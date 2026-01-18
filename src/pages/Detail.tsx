@@ -1,0 +1,4 @@
+import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { getItem } from '../lib/api'
+export default function Detail(){const {id}=useParams();const [it,setIt]=useState<any>(null);const [err,setErr]=useState('');useEffect(()=>{if(!id)return;getItem(id).then(setIt).catch(e=>setErr(String(e.message||e)))},[id]);return (<div className='mx-auto max-w-3xl px-4 py-6 space-y-3'><Link className='text-sm underline' to='/'>← zpět</Link>{err&&<div className='text-sm text-red-700'>{err}</div>}{!err&&!it&&<div className='text-sm text-gray-600'>Načítám…</div>}{it&&<div className='rounded-2xl border bg-white p-4'><h1 className='text-2xl font-semibold'>{it.name}</h1><div className='text-xs text-gray-500 mt-1'>ID: {it.id}</div><div className='text-sm text-gray-700 whitespace-pre-wrap mt-3'>{it.description||'—'}</div></div>}</div>)}
