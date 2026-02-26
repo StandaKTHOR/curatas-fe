@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login } from '../lib/api'
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import {Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter} from '../components/ui/card';
 
 export default function Login() {
     const [username, setUsername] = useState('')
@@ -46,7 +46,7 @@ export default function Login() {
                                 type="text"
                                 placeholder="admin"
                                 value={username}
-                                onChange={(e) => setUsername(e.target.value)}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
                                 required
                             />
                         </div>
@@ -56,7 +56,7 @@ export default function Login() {
                                 id="password"
                                 type="password"
                                 value={password}
-                                onChange={(e) => setPassword(e.target.value)}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                                 required
                             />
                         </div>
