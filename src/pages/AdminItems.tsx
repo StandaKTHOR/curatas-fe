@@ -8,7 +8,7 @@ export default function AdminItems() {
     const navigate = useNavigate();
 
     // Načítáme data s limitem 1000 pro demo účely
-    const loadData = () => listAdminItems(page, 1000).then(setData);
+    const loadData = () => listAdminItems(page, 50).then(setData);
 
     useEffect(() => { loadData(); }, [page]);
 

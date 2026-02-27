@@ -8,7 +8,7 @@ export default function Catalog() {
 
     useEffect(() => {
         const delayDebounceFn = setTimeout(() => {
-            listPublicItems({ q: searchTerm, size: 1000 })
+            listPublicItems({ q: searchTerm })
                 .then(data => setItems(data.content || []))
                 .catch(console.error);
         }, 300);
