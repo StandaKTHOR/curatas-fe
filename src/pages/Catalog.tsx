@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listPublicItems } from '../lib/api';
+import SafeImage from "@/components/SafeImage";
 
 export default function Catalog() {
     const [items, setItems] = useState<any[]>([]);
@@ -44,14 +45,12 @@ export default function Catalog() {
                 {items.length > 0 ? items.map(it => (
                     <div key={it.id} className="col-lg-3 col-md-6 mb-8">
                         <div className="card h-100 shadow-sm border-0 transition-all hover:shadow-md">
-                            <div className="aspect-[4/3] overflow-hidden bg-gray-50">
-                                <img
-                                    src={it.primaryImageUrl || 'https://via.placeholder.com/400x300?text=Bez+fotografie'}
-                                    className="card-img-top object-cover w-full h-full"
+                            <div className="aspect-[4/3] overflow-hidden bg-gray-50 shadow-inner">
+                                <SafeImage
+                                    src={it.primaryImageUrl}
                                     alt={it.title}
-                                    onError={(e) => {
-                                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Obrázek+nenalezen';
-                                    }}
+                                    // Třídy pro roztažení na celý prostor wrapperu a jemný efekt při najetí
+                                    className="card-img-top object-cover w-full h-full transition-transform duration-500 hover:scale-105"
                                 />
                             </div>
                             <div className="card-body p-4 flex flex-col justify-between">

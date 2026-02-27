@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getItem } from '../lib/api'
+import SafeImage from "@/components/SafeImage";
 
 // POMOCNÁ KOMPONENTA PRO VÝPIS JEDNOHO ŘÁDKU Z DEMUSU
 const LegacyRow = ({ label, value }: { label: string; value: any }) => {
@@ -43,13 +44,10 @@ export default function Detail() {
                 {/* LEVÝ SLOUPEC: OBRÁZKY */}
                 <div className="col-lg-4 mb-6">
                     <div className="bg-white p-4 shadow-sm rounded border border-gray-100 mb-4">
-                        <img
-                            src={it.primaryImageUrl || 'https://via.placeholder.com/800x600?text=Bez+fotografie'}
-                            className="img-fluid w-full rounded object-cover"
+                        <SafeImage
+                            src={it.primaryImageUrl}
                             alt={it.title}
-                            onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Obrázek+nenalezen';
-                            }}
+                            className="img-fluid w-full rounded object-cover h-[200px]" // Nastav pevnou výšku, ať to neskáče
                         />
                     </div>
 
