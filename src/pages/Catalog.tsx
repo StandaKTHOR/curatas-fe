@@ -49,6 +49,9 @@ export default function Catalog() {
                                     src={it.primaryImageUrl || 'https://via.placeholder.com/400x300?text=Bez+fotografie'}
                                     className="card-img-top object-cover w-full h-full"
                                     alt={it.title}
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Obrázek+nenalezen';
+                                    }}
                                 />
                             </div>
                             <div className="card-body p-4 flex flex-col justify-between">

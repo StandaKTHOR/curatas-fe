@@ -47,6 +47,9 @@ export default function Detail() {
                             src={it.primaryImageUrl || 'https://via.placeholder.com/800x600?text=Bez+fotografie'}
                             className="img-fluid w-full rounded object-cover"
                             alt={it.title}
+                            onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Obrázek+nenalezen';
+                            }}
                         />
                     </div>
 
