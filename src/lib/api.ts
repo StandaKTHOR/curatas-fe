@@ -14,10 +14,12 @@ export async function listPublicItems(params: { q?: string, material?: string, a
     if (params.q) u.searchParams.set('q', params.q);
     if (params.material) u.searchParams.set('material', params.material);
     if (params.authorName) u.searchParams.set('authorName', params.authorName);
-    if (params.page) u.searchParams.set('page', params.page.toString());
 
-    // Vynutíme velikost 1000 pro demo
-    u.searchParams.set('size', (params.size || 1000).toString());
+    // Zajištění, že se pošle i page 0 (pokud je definovaná)
+    if (params.page !== undefined) u.searchParams.set('page', params.page.toString());
+
+    // ZMĚNA: Místo 1000 taháme standardně 20 položek
+    u.searchParams.set('size', (params.size || 20).toString());
 
     const r = await fetch(u);
     if (!r.ok) throw new Error('Načítání katalogu selhalo');
@@ -55,7 +57,8 @@ export async function login(credentials: { username: string; password: string })
 
 // src/lib/api.ts
 
-export async function listAdminItems(page: number = 0, size: number = 1000, q: string = '') {
+// ZMĚNA: Výchozí size je nyní 50 místo 1000
+export async function listAdminItems(page: number = 0, size: number = 50, q: string = '') {
     const query = new URLSearchParams({
         page: page.toString(),
         size: size.toString(),
