@@ -37,14 +37,16 @@ export default function AdminItemForm() {
         insuranceValue: '',
         published: true,
         auditComment: '', // Povinné pro auditní stopu při editaci
-        imageUrls: [] // Pro zobrazení nahraných fotek
+        imageUrls: [], // Pro zobrazení nahraných fotek
+        legacyData: {} // PŘIDÁNO: Batoh pro historická data z Demusu
     });
 
     // Načtení dat při editaci
     useEffect(() => {
         if (id) {
             getAdminItem(id).then(data => {
-                setForm({ ...data, auditComment: '' });
+                // Zajistíme, že legacyData nebude undefined
+                setForm({ ...data, auditComment: '', legacyData: data.legacyData || {} });
             }).catch(err => alert("Chyba při načítání: " + err));
         }
     }, [id]);
@@ -71,6 +73,17 @@ export default function AdminItemForm() {
         } finally {
             setUploading(false);
         }
+    };
+
+    // PŘIDÁNO: Speciální handler pro zanořená historická data
+    const handleLegacyChange = (key: string, value: string) => {
+        setForm((prev: any) => ({
+            ...prev,
+            legacyData: {
+                ...prev.legacyData,
+                [key]: value
+            }
+        }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -113,14 +126,15 @@ export default function AdminItemForm() {
                     </div>
                 </div>
 
-                {/* ZÁLOŽKY */}
-                <ul className="nav nav-tabs border-0 gap-4">
+                {/* ZÁLOŽKY - Přidána záložka Demus */}
+                <ul className="nav nav-tabs border-0 gap-4 flex-wrap">
                     {[
                         { id: 'identity', label: '1. Identita' },
                         { id: 'description', label: '2. Popis & Foto' },
                         { id: 'provenance', label: '3. Původ' },
                         { id: 'storage', label: '4. Správa & Umístění' },
-                        { id: 'audit', label: '5. Audit' }
+                        { id: 'demus', label: '5. Demus (Historie)' },
+                        { id: 'audit', label: '6. Audit' }
                     ].map(tab => (
                         <li key={tab.id} className="nav-item">
                             <button
@@ -141,27 +155,27 @@ export default function AdminItemForm() {
                     <div className="row g-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                         <div className="col-md-6">
                             <label className={labelClass}>Přírůstkové číslo (Právní ID) *</label>
-                            <input className={inputClass} value={form.accessionNumber} onChange={e => setForm({...form, accessionNumber: e.target.value})} required />
+                            <input className={inputClass} value={form.accessionNumber || ''} onChange={e => setForm({...form, accessionNumber: e.target.value})} required />
                         </div>
                         <div className="col-md-6">
                             <label className={labelClass}>Inventární číslo</label>
-                            <input className={inputClass} value={form.inventoryNumber} onChange={e => setForm({...form, inventoryNumber: e.target.value})} />
+                            <input className={inputClass} value={form.inventoryNumber || ''} onChange={e => setForm({...form, inventoryNumber: e.target.value})} />
                         </div>
                         <div className="col-md-12">
                             <label className={labelClass}>Název předmětu *</label>
-                            <input className={`${inputClass} text-lg font-bold`} value={form.title} onChange={e => setForm({...form, title: e.target.value})} required />
+                            <input className={`${inputClass} text-lg font-bold`} value={form.title || ''} onChange={e => setForm({...form, title: e.target.value})} required />
                         </div>
                         <div className="col-md-4">
                             <label className={labelClass}>Podsbírka</label>
-                            <input className={inputClass} value={form.subCollection} onChange={e => setForm({...form, subCollection: e.target.value})} />
+                            <input className={inputClass} value={form.subCollection || ''} onChange={e => setForm({...form, subCollection: e.target.value})} />
                         </div>
                         <div className="col-md-4">
                             <label className={labelClass}>Typ předmětu</label>
-                            <input className={inputClass} value={form.objectType} onChange={e => setForm({...form, objectType: e.target.value})} />
+                            <input className={inputClass} value={form.objectType || ''} onChange={e => setForm({...form, objectType: e.target.value})} />
                         </div>
                         <div className="col-md-4">
                             <label className={labelClass}>Stav zpracování</label>
-                            <select className={inputClass} value={form.catalogingStatus} onChange={e => setForm({...form, catalogingStatus: e.target.value})}>
+                            <select className={inputClass} value={form.catalogingStatus || ''} onChange={e => setForm({...form, catalogingStatus: e.target.value})}>
                                 <option>Zapsán</option>
                                 <option>Katalogizován</option>
                                 <option>Odborně zpracován</option>
@@ -175,19 +189,19 @@ export default function AdminItemForm() {
                     <div className="row g-4 animate-in fade-in duration-300">
                         <div className="col-md-6">
                             <label className={labelClass}>Materiál</label>
-                            <input className={inputClass} value={form.material} onChange={e => setForm({...form, material: e.target.value})} />
+                            <input className={inputClass} value={form.material || ''} onChange={e => setForm({...form, material: e.target.value})} />
                         </div>
                         <div className="col-md-6">
                             <label className={labelClass}>Technika</label>
-                            <input className={inputClass} value={form.technique} onChange={e => setForm({...form, technique: e.target.value})} />
+                            <input className={inputClass} value={form.technique || ''} onChange={e => setForm({...form, technique: e.target.value})} />
                         </div>
                         <div className="col-md-12">
                             <label className={labelClass}>Základní popis</label>
-                            <textarea className={inputClass} rows={3} value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
+                            <textarea className={inputClass} rows={3} value={form.description || ''} onChange={e => setForm({...form, description: e.target.value})} />
                         </div>
                         <div className="col-md-12">
                             <label className={labelClass}>Rozšířený kurátorský popis</label>
-                            <textarea className={inputClass} rows={5} value={form.extendedDescription} onChange={e => setForm({...form, extendedDescription: e.target.value})} />
+                            <textarea className={inputClass} rows={5} value={form.extendedDescription || ''} onChange={e => setForm({...form, extendedDescription: e.target.value})} />
                         </div>
 
                         {/* Náhledy nahraných fotografií */}
@@ -212,11 +226,11 @@ export default function AdminItemForm() {
                     <div className="row g-4 animate-in fade-in duration-300">
                         <div className="col-md-6">
                             <label className={labelClass}>Země původu</label>
-                            <input className={inputClass} value={form.countryOfOrigin} onChange={e => setForm({...form, countryOfOrigin: e.target.value})} />
+                            <input className={inputClass} value={form.countryOfOrigin || ''} onChange={e => setForm({...form, countryOfOrigin: e.target.value})} />
                         </div>
                         <div className="col-md-6">
                             <label className={labelClass}>Způsob nabytí</label>
-                            <select className={inputClass} value={form.acquisitionMethod} onChange={e => setForm({...form, acquisitionMethod: e.target.value})}>
+                            <select className={inputClass} value={form.acquisitionMethod || ''} onChange={e => setForm({...form, acquisitionMethod: e.target.value})}>
                                 <option>Dar</option>
                                 <option>Koupě</option>
                                 <option>Vlastní sběr</option>
@@ -225,11 +239,11 @@ export default function AdminItemForm() {
                         </div>
                         <div className="col-md-6">
                             <label className={labelClass}>Datum nabytí</label>
-                            <input type="date" className={inputClass} value={form.acquisitionDate} onChange={e => setForm({...form, acquisitionDate: e.target.value})} />
+                            <input type="date" className={inputClass} value={form.acquisitionDate || ''} onChange={e => setForm({...form, acquisitionDate: e.target.value})} />
                         </div>
                         <div className="col-md-6">
                             <label className={labelClass}>Získáno od (Původce)</label>
-                            <input className={inputClass} value={form.acquiredFrom} onChange={e => setForm({...form, acquiredFrom: e.target.value})} />
+                            <input className={inputClass} value={form.acquiredFrom || ''} onChange={e => setForm({...form, acquiredFrom: e.target.value})} />
                         </div>
                     </div>
                 )}
@@ -239,15 +253,15 @@ export default function AdminItemForm() {
                     <div className="row g-4 animate-in fade-in duration-300">
                         <div className="col-md-4">
                             <label className={labelClass}>Budova</label>
-                            <input className={inputClass} value={form.locationBuilding} onChange={e => setForm({...form, locationBuilding: e.target.value})} />
+                            <input className={inputClass} value={form.locationBuilding || ''} onChange={e => setForm({...form, locationBuilding: e.target.value})} />
                         </div>
                         <div className="col-md-4">
                             <label className={labelClass}>Místnost / Depozitář</label>
-                            <input className={inputClass} value={form.locationRoom} onChange={e => setForm({...form, locationRoom: e.target.value})} />
+                            <input className={inputClass} value={form.locationRoom || ''} onChange={e => setForm({...form, locationRoom: e.target.value})} />
                         </div>
                         <div className="col-md-4">
                             <label className={labelClass}>Stav předmětu</label>
-                            <select className={inputClass} value={form.objectCondition} onChange={e => setForm({...form, objectCondition: e.target.value})}>
+                            <select className={inputClass} value={form.objectCondition || ''} onChange={e => setForm({...form, objectCondition: e.target.value})}>
                                 <option>Výborný</option>
                                 <option>Dobrý</option>
                                 <option>Poškozeno</option>
@@ -256,16 +270,61 @@ export default function AdminItemForm() {
                         </div>
                         <div className="col-md-6">
                             <label className={labelClass}>Odpovědný správce</label>
-                            <input className={inputClass} value={form.spravce} onChange={e => setForm({...form, spravce: e.target.value})} />
+                            <input className={inputClass} value={form.spravce || ''} onChange={e => setForm({...form, spravce: e.target.value})} />
                         </div>
                         <div className="col-md-6">
                             <label className={labelClass}>Pojistná hodnota (Kč)</label>
-                            <input type="number" className={inputClass} value={form.insuranceValue} onChange={e => setForm({...form, insuranceValue: e.target.value})} />
+                            <input type="number" className={inputClass} value={form.insuranceValue || ''} onChange={e => setForm({...form, insuranceValue: e.target.value})} />
                         </div>
                     </div>
                 )}
 
-                {/* ZÁLOŽKA 5: AUDIT */}
+                {/* PŘIDÁNO: ZÁLOŽKA 5: DEMUS (HISTORIE) */}
+                {activeTab === 'demus' && (
+                    <div className="row g-4 bg-gray-50 p-4 border border-gray-200 rounded animate-in fade-in duration-300">
+                        <div className="col-md-12 mb-2">
+                            <h6 className="font-bold text-[#3e5569] flex items-center gap-2 m-0">
+                                <i className="fa fa-archive"></i> Původní evidence zapsaná v systému Demus
+                            </h6>
+                            <p className="text-xs text-gray-500 italic mt-1">Tyto údaje jsou uchovány pro historický kontext a měly by být upravovány jen v případě zjevných chyb z migrace.</p>
+                        </div>
+
+                        <div className="col-md-6">
+                            <label className={labelClass}>Způsob nabytí (Původní)</label>
+                            <input className={inputClass} value={form.legacyData?.zpusob_nabyti || ''} onChange={e => handleLegacyChange('zpusob_nabyti', e.target.value)} />
+                        </div>
+                        <div className="col-md-6">
+                            <label className={labelClass}>Předchozí majitel</label>
+                            <input className={inputClass} value={form.legacyData?.predchozi_majitel || ''} onChange={e => handleLegacyChange('predchozi_majitel', e.target.value)} />
+                        </div>
+                        <div className="col-md-6">
+                            <label className={labelClass}>Autor (Historický)</label>
+                            <input className={inputClass} value={form.legacyData?.autor || ''} onChange={e => handleLegacyChange('autor', e.target.value)} />
+                        </div>
+                        <div className="col-md-6">
+                            <label className={labelClass}>Místo vzniku</label>
+                            <input className={inputClass} value={form.legacyData?.misto_vzniku || ''} onChange={e => handleLegacyChange('misto_vzniku', e.target.value)} />
+                        </div>
+                        <div className="col-md-4">
+                            <label className={labelClass}>Fond / Sbírka</label>
+                            <input className={inputClass} value={form.legacyData?.fond || ''} onChange={e => handleLegacyChange('fond', e.target.value)} />
+                        </div>
+                        <div className="col-md-4">
+                            <label className={labelClass}>Zapsal (Kurátor)</label>
+                            <input className={inputClass} value={form.legacyData?.zapsal || ''} onChange={e => handleLegacyChange('zapsal', e.target.value)} />
+                        </div>
+                        <div className="col-md-4">
+                            <label className={labelClass}>Datum zápisu (Demus)</label>
+                            <input className={inputClass} value={form.legacyData?.datum_zapisu || ''} onChange={e => handleLegacyChange('datum_zapisu', e.target.value)} />
+                        </div>
+                        <div className="col-md-12">
+                            <label className={labelClass}>Historická poznámka</label>
+                            <textarea className={inputClass} rows={3} value={form.legacyData?.poznamka || ''} onChange={e => handleLegacyChange('poznamka', e.target.value)} />
+                        </div>
+                    </div>
+                )}
+
+                {/* ZÁLOŽKA 6: AUDIT */}
                 {activeTab === 'audit' && (
                     <div className="bg-yellow-50 p-6 border-l-4 border-[#ffbc34] animate-in slide-in-from-left duration-300">
                         <h6 className="font-bold text-[#1f262d] mb-2 flex items-center gap-2">
@@ -277,9 +336,9 @@ export default function AdminItemForm() {
                             className="form-control mt-2 border-yellow-200 focus:border-[#ffbc34] focus:ring-0"
                             rows={4}
                             placeholder="Např.: Oprava překlepu v popisu, aktualizace lokace po revizi..."
-                            value={form.auditComment}
+                            value={form.auditComment || ''}
                             onChange={e => setForm({...form, auditComment: e.target.value})}
-                            required={!!id} // Povinné pouze při úpravě existujícího
+                            required={!!id}
                         />
                     </div>
                 )}

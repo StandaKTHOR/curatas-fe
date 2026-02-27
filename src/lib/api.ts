@@ -6,9 +6,6 @@ const getAuthHeader = (): HeadersInit => {
     return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
-// VEŘEJNÉ FUNKCE
-// src/lib/api.ts
-
 export async function listPublicItems(params: { q?: string, material?: string, authorName?: string, page?: number, size?: number }) {
     const u = new URL(`${API_BASE}/public/v1/catalog/items`);
     if (params.q) u.searchParams.set('q', params.q);
@@ -54,8 +51,6 @@ export async function login(credentials: { username: string; password: string })
     localStorage.setItem('token', data.token);
     return data;
 }
-
-// src/lib/api.ts
 
 // ZMĚNA: Výchozí size je nyní 50 místo 1000
 export async function listAdminItems(page: number = 0, size: number = 50, q: string = '') {

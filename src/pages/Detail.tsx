@@ -2,6 +2,20 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getItem } from '../lib/api'
 
+// POMOCNÁ KOMPONENTA PRO VÝPIS JEDNOHO ŘÁDKU Z DEMUSU
+const LegacyRow = ({ label, value }: { label: string; value: any }) => {
+    if (!value) return null; // Pokud údaj chybí, řádek nevykreslíme
+
+    return (
+        <div className="flex flex-col sm:flex-row sm:justify-between py-2 border-b border-gray-100 last:border-0 hover:bg-gray-50 px-2 -mx-2 rounded transition-colors">
+            <span className="text-[10px] uppercase text-gray-500 font-bold tracking-wider sm:w-1/3 pt-1">{label}</span>
+            <span className="text-sm text-gray-800 font-medium sm:w-2/3 sm:text-right">
+                {Array.isArray(value) ? value.join(' | ') : value}
+            </span>
+        </div>
+    );
+};
+
 export default function Detail() {
     const { id } = useParams<{ id: string }>();
     const [it, setIt] = useState<any>(null);
@@ -101,6 +115,32 @@ export default function Detail() {
                             )}
                         </div>
                     </div>
+
+                    {/* BLOK 2.5: HISTORICKÁ DATA Z DEMUSU (Zobrazí se jen pokud nějaká jsou) */}
+                    {it.legacyData && Object.keys(it.legacyData).length > 0 && (
+                        <div className="card shadow-sm border-0 mb-6 border-l-4 border-[#3e5569]">
+                            <div className="card-header bg-white border-b border-gray-100 py-4 flex justify-between items-center">
+                                <h6 className="m-0 text-xs font-bold uppercase text-[#3e5569] tracking-widest">
+                                    <i className="fa fa-archive mr-2"></i> Původní evidence z Demusu
+                                </h6>
+                                <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded">Historická data</span>
+                            </div>
+                            <div className="card-body p-6">
+                                <LegacyRow label="Způsob nabytí" value={it.legacyData.zpusob_nabyti} />
+                                <LegacyRow label="Předchozí majitel" value={it.legacyData.predchozi_majitel} />
+                                <LegacyRow label="Okolnosti nabytí" value={it.legacyData.okolnosti_nabyti} />
+                                <LegacyRow label="Fond / Sbírka" value={it.legacyData.fond} />
+                                <LegacyRow label="Původní Autor" value={it.legacyData.autor} />
+                                <LegacyRow label="Místo vzniku" value={it.legacyData.misto_vzniku} />
+                                <LegacyRow label="Původní lokace" value={it.legacyData.aktualni_lokace} />
+                                <LegacyRow label="Strukturované rozměry" value={it.legacyData.rozmery_strukturovane} />
+                                <LegacyRow label="Historická poznámka" value={it.legacyData.poznamka} />
+                                <LegacyRow label="Zapsal (Kurátor)" value={it.legacyData.zapsal} />
+                                <LegacyRow label="Datum zápisu" value={it.legacyData.datum_zapisu} />
+                                <LegacyRow label="Identifikátor v Demusu" value={it.legacyData.demus_id} />
+                            </div>
+                        </div>
+                    )}
 
                     {/* BLOK 3: ROZMĚRY & ADMINISTRACE */}
                     <div className="row">
