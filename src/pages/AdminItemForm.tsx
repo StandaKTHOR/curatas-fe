@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getAdminItem, updateItem, createItem, uploadItemImage } from '../lib/api';
+import { getAdminItem, updateItem, createItem, uploadItemImage, bulkCopyItem } from '../lib/api';
 
 export default function AdminItemForm() {
     const { id } = useParams();
@@ -8,6 +8,14 @@ export default function AdminItemForm() {
     const [activeTab, setActiveTab] = useState('identity');
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+
+    // --- PŘIDÁNO: Stavy pro hromadné zakládání ---
+    const [bulkMode, setBulkMode] = useState(false);
+    const [bulkParams, setBulkParams] = useState({
+        count: 10,
+        titleSuffix: ' _',
+        invNumSuffix: '/_'
+    });
 
     // Kompletní stav pro všechna muzejní pole
     const [form, setForm] = useState<any>({
@@ -38,14 +46,13 @@ export default function AdminItemForm() {
         published: true,
         auditComment: '', // Povinné pro auditní stopu při editaci
         imageUrls: [], // Pro zobrazení nahraných fotek
-        legacyData: {} // PŘIDÁNO: Batoh pro historická data z Demusu
+        legacyData: {} // Batoh pro historická data z Demusu
     });
 
     // Načtení dat při editaci
     useEffect(() => {
         if (id) {
             getAdminItem(id).then(data => {
-                // Zajistíme, že legacyData nebude undefined
                 setForm({ ...data, auditComment: '', legacyData: data.legacyData || {} });
             }).catch(err => alert("Chyba při načítání: " + err));
         }
@@ -62,7 +69,6 @@ export default function AdminItemForm() {
         setUploading(true);
         try {
             const result = await uploadItemImage(Number(id), e.target.files[0]);
-            // Aktualizujeme seznam obrázků v lokálním stavu
             setForm((prev: any) => ({
                 ...prev,
                 imageUrls: [...(prev.imageUrls || []), result.url]
@@ -75,17 +81,14 @@ export default function AdminItemForm() {
         }
     };
 
-    // PŘIDÁNO: Speciální handler pro zanořená historická data
     const handleLegacyChange = (key: string, value: string) => {
         setForm((prev: any) => ({
             ...prev,
-            legacyData: {
-                ...prev.legacyData,
-                [key]: value
-            }
+            legacyData: { ...prev.legacyData, [key]: value }
         }));
     };
 
+    // --- UPRAVENO: HandleSubmit s podporou Bulk Copy ---
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -93,7 +96,18 @@ export default function AdminItemForm() {
             if (id) {
                 await updateItem(Number(id), form);
             } else {
-                await createItem(form);
+                // Uložíme základní předmět a získáme jeho ID
+                const savedItem = await createItem(form);
+
+                // Pokud je bulk mode aktivní, spustíme rozkopírování
+                if (bulkMode && savedItem?.id) {
+                    try {
+                        await bulkCopyItem(savedItem.id, bulkParams);
+                    } catch (bulkErr) {
+                        console.error("Hromadné kopírování selhalo:", bulkErr);
+                        alert("Hlavní předmět byl uložen, ale nepodařilo se vytvořit kopie.");
+                    }
+                }
             }
             navigate('/admin/items');
         } catch (err) {
@@ -126,7 +140,6 @@ export default function AdminItemForm() {
                     </div>
                 </div>
 
-                {/* ZÁLOŽKY - Přidána záložka Demus */}
                 <ul className="nav nav-tabs border-0 gap-4 flex-wrap">
                     {[
                         { id: 'identity', label: '1. Identita' },
@@ -150,7 +163,6 @@ export default function AdminItemForm() {
             </div>
 
             <form onSubmit={handleSubmit} className="card-body p-8">
-                {/* ZÁLOŽKA 1: IDENTITA */}
                 {activeTab === 'identity' && (
                     <div className="row g-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                         <div className="col-md-6">
@@ -184,7 +196,6 @@ export default function AdminItemForm() {
                     </div>
                 )}
 
-                {/* ZÁLOŽKA 2: POPIS & FOTO */}
                 {activeTab === 'description' && (
                     <div className="row g-4 animate-in fade-in duration-300">
                         <div className="col-md-6">
@@ -204,7 +215,6 @@ export default function AdminItemForm() {
                             <textarea className={inputClass} rows={5} value={form.extendedDescription || ''} onChange={e => setForm({...form, extendedDescription: e.target.value})} />
                         </div>
 
-                        {/* Náhledy nahraných fotografií */}
                         <div className="col-md-12 mt-4">
                             <label className={labelClass}>Fotodokumentace</label>
                             <div className="flex gap-4 mt-2 overflow-x-auto pb-2">
@@ -221,7 +231,6 @@ export default function AdminItemForm() {
                     </div>
                 )}
 
-                {/* ZÁLOŽKA 3: PROVENIENCE */}
                 {activeTab === 'provenance' && (
                     <div className="row g-4 animate-in fade-in duration-300">
                         <div className="col-md-6">
@@ -248,7 +257,6 @@ export default function AdminItemForm() {
                     </div>
                 )}
 
-                {/* ZÁLOŽKA 4: SPRÁVA & UMÍSTĚNÍ */}
                 {activeTab === 'storage' && (
                     <div className="row g-4 animate-in fade-in duration-300">
                         <div className="col-md-4">
@@ -279,14 +287,13 @@ export default function AdminItemForm() {
                     </div>
                 )}
 
-                {/* PŘIDÁNO: ZÁLOŽKA 5: DEMUS (HISTORIE) */}
                 {activeTab === 'demus' && (
                     <div className="row g-4 bg-gray-50 p-4 border border-gray-200 rounded animate-in fade-in duration-300">
                         <div className="col-md-12 mb-2">
                             <h6 className="font-bold text-[#3e5569] flex items-center gap-2 m-0">
                                 <i className="fa fa-archive"></i> Původní evidence zapsaná v systému Demus
                             </h6>
-                            <p className="text-xs text-gray-500 italic mt-1">Tyto údaje jsou uchovány pro historický kontext a měly by být upravovány jen v případě zjevných chyb z migrace.</p>
+                            <p className="text-xs text-gray-500 italic mt-1">Tyto údaje jsou uchovány pro historický kontext.</p>
                         </div>
 
                         <div className="col-md-6">
@@ -305,18 +312,6 @@ export default function AdminItemForm() {
                             <label className={labelClass}>Místo vzniku</label>
                             <input className={inputClass} value={form.legacyData?.misto_vzniku || ''} onChange={e => handleLegacyChange('misto_vzniku', e.target.value)} />
                         </div>
-                        <div className="col-md-4">
-                            <label className={labelClass}>Fond / Sbírka</label>
-                            <input className={inputClass} value={form.legacyData?.fond || ''} onChange={e => handleLegacyChange('fond', e.target.value)} />
-                        </div>
-                        <div className="col-md-4">
-                            <label className={labelClass}>Zapsal (Kurátor)</label>
-                            <input className={inputClass} value={form.legacyData?.zapsal || ''} onChange={e => handleLegacyChange('zapsal', e.target.value)} />
-                        </div>
-                        <div className="col-md-4">
-                            <label className={labelClass}>Datum zápisu (Demus)</label>
-                            <input className={inputClass} value={form.legacyData?.datum_zapisu || ''} onChange={e => handleLegacyChange('datum_zapisu', e.target.value)} />
-                        </div>
                         <div className="col-md-12">
                             <label className={labelClass}>Historická poznámka</label>
                             <textarea className={inputClass} rows={3} value={form.legacyData?.poznamka || ''} onChange={e => handleLegacyChange('poznamka', e.target.value)} />
@@ -324,22 +319,69 @@ export default function AdminItemForm() {
                     </div>
                 )}
 
-                {/* ZÁLOŽKA 6: AUDIT */}
                 {activeTab === 'audit' && (
                     <div className="bg-yellow-50 p-6 border-l-4 border-[#ffbc34] animate-in slide-in-from-left duration-300">
                         <h6 className="font-bold text-[#1f262d] mb-2 flex items-center gap-2">
                             <i className="fa fa-history text-[#ffbc34]"></i> Právní auditní stopa
                         </h6>
-                        <p className="text-xs text-gray-600 mb-4 italic">Změny v muzejní evidenci nesmí být anonymní. Uveďte důvod úpravy.</p>
                         <label className={labelClass}>Důvod nebo popis provedené změny *</label>
                         <textarea
                             className="form-control mt-2 border-yellow-200 focus:border-[#ffbc34] focus:ring-0"
                             rows={4}
-                            placeholder="Např.: Oprava překlepu v popisu, aktualizace lokace po revizi..."
                             value={form.auditComment || ''}
                             onChange={e => setForm({...form, auditComment: e.target.value})}
                             required={!!id}
                         />
+                    </div>
+                )}
+
+                {/* --- PŘIDÁNO: SEKCE PRO HROMADNÉ ZAKLÁDÁNÍ (Zobrazí se jen při vytváření nového) --- */}
+                {!id && (
+                    <div className="mt-8 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-lg shadow-sm animate-in fade-in duration-500">
+                        <div className="flex items-center gap-3 mb-3">
+                            <input
+                                type="checkbox"
+                                id="bulkCreate"
+                                className="w-4 h-4 text-warning border-gray-300 rounded focus:ring-warning"
+                                checked={bulkMode}
+                                onChange={e => setBulkMode(e.target.checked)}
+                            />
+                            <label htmlFor="bulkCreate" className="text-sm font-bold text-gray-700 cursor-pointer m-0">
+                                Založit jako sérii (vytvořit hromadně kopie podle tohoto vzoru)
+                            </label>
+                        </div>
+
+                        {bulkMode && (
+                            <div className="row g-3 animate-in slide-in-from-top-2 duration-300">
+                                <div className="col-md-4">
+                                    <label className={labelClass}>Počet kusů v sérii</label>
+                                    <input
+                                        type="number"
+                                        className={inputClass}
+                                        value={bulkParams.count}
+                                        onChange={e => setBulkParams({...bulkParams, count: parseInt(e.target.value) || 1})}
+                                    />
+                                </div>
+                                <div className="col-md-4">
+                                    <label className={labelClass}>Přípona názvu (použij _ pro číslo)</label>
+                                    <input
+                                        className={inputClass}
+                                        value={bulkParams.titleSuffix}
+                                        onChange={e => setBulkParams({...bulkParams, titleSuffix: e.target.value})}
+                                        placeholder="např. - jedinec _"
+                                    />
+                                </div>
+                                <div className="col-md-4">
+                                    <label className={labelClass}>Přípona Inv. č. (použij _ pro číslo)</label>
+                                    <input
+                                        className={inputClass}
+                                        value={bulkParams.invNumSuffix}
+                                        onChange={e => setBulkParams({...bulkParams, invNumSuffix: e.target.value})}
+                                        placeholder="např. /_"
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
