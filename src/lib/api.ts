@@ -1,25 +1,72 @@
-// export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080';
-export const API_BASE = import.meta.env.VITE_API_BASE || 'https://curatas-be-production.up.railway.app';
+export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080';
+// export const API_BASE = import.meta.env.VITE_API_BASE || 'https://curatas-be-production.up.railway.app';
 
 const getAuthHeader = (): HeadersInit => {
     const token = localStorage.getItem('token');
     return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
-export async function listPublicItems(params: { q?: string, material?: string, authorName?: string, page?: number, size?: number }) {
+export async function listPublicItems(params: {
+    q?: string,
+    accessionNumber?: string,
+    inventoryNumber?: string,
+    subCollection?: string,
+    objectType?: string,
+    author?: string,
+    datingFrom?: string | number,
+    datingTo?: string | number,
+    originPlace?: string,
+    material?: string,
+    technique?: string,
+    location?: string,
+    spravce?: string,
+    page?: number,
+    size?: number
+}) {
     const u = new URL(`${API_BASE}/public/v1/catalog/items`);
-    if (params.q) u.searchParams.set('q', params.q);
-    if (params.material) u.searchParams.set('material', params.material);
-    if (params.authorName) u.searchParams.set('authorName', params.authorName);
 
-    // Zajištění, že se pošle i page 0 (pokud je definovaná)
-    if (params.page !== undefined) u.searchParams.set('page', params.page.toString());
-
-    // ZMĚNA: Místo 1000 taháme standardně 20 položek
-    u.searchParams.set('size', (params.size || 20).toString());
-
-    const r = await fetch(u);
+    // Projdeme všechny klíče v objektu params
+    Object.entries(params).forEach(([key, value]) => {
+        // Přidáme do URL pouze pokud má hodnota smysl (není null, undefined nebo prázdný string)
+        if (value !== undefined && value !== null && value !== '') {
+            u.searchParams.set(key, value.toString());
+        }
+    });
+    // Zajištění výchozí velikosti stránky, pokud není v params
+    if (!u.searchParams.has('size')) {
+        u.searchParams.set('size', '20');
+    }
+    const r = await fetch(u.toString());
     if (!r.ok) throw new Error('Načítání katalogu selhalo');
+    return r.json();
+}
+
+export async function listAdminItems(params: {
+    page?: number,
+    size?: number,
+    q?: string,
+    accessionNumber?: string,
+    inventoryNumber?: string,
+    author?: string,
+    originPlace?: string, // PŘIDAT SEM
+    subCollection?: string,
+    material?: string,
+    location?: string,
+    spravce?: string
+}) {
+    const u = new URL(`${API_BASE}/api/v1/items`);
+
+    Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            u.searchParams.set(key, value.toString());
+        }
+    });
+
+    const r = await fetch(u.toString(), {
+        headers: getAuthHeader() // Nezapomeň na token, v adminu je povinný!
+    });
+
+    if (!r.ok) throw new Error('Načítání administrace selhalo');
     return r.json();
 }
 
@@ -50,30 +97,6 @@ export async function login(credentials: { username: string; password: string })
     const data = await response.json();
     localStorage.setItem('token', data.token);
     return data;
-}
-
-// ZMĚNA: Výchozí size je nyní 50 místo 1000
-export async function listAdminItems(page: number = 0, size: number = 50, q: string = '') {
-    const query = new URLSearchParams({
-        page: page.toString(),
-        size: size.toString(),
-        q: q
-    });
-
-    const r = await fetch(`${API_BASE}/api/v1/items?${query}`, {
-        headers: getAuthHeader()
-    });
-
-    if (r.status === 401 || r.status === 403) {
-        throw new Error('Přístup odepřen – nemáte dostatečná oprávnění (Admin/Curator)');
-    }
-
-    if (!r.ok) {
-        const errorData = await r.json().catch(() => ({}));
-        throw new Error(`Chyba serveru (${r.status}): ${errorData.message || 'Špatný požadavek'}`);
-    }
-
-    return r.json();
 }
 
 export async function createItem(body: any) {
@@ -127,4 +150,62 @@ export async function uploadItemImage(itemId: number, file: File) {
     });
     if (!r.ok) throw new Error('Nahrávání obrázku selhalo');
     return r.json();
+}
+
+export async function exportItemsToExcel(params: any) {
+    const u = new URL(`${API_BASE}/api/v1/items/export/excel`);
+
+    // Přidáme filtry do URL
+    Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            u.searchParams.set(key, value.toString());
+        }
+    });
+
+    const r = await fetch(u.toString(), {
+        headers: getAuthHeader() // Použije tvou existující funkci pro token
+    });
+
+    if (!r.ok) throw new Error('Export selhal');
+
+    // Zpracování binárních dat (blob)
+    const blob = await r.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+
+    // Vytvoření a kliknutí na skrytý odkaz
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+
+    // Pojmenování souboru s aktuálním datem
+    const date = new Date().toISOString().split('T')[0];
+    link.setAttribute('download', `export_sbirky_${date}.xlsx`);
+
+    document.body.appendChild(link);
+    link.click();
+
+    // Úklid v paměti prohlížeče
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+}
+
+// Přidat do lib/api.ts
+export async function bulkCopyItem(id: number, data: {
+    count: number,
+    titleSuffix: string,
+    invNumSuffix: string
+}) {
+    const r = await fetch(`${API_BASE}/api/v1/items/${id}/bulk-copy`, {
+        method: 'POST',
+        headers: {
+            ...getAuthHeader(),
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    });
+
+    if (!r.ok) {
+        const error = await r.json().catch(() => ({}));
+        throw new Error(error.message || 'Hromadné kopírování selhalo');
+    }
+    return true;
 }
