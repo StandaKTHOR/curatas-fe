@@ -988,15 +988,16 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .genric-btn.warning {
-  color: #fff;
-  background: #f4e700;
+  background: #ffbc34 !important;
+  color: #1f262d !important; /* Tvá tmavá barva místo bílé */
+  font-weight: 900 !important;
   border: 1px solid transparent;
 }
 
 .genric-btn.warning:hover {
-  color: #f4e700;
+  background: #e0a62e !important;
+  color: #000 !important;
   border: 1px solid #f4e700;
-  background: #fff;
 }
 
 .genric-btn.warning-border {

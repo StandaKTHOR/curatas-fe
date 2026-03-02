@@ -1,5 +1,8 @@
-// export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080';
-export const API_BASE = import.meta.env.VITE_API_BASE || 'https://curatas-be-production.up.railway.app';
+import {useEffect, useState} from "react";
+import {LabelDto} from "@/components/LabelPrinter";
+
+export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080';
+// export const API_BASE = import.meta.env.VITE_API_BASE || 'https://curatas-be-production.up.railway.app';
 
 const getAuthHeader = (): HeadersInit => {
     const token = localStorage.getItem('token');
@@ -140,16 +143,27 @@ export async function uploadItemImage(itemId: number, file: File) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/images`, {
+    const response = await fetch(`${API_BASE}/api/v1/items/${itemId}/images`, {
         method: 'POST',
         headers: {
-            // POZOR: U FormData se Content-Type v fetch nenastavuje, prohlížeč ho doplní sám vč. boundary
             'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: formData
     });
-    if (!r.ok) throw new Error('Nahrávání obrázku selhalo');
-    return r.json();
+
+    const rawResponse = await response.text(); // Přečteme odpověď jako čistý text
+    console.log("Raw response ze serveru:", rawResponse);
+
+    if (!response.ok) {
+        throw new Error(`Nahrávání selhalo: ${rawResponse}`);
+    }
+
+    try {
+        return JSON.parse(rawResponse); // Teprve teď zkusíme JSON
+    } catch (e) {
+        console.error("Chyba při parsování JSONu. Server poslal tohle:", rawResponse);
+        throw new Error("Server neposlal platný JSON. Podívej se do konzole.");
+    }
 }
 
 export async function exportItemsToExcel(params: any) {
@@ -209,3 +223,56 @@ export async function bulkCopyItem(id: number, data: {
     }
     return true;
 }
+
+export async function getDictionaries() {
+    const response = await fetch(`${API_BASE}/api/v1/dictionaries`, {
+        headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+        }
+    });
+    if (!response.ok) throw new Error('Nepodařilo se načíst číselníky');
+    return response.json();
+}
+
+export async function getNextAvailableNumbers() {
+    const response = await fetch(`${API_BASE}/api/v1/items/next-numbers`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    return response.json();
+}
+
+export async function checkUniqueness(type: 'accession' | 'inventory', value: string) {
+    // Ujisti se, že URL je správná (včetně lomítek)
+    const response = await fetch(`${API_BASE}/api/v1/items/check?type=${type}&value=${encodeURIComponent(value)}`, {
+        headers: getAuthHeader()
+    });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Server vrátil chybu:", errorData);
+        throw new Error('Chyba při validaci unikátnosti');
+    }
+    return response.json();
+}
+
+export const fetchLabelData = async (id: number): Promise<LabelDto> => {
+    // Získání tokenu pro autorizaci (předpokládáme uložení v localStorage)
+    const token = localStorage.getItem('token');
+
+    const response = await fetch(`${API_BASE}/api/v1/items/${id}/label`, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    });
+
+    if (!response.ok) {
+        // Pokud backend vrátí chybu (např. 404 nebo 403), vyhodíme výjimku
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Nepodařilo se načíst data pro štítek');
+    }
+
+    // Vracíme zformátovaný JSON, který odpovídá struktuře LabelDto
+    return await response.json();
+};
