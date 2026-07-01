@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { login } from '../lib/api'
 import { useAuth } from '../components/AuthContext' // OPRAVENÁ CESTA
 
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function Login() {
     const [username, setUsername] = useState('')
