@@ -6,6 +6,7 @@ import { useAuth } from '../components/AuthContext' // OPRAVENÁ CESTA
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { APP_NAME } from '@/lib/constants';
 
 export default function Login() {
     const [username, setUsername] = useState('')
@@ -51,8 +52,8 @@ export default function Login() {
                     <div className="w-20 h-20 bg-[#ffbc34] rounded-full flex items-center justify-center text-black font-extrabold text-4xl mx-auto mb-6 shadow-[0_0_40px_rgba(255,188,52,0.15)]">
                         A
                     </div>
-                    <h1 className="text-2xl font-black tracking-tight text-white uppercase">
-                        Zemské <span className="text-[#ffbc34]">MUSEUM</span>
+                    <h1 className="text-xl font-black tracking-tight text-white uppercase px-4 leading-tight">
+                        MES - <span className="text-[#ffbc34]">Muzejní Evidence Sbírek</span>
                     </h1>
                     <p className="text-gray-500 text-[9px] uppercase tracking-[4px] mt-2 font-bold opacity-50">
                         Intranetsystém správy

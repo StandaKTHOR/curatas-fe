@@ -7,6 +7,7 @@ import AdminItems from './pages/AdminItems'
 import Login from './pages/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminItemForm from "@/pages/AdminItemForm"
+import { APP_NAME } from '@/lib/constants'
 
 /**
  * POMOCNÁ KOMPONENTA PRO ODPOČET SEZENÍ
@@ -60,8 +61,8 @@ function AppContent() {
                         {/* LOGO SEKCE */}
                         <div className="mb-10 flex items-center gap-2">
                             <div className="w-8 h-8 bg-[#ffbc34] rounded-full flex items-center justify-center text-black font-bold shadow-sm">A</div>
-                            <h1 className="text-xl font-bold tracking-tight text-white">
-                                Zemské <span className="text-[#ffbc34]">MUSEUM</span>
+                            <h1 className="text-xs font-black tracking-tight text-white leading-tight">
+                                MES - <span className="text-[#ffbc34]">Muzejní Evidence Sbírek</span>
                             </h1>
                         </div>
 
