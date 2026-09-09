@@ -8,9 +8,11 @@ import {
     bulkCopyItem,
     getDictionaries,
     getNextAvailableNumbers,
-    checkUniqueness
+    checkUniqueness,
+    ApiError
 } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
+import { GovButton, GovFormInput, GovFormLabel, GovMessage } from '@gov-design-system-ce/react';
 
 export default function AdminItemForm() {
     const { id } = useParams();
@@ -24,12 +26,23 @@ export default function AdminItemForm() {
     const [validity, setValidity] = useState({ accession: true, inventory: true });
     const [suggestions, setSuggestions] = useState({ accession: '', inventory: '' });
 
-    // --- STAVY PRO VLASTNÍ DROPDOWN ZEMÍ ---
+    // --- STAV PRO CHYBY (KOMPLEXNÍ ERROR STAV) ---
+    const [globalError, setGlobalError] = useState<string | null>(null);
+    const [unauthorizedError, setUnauthorizedError] = useState(false);
+    const [forbiddenError, setForbiddenError] = useState(false);
+    const [conflictError, setConflictError] = useState<string | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+    // --- STAVY PRO VLASTNÍ DROPDOWNY ČÍSELNÍKŮ ---
     const [showCountries, setShowCountries] = useState(false);
     const [countrySearch, setCountrySearch] = useState('');
-    const dropdownRef = useRef<HTMLDivElement>(null);
+    const countryDropdownRef = useRef<HTMLDivElement>(null);
 
-    // --- STAV PRO ČÍSELNÍKY ---
+    const [showAuthors, setShowAuthors] = useState(false);
+    const [authorSearch, setAuthorSearch] = useState('');
+    const authorDropdownRef = useRef<HTMLDivElement>(null);
+
+    // --- STAV PRO ČÍSELNÍKY Z API ---
     const [dicts, setDicts] = useState<any>({
         objectTypes: [],
         materials: [],
@@ -71,8 +84,8 @@ export default function AdminItemForm() {
         spravce: '',
         oddeleni: '',
         insuranceValue: '',
-        weight: '', // Přidáno pole pro váhu
-        dimensions: [], // Pole pro komplexní rozměry z DB
+        weight: '',
+        dimensions: [],
         published: true,
         auditComment: '',
         imageUrls: [],
@@ -81,37 +94,37 @@ export default function AdminItemForm() {
 
     // Načtení dat při startu
     useEffect(() => {
-        // Načtení číselníků pro selecty (Materiál, Technika, atd.)
         getDictionaries().then(data => setDicts(data)).catch(console.error);
 
         if (id) {
-            getAdminItem(id).then(data => {
-                console.log("Data z API dorazila do formuláře:", data);
-
-                // Pomocná funkce, aby null nebo undefined hodnoty z API nezpůsobily pád inputů
-                const safeVal = (v: any) => (v === null || v === undefined) ? '' : v;
-
-                setForm({
-                    ...data,
-                    imageUrls: Array.isArray(data.imageUrls) ? data.imageUrls : [],
-                    author: (data.authors && data.authors.length > 0) ? data.authors[0] : (data.author || ''),
-                    material: (data.materials && data.materials.length > 0) ? data.materials[0] : (data.material || ''),
-                    weight: safeVal(data.weight),
-                    title: safeVal(data.title),
-                    description: safeVal(data.description),
-                    extendedDescription: safeVal(data.extendedDescription),
-                    technique: safeVal(data.technique),
-                    datingText: safeVal(data.datingText),
-                    countryOfOrigin: safeVal(data.countryOfOrigin),
-                    objectCondition: safeVal(data.objectCondition),
-                    spravce: safeVal(data.spravce),
-                    oddeleni: safeVal(data.oddeleni),
-                    auditComment: '',
-                    legacyData: data.legacyData || {}
-                });
-            }).catch(err => alert("Chyba při načítání detailu: " + err));
+            setLoading(true);
+            getAdminItem(id)
+                .then(data => {
+                    const safeVal = (v: any) => (v === null || v === undefined) ? '' : v;
+                    setForm({
+                        ...data,
+                        imageUrls: Array.isArray(data.imageUrls) ? data.imageUrls : [],
+                        author: (data.authors && data.authors.length > 0) ? data.authors[0] : (data.author || ''),
+                        material: (data.materials && data.materials.length > 0) ? data.materials[0] : (data.material || ''),
+                        weight: safeVal(data.weight),
+                        title: safeVal(data.title),
+                        description: safeVal(data.description),
+                        extendedDescription: safeVal(data.extendedDescription),
+                        technique: safeVal(data.technique),
+                        datingText: safeVal(data.datingText),
+                        countryOfOrigin: safeVal(data.countryOfOrigin),
+                        objectCondition: safeVal(data.objectCondition),
+                        spravce: safeVal(data.spravce),
+                        oddeleni: safeVal(data.oddeleni),
+                        auditComment: '',
+                        legacyData: data.legacyData || {}
+                    });
+                })
+                .catch(err => {
+                    setGlobalError("Nepodařilo se načíst detail předmětu: " + err.message);
+                })
+                .finally(() => setLoading(false));
         } else {
-            // Logika pro nový předmět (není ID v URL)
             getNextAvailableNumbers().then(next => {
                 setSuggestions({ accession: next.accession, inventory: next.inventory });
                 setForm((prev: any) => ({
@@ -130,8 +143,11 @@ export default function AdminItemForm() {
         }
 
         const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+            if (countryDropdownRef.current && !countryDropdownRef.current.contains(event.target as Node)) {
                 setShowCountries(false);
+            }
+            if (authorDropdownRef.current && !authorDropdownRef.current.contains(event.target as Node)) {
+                setShowAuthors(false);
             }
         };
         document.addEventListener("mousedown", handleClickOutside);
@@ -158,10 +174,9 @@ export default function AdminItemForm() {
         setUploading(true);
         try {
             const result = await uploadItemImage(Number(id), file);
-            const newUrl = result.url;
             setForm((prev: any) => ({
                 ...prev,
-                imageUrls: [...(prev.imageUrls || []), newUrl]
+                imageUrls: [...(prev.imageUrls || []), result.url]
             }));
             alert("Fotografie byla nahrána.");
         } catch (err: any) {
@@ -182,14 +197,20 @@ export default function AdminItemForm() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        // Vyčištění předchozích chyb
+        setGlobalError(null);
+        setUnauthorizedError(false);
+        setForbiddenError(false);
+        setConflictError(null);
+        setFieldErrors({});
+
         if (!validity.accession || !validity.inventory) {
-            alert("Nelze uložit: Evidenční čísla musí být unikátní!");
+            setGlobalError("Nelze uložit: Evidenční čísla musí být unikátní!");
             return;
         }
 
         setLoading(true);
 
-        // Vytvoříme čistý payload jen s poli, která chceme odeslat
         const payload = {
             title: form.title || '',
             accessionNumber: form.accessionNumber || '',
@@ -230,221 +251,379 @@ export default function AdminItemForm() {
             }
             navigate('/admin/items');
         } catch (err) {
-            alert("Chyba při ukládání: " + err);
+            console.error("Chyba při ukládání záznamu:", err);
+            if (err instanceof ApiError) {
+                if (err.status === 401) {
+                    setUnauthorizedError(true);
+                } else if (err.status === 403) {
+                    setForbiddenError(true);
+                } else if (err.status === 409) {
+                    setConflictError(err.message || "Střet verzí nebo duplicitní unikátní identifikátor.");
+                } else {
+                    setGlobalError(err.message || "Nepodařilo se uložit záznam.");
+                }
+                if (err.fieldErrors) {
+                    setFieldErrors(err.fieldErrors);
+                }
+            } else if (err instanceof Error) {
+                setGlobalError(err.message);
+            } else {
+                setGlobalError("Došlo k neočekávané chybě.");
+            }
         } finally {
             setLoading(false);
         }
     };
 
-    const inputClass = "form-control mt-1 text-sm border-gray-200 focus:border-[#ffbc34] focus:ring-0 text-[#1f262d]";
-    const selectClass = "form-select mt-1 text-sm border-gray-200 focus:border-[#ffbc34] focus:ring-0 text-[#1f262d] w-full";
-    const labelClass = "text-[10px] uppercase font-bold text-gray-500 tracking-wider";
-
     return (
-        <div className="card shadow-sm border-0 animate-in fade-in duration-500 bg-white">
-            <div className="card-header bg-white py-4 border-b">
-                <div className="flex justify-between items-center mb-4">
-                    <h4 className="font-bold text-[#1f262d] m-0 uppercase tracking-tighter text-xl">
-                        {id ? `Editace: ${form.inventoryNumber || form.accessionNumber}` : 'Nový sbírkový předmět'}
-                    </h4>
-                    <div className="flex gap-2 items-center">
-                        {!id && <span className="text-[10px] text-gray-400 italic mr-2">Foto lze přidat po uložení</span>}
-                        <input type="file" id="photo-up" hidden onChange={handleFileChange} accept="image/*" />
-                        <button
-                            type="button"
-                            onClick={() => document.getElementById('photo-up')?.click()}
-                            disabled={uploading || !id}
-                            className={`genric-btn info-border circle small ${!id ? 'opacity-30 cursor-not-allowed' : ''}`}
-                        >
-                            {uploading ? 'Nahrávám...' : '📸 Přidat foto'}
-                        </button>
-                    </div>
-                    <div className="flex items-center bg-gray-50 border rounded-full px-3 py-1 gap-2 mr-4">
-                            <span className={`text-[9px] font-black uppercase ${form.published ? 'text-green-600' : 'text-gray-400'}`}>
-                                {form.published ? '● VEŘEJNÉ' : '○ SOUKROMÉ'}
-                            </span>
-                        <div className="form-check form-switch m-0 p-0 flex items-center">
-                            <input
-                                className="form-check-input cursor-pointer"
-                                type="checkbox"
-                                role="switch"
-                                id="publishedSwitch"
-                                checked={form.published || false}
-                                onChange={(e) => setForm({...form, published: e.target.checked})}
-                                style={{ width: '30px', height: '16px', marginTop: '0' }}
-                            />
+        <div className="bg-white rounded border border-gray-200 shadow-sm animate-in fade-in duration-300">
+
+            {/* PANEL PRO GLOBÁLNÍ CHYBOVÉ STAVY */}
+            {unauthorizedError && (
+                <div className="p-4 bg-red-50 border-b border-red-200">
+                    <GovMessage color="error" type="bold">
+                        <div>
+                            <div className="font-extrabold text-sm mb-1">Přihlášení vypršelo</div>
+                            <p className="text-xs">Vaše přihlášení již není platné. Přihlaste se prosím znovu před uložením rozpracované práce.</p>
                         </div>
-                    </div>
+                    </GovMessage>
                 </div>
+            )}
 
+            {forbiddenError && (
+                <div className="p-4 bg-red-50 border-b border-red-200">
+                    <GovMessage color="error" type="bold">
+                        <div>
+                            <div className="font-extrabold text-sm mb-1">Nedostatečná oprávnění</div>
+                            <p className="text-xs">Nemáte potřebná kurátorská oprávnění pro provádění změn v tomto evidenčním fondu.</p>
+                        </div>
+                    </GovMessage>
+                </div>
+            )}
 
-                <ul className="nav nav-tabs border-0 gap-4 flex-wrap">
-                    {[
-                        { id: 'identity', label: '1. Identita' },
-                        { id: 'description', label: '2. Popis & Rozměry' },
-                        { id: 'provenance', label: '3. Původ' },
-                        { id: 'storage', label: '4. Umístění' },
-                        { id: 'demus', label: '5. Demus' },
-                        { id: 'audit', label: '6. Audit' }
-                    ].map(tab => (
-                        <li key={tab.id} className="nav-item">
-                            <button
-                                type="button"
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`pb-2 text-[11px] font-bold uppercase tracking-widest transition-all ${activeTab === tab.id ? 'text-[#ffbc34] border-b-2 border-[#ffbc34]' : 'text-gray-400 hover:text-gray-600'}`}
+            {conflictError && (
+                <div className="p-4 bg-red-50 border-b border-red-200">
+                    <GovMessage color="error" type="bold">
+                        <div>
+                            <div className="font-extrabold text-sm mb-1">Konflikt dat</div>
+                            <p className="text-xs">{conflictError}</p>
+                        </div>
+                    </GovMessage>
+                </div>
+            )}
+
+            {globalError && (
+                <div className="p-4 bg-red-50 border-b border-red-200">
+                    <GovMessage color="error" type="bold">
+                        <div>
+                            <div className="font-extrabold text-sm mb-1">Chyba ukládání</div>
+                            <p className="text-xs">{globalError}</p>
+                        </div>
+                    </GovMessage>
+                </div>
+            )}
+
+            {/* HLAVIČKA FORMULÁŘE */}
+            <div className="px-8 py-5 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h3 className="text-xl font-black text-gray-900 tracking-tight">
+                        {id ? `Kurátorský detail: ${form.inventoryNumber || form.accessionNumber}` : 'Založení nového sbírkového předmětu'}
+                    </h3>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">MZM Administrační panel</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center bg-gray-50 border rounded-full px-3 py-1 gap-2">
+                        <span className={`text-[9px] font-black uppercase ${form.published ? 'text-green-600' : 'text-gray-400'}`}>
+                            {form.published ? '● Zveřejněno' : '○ Neveřejné'}
+                        </span>
+                        <input
+                            type="checkbox"
+                            checked={form.published || false}
+                            onChange={(e) => setForm({...form, published: e.target.checked})}
+                            className="cursor-pointer rounded border-gray-300 text-[#00204a] focus:ring-0"
+                            style={{ width: '16px', height: '16px' }}
+                        />
+                    </div>
+                    {id && (
+                        <>
+                            <input type="file" id="photo-up" hidden onChange={handleFileChange} accept="image/*" />
+                            <GovButton
+                                type="outlined"
+                                color="neutral"
+                                size="s"
+                                disabled={uploading}
+                                onClick={() => document.getElementById('photo-up')?.click()}
                             >
-                                {tab.label}
-                            </button>
-                        </li>
-                    ))}
-                </ul>
+                                {uploading ? 'Nahrávám...' : '📸 Nahrát foto'}
+                            </GovButton>
+                        </>
+                    )}
+                </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="card-body p-8">
+            {/* ZÁLOŽKOVÁ NAVIGACE (TABS) */}
+            <div className="border-b border-gray-100 bg-gray-50 px-8 py-2 overflow-x-auto flex gap-4 select-none">
+                {[
+                    { id: 'identity', label: '1. Identita' },
+                    { id: 'description', label: '2. Popis & Rozměry' },
+                    { id: 'provenance', label: '3. Původ' },
+                    { id: 'storage', label: '4. Umístění' },
+                    { id: 'demus', label: '5. Demus' },
+                    { id: 'audit', label: '6. Audit' }
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`py-2 px-1 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${activeTab === tab.id ? 'text-[#00204a] border-[#00204a]' : 'text-gray-400 border-transparent hover:text-gray-600'}`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* TĚLO FORMULÁŘE */}
+            <form onSubmit={handleSubmit} className="p-8 space-y-6">
+
+                {/* 1. IDENTITA */}
                 {activeTab === 'identity' && (
-                    <div className="row g-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        <div className="col-md-6">
-                            <label className={labelClass}>Přírůstkové číslo *</label>
-                            <input
-                                className={`${inputClass} ${!validity.accession ? 'border-red-500 bg-red-50' : ''}`}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-200">
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="accessionNumber">Přírůstkové číslo *</GovFormLabel>
+                            <GovFormInput
+                                id="accessionNumber"
                                 value={form.accessionNumber || ''}
-                                onChange={e => setForm({...form, accessionNumber: e.target.value})}
-                                onBlur={e => handleNumberBlur('accession', e.target.value)}
+                                onChange={(e: any) => setForm({...form, accessionNumber: e.target.value})}
+                                onBlur={(e: any) => handleNumberBlur('accession', e.target.value)}
                                 required
                             />
+                            {fieldErrors.accessionNumber && <p className="text-xs font-bold text-red-600">{fieldErrors.accessionNumber}</p>}
                             {!validity.accession && (
-                                <div className="mt-2 p-2 bg-red-100 text-red-700 text-[10px] rounded border border-red-200 flex justify-between items-center">
-                                    <span>⚠️ Číslo již existuje!</span>
-                                    <button type="button" className="underline font-black" onClick={() => { setForm({...form, accessionNumber: suggestions.accession}); setValidity(v => ({...v, accession: true})); }}>
+                                <div className="mt-1.5 p-2 bg-red-50 border border-red-100 rounded text-[10px] text-red-700 flex justify-between items-center font-bold">
+                                    <span>⚠️ Číslo je již obsazeno!</span>
+                                    <button type="button" className="underline text-red-900" onClick={() => { setForm({...form, accessionNumber: suggestions.accession}); setValidity(v => ({...v, accession: true})); }}>
                                         Použít volné: {suggestions.accession}
                                     </button>
                                 </div>
                             )}
                         </div>
 
-                        <div className="col-md-6">
-                            <label className={labelClass}>Inventární číslo</label>
-                            <input
-                                className={`${inputClass} ${!validity.inventory ? 'border-red-500 bg-red-50' : ''}`}
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="inventoryNumber">Inventární číslo</GovFormLabel>
+                            <GovFormInput
+                                id="inventoryNumber"
                                 value={form.inventoryNumber || ''}
-                                onChange={e => setForm({...form, inventoryNumber: e.target.value})}
-                                onBlur={e => handleNumberBlur('inventory', e.target.value)}
+                                onChange={(e: any) => setForm({...form, inventoryNumber: e.target.value})}
+                                onBlur={(e: any) => handleNumberBlur('inventory', e.target.value)}
                             />
+                            {fieldErrors.inventoryNumber && <p className="text-xs font-bold text-red-600">{fieldErrors.inventoryNumber}</p>}
                             {!validity.inventory && (
-                                <div className="mt-2 p-2 bg-red-100 text-red-700 text-[10px] rounded border border-red-200 flex justify-between items-center">
-                                    <span>⚠️ Číslo již existuje!</span>
-                                    <button type="button" className="underline font-black" onClick={() => { setForm({...form, inventoryNumber: suggestions.inventory}); setValidity(v => ({...v, inventory: true})); }}>
+                                <div className="mt-1.5 p-2 bg-red-50 border border-red-100 rounded text-[10px] text-red-700 flex justify-between items-center font-bold">
+                                    <span>⚠️ Číslo je již obsazeno!</span>
+                                    <button type="button" className="underline text-red-900" onClick={() => { setForm({...form, inventoryNumber: suggestions.inventory}); setValidity(v => ({...v, inventory: true})); }}>
                                         Použít volné: {suggestions.inventory}
                                     </button>
                                 </div>
                             )}
                         </div>
 
-                        <div className="col-md-12">
-                            <label className={labelClass}>Název předmětu *</label>
-                            <input className={`${inputClass} text-lg font-bold`} value={form.title || ''} onChange={e => setForm({...form, title: e.target.value})} required />
+                        <div className="md:col-span-2 space-y-1">
+                            <GovFormLabel htmlFor="title">Název sbírkového předmětu *</GovFormLabel>
+                            <GovFormInput
+                                id="title"
+                                value={form.title || ''}
+                                onChange={(e: any) => setForm({...form, title: e.target.value})}
+                                required
+                            />
+                            {fieldErrors.title && <p className="text-xs font-bold text-red-600">{fieldErrors.title}</p>}
                         </div>
-                        <div className="col-md-4">
-                            <label className={labelClass}>Podsbírka</label>
-                            <input className={inputClass} value={form.subCollection || ''} onChange={e => setForm({...form, subCollection: e.target.value})} />
+
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="subCollection">Fond / Podsbírka</GovFormLabel>
+                            <GovFormInput id="subCollection" value={form.subCollection || ''} onChange={(e: any) => setForm({...form, subCollection: e.target.value})} />
+                            {fieldErrors.subCollection && <p className="text-xs font-bold text-red-600">{fieldErrors.subCollection}</p>}
                         </div>
-                        <div className="col-md-4">
-                            <label className={labelClass}>Typ předmětu</label>
-                            <select className={selectClass} value={form.objectType || ''} onChange={e => setForm({...form, objectType: e.target.value})}>
-                                <option value="">-- Vyberte typ --</option>
+
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="objectType">Typ předmětu</GovFormLabel>
+                            <select
+                                id="objectType"
+                                className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                value={form.objectType || ''}
+                                onChange={e => setForm({...form, objectType: e.target.value})}
+                            >
+                                <option value="">-- Vyberte typ (Číselník) --</option>
                                 {dicts.objectTypes?.map((t: string) => <option key={t} value={t}>{t}</option>)}
                             </select>
+                            {fieldErrors.objectType && <p className="text-xs font-bold text-red-600">{fieldErrors.objectType}</p>}
                         </div>
-                        <div className="col-md-4">
-                            <label className={labelClass}>Stav zpracování</label>
-                            <select className={selectClass} value={form.catalogingStatus || ''} onChange={e => setForm({...form, catalogingStatus: e.target.value})}>
+
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="catalogingStatus">Stav zpracování</GovFormLabel>
+                            <select
+                                id="catalogingStatus"
+                                className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                value={form.catalogingStatus || ''}
+                                onChange={e => setForm({...form, catalogingStatus: e.target.value})}
+                            >
                                 <option>Zapsán</option>
                                 <option>Katalogizován</option>
                                 <option>Odborně zpracován</option>
                             </select>
+                            {fieldErrors.catalogingStatus && <p className="text-xs font-bold text-red-600">{fieldErrors.catalogingStatus}</p>}
                         </div>
+
+                        {/* VOLBA PRO HROMADNÉ ZAKLÁDÁNÍ */}
+                        {!id && (
+                            <div className="md:col-span-2 mt-4 p-5 bg-blue-50/50 rounded border border-blue-100 space-y-4">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="bulkMode"
+                                        checked={bulkMode}
+                                        onChange={e => setBulkMode(e.target.checked)}
+                                        className="rounded border-gray-300 text-[#00204a]"
+                                    />
+                                    <label htmlFor="bulkMode" className="text-xs font-bold text-gray-700 uppercase tracking-wider cursor-pointer">
+                                        Režim hromadného založení duplikátů (MS Access parita)
+                                    </label>
+                                </div>
+                                {bulkMode && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-in slide-in-from-top-2 duration-300">
+                                        <div className="space-y-1">
+                                            <GovFormLabel htmlFor="bulkCount">Počet duplicitních kopií</GovFormLabel>
+                                            <GovFormInput id="bulkCount" type="number" value={bulkParams.count} onChange={(e: any) => setBulkParams({...bulkParams, count: parseInt(e.target.value, 10) || 1})} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <GovFormLabel htmlFor="titleSuffix">Přípona názvu kopií</GovFormLabel>
+                                            <GovFormInput id="titleSuffix" value={bulkParams.titleSuffix} onChange={(e: any) => setBulkParams({...bulkParams, titleSuffix: e.target.value})} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <GovFormLabel htmlFor="invNumSuffix">Přípona inventárního čísla</GovFormLabel>
+                                            <GovFormInput id="invNumSuffix" value={bulkParams.invNumSuffix} onChange={(e: any) => setBulkParams({...bulkParams, invNumSuffix: e.target.value})} />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
 
+                {/* 2. POPIS & ROZMĚRY */}
                 {activeTab === 'description' && (
-                    <div className="row g-4 animate-in fade-in duration-300">
-                        <div className="col-md-6">
-                            <label className={labelClass}>Autor / Původce</label>
-                            <select
-                                className={selectClass}
-                                value={form.author || ''}
-                                onChange={e => setForm({...form, author: e.target.value})}
-                            >
-                                <option value="">-- Vyberte autora --</option>
-                                {Array.from(new Set(dicts.authors || [])).sort().map((a: any) => (
-                                    <option key={a} value={a}>{a}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="col-md-6">
-                            <label className={labelClass}>Datování</label>
-                            <input
-                                className={inputClass}
-                                value={form.datingText || ''}
-                                onChange={e => setForm({...form, datingText: e.target.value})}
-                                placeholder="např. 19. století, léta 1920-1930"
-                            />
-                        </div>
-                        <div className="col-md-6">
-                            <label className={labelClass}>Materiál</label>
-                            <select className={selectClass} value={form.material || ''} onChange={e => setForm({...form, material: e.target.value})}>
-                                <option value="">-- Vyberte materiál --</option>
-                                {dicts.materials?.map((m: string) => <option key={m} value={m}>{m}</option>)}
-                            </select>
-                        </div>
-                        <div className="col-md-6">
-                            <label className={labelClass}>Technika</label>
-                            <select className={selectClass} value={form.technique || ''} onChange={e => setForm({...form, technique: e.target.value})}>
-                                <option value="">-- Vyberte techniku --</option>
-                                {dicts.techniques?.map((t: string) => <option key={t} value={t}>{t}</option>)}
-                            </select>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-200">
+                        {/* Autor s Autocomplete vyhledáváním z Dictionaries */}
+                        <div className="space-y-1" ref={authorDropdownRef}>
+                            <GovFormLabel htmlFor="author">Autor / Původce (Číselník)</GovFormLabel>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    id="author"
+                                    className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                    value={form.author || ''}
+                                    onFocus={() => setShowAuthors(true)}
+                                    onChange={(e) => { setForm({...form, author: e.target.value}); setAuthorSearch(e.target.value); setShowAuthors(true); }}
+                                    placeholder="Začněte psát jméno autora..."
+                                />
+                                {showAuthors && (
+                                    <div className="absolute left-0 right-0 mt-1 max-h-[180px] overflow-y-auto bg-white border border-gray-200 rounded shadow-lg z-[999]">
+                                        {Array.from(new Set(dicts.authors || []))
+                                            .filter((a: any) => a.toLowerCase().includes(authorSearch.toLowerCase()))
+                                            .sort()
+                                            .map((a: any) => (
+                                                <div
+                                                    key={a}
+                                                    onClick={() => { setForm({...form, author: a}); setAuthorSearch(''); setShowAuthors(false); }}
+                                                    className="px-4 py-2 text-xs hover:bg-gray-100 cursor-pointer transition-colors border-b last:border-0"
+                                                >
+                                                    {a}
+                                                </div>
+                                            ))}
+                                    </div>
+                                )}
+                            </div>
+                            {fieldErrors.author && <p className="text-xs font-bold text-red-600">{fieldErrors.author}</p>}
                         </div>
 
-                        {/* SEKCE ROZMĚRY A VÁHA */}
-                        <div className="col-md-12 mt-2 bg-gray-50 p-4 rounded-lg border border-dashed border-gray-200">
-                            <label className={labelClass}>Fyzické parametry</label>
-                            <div className="row g-3 mt-1">
-                                <div className="col-md-3">
-                                    <div className="input-group input-group-sm">
-                                        <span className="input-group-text bg-white text-[9px] font-bold border-gray-200">VÁHA</span>
-                                        <input type="text" className="form-control" placeholder="kg" value={form.weight || ''} onChange={e => setForm({...form, weight: e.target.value})} />
-                                    </div>
-                                 </div>
-                                <div className="col-md-3">
-                                    <div className="input-group input-group-sm">
-                                        <span className="input-group-text bg-white text-[9px] font-bold border-gray-200">VÝŠKA</span>
-                                        <input type="text" className="form-control" placeholder="cm" value={form.legacyData?.vyska || ''} onChange={e => handleLegacyChange('vyska', e.target.value)} />
-                                    </div>
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="datingText">Datování</GovFormLabel>
+                            <GovFormInput
+                                id="datingText"
+                                value={form.datingText || ''}
+                                onChange={(e: any) => setForm({...form, datingText: e.target.value})}
+                                placeholder="např. 19. století, léta 1920-1930"
+                            />
+                            {fieldErrors.datingText && <p className="text-xs font-bold text-red-600">{fieldErrors.datingText}</p>}
+                        </div>
+
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="material">Materiál</GovFormLabel>
+                            <select
+                                id="material"
+                                className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                value={form.material || ''}
+                                onChange={e => setForm({...form, material: e.target.value})}
+                            >
+                                <option value="">-- Vyberte materiál (Číselník) --</option>
+                                {dicts.materials?.map((m: string) => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                            {fieldErrors.material && <p className="text-xs font-bold text-red-600">{fieldErrors.material}</p>}
+                        </div>
+
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="technique">Technika</GovFormLabel>
+                            <select
+                                id="technique"
+                                className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                value={form.technique || ''}
+                                onChange={e => setForm({...form, technique: e.target.value})}
+                            >
+                                <option value="">-- Vyberte techniku (Číselník) --</option>
+                                {dicts.techniques?.map((t: string) => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                            {fieldErrors.technique && <p className="text-xs font-bold text-red-600">{fieldErrors.technique}</p>}
+                        </div>
+
+                        {/* SEKCE PRO FYZICKÉ ROZMĚRY */}
+                        <div className="md:col-span-2 bg-gray-50 p-5 rounded border border-gray-200">
+                            <h4 className="text-xs font-black text-gray-800 uppercase tracking-widest mb-3">Fyzické rozměry & Hmotnost</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                                <div className="space-y-1">
+                                    <GovFormLabel htmlFor="weight">Váha (g / kg)</GovFormLabel>
+                                    <GovFormInput id="weight" value={form.weight || ''} onChange={(e: any) => setForm({...form, weight: e.target.value})} />
                                 </div>
-                                <div className="col-md-3">
-                                    <div className="input-group input-group-sm">
-                                        <span className="input-group-text bg-white text-[9px] font-bold border-gray-200">ŠÍŘKA</span>
-                                        <input type="text" className="form-control" placeholder="cm" value={form.legacyData?.sirka || ''} onChange={e => handleLegacyChange('sirka', e.target.value)} />
-                                    </div>
+                                <div className="space-y-1">
+                                    <GovFormLabel htmlFor="legacyVyska">Výška (cm)</GovFormLabel>
+                                    <GovFormInput id="legacyVyska" value={form.legacyData?.vyska || ''} onChange={(e: any) => handleLegacyChange('vyska', e.target.value)} />
                                 </div>
-                                <div className="col-md-3">
-                                    <div className="input-group input-group-sm">
-                                        <span className="input-group-text bg-white text-[9px] font-bold border-gray-200">HLOUBKA</span>
-                                        <input type="text" className="form-control" placeholder="cm" value={form.legacyData?.hloubka || ''} onChange={e => handleLegacyChange('hloubka', e.target.value)} />
-                                    </div>
+                                <div className="space-y-1">
+                                    <GovFormLabel htmlFor="legacySirka">Šířka (cm)</GovFormLabel>
+                                    <GovFormInput id="legacySirka" value={form.legacyData?.sirka || ''} onChange={(e: any) => handleLegacyChange('sirka', e.target.value)} />
+                                </div>
+                                <div className="space-y-1">
+                                    <GovFormLabel htmlFor="legacyHloubka">Hloubka (cm)</GovFormLabel>
+                                    <GovFormInput id="legacyHloubka" value={form.legacyData?.hloubka || ''} onChange={(e: any) => handleLegacyChange('hloubka', e.target.value)} />
                                 </div>
                             </div>
                         </div>
 
-                        <div className="col-md-12">
-                            <label className={labelClass}>Základní popis</label>
-                            <textarea className={inputClass} rows={3} value={form.description || ''} onChange={e => setForm({...form, description: e.target.value})} />
+                        <div className="md:col-span-2 space-y-1">
+                            <GovFormLabel htmlFor="description">Základní badatelský popis</GovFormLabel>
+                            <textarea
+                                id="description"
+                                rows={4}
+                                className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                value={form.description || ''}
+                                onChange={e => setForm({...form, description: e.target.value})}
+                            />
+                            {fieldErrors.description && <p className="text-xs font-bold text-red-600">{fieldErrors.description}</p>}
                         </div>
-                        <div className="col-md-12">
-                            <label className={labelClass}>Fotodokumentace</label>
-                            <div className="flex gap-4 mt-2 overflow-x-auto pb-2">
+
+                        <div className="md:col-span-2 space-y-1">
+                            <GovFormLabel>Nahraná fotodokumentace</GovFormLabel>
+                            <div className="flex gap-4 overflow-x-auto pb-2 pt-2">
                                 {form.imageUrls?.map((url: string, idx: number) => (
-                                    <div key={idx} className="min-w-[150px] h-[100px] rounded border overflow-hidden bg-white shadow-sm transition-transform hover:scale-105">
+                                    <div key={idx} className="min-w-[140px] h-[100px] bg-gray-50 border rounded overflow-hidden shadow-sm hover:scale-105 transition-transform">
                                         <img
                                             src={url}
                                             className="w-full h-full object-cover"
@@ -454,98 +633,180 @@ export default function AdminItemForm() {
                                         />
                                     </div>
                                 ))}
-                                {(!form.imageUrls || form.imageUrls.length === 0) && <p className="text-xs text-gray-400 italic py-4">Žádné fotografie nejsou k dispozici.</p>}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {activeTab === 'provenance' && (
-                    <div className="row g-4 animate-in fade-in duration-300">
-                        <div className="col-md-6" ref={dropdownRef}>
-                            <label className={labelClass}>Země původu</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    className={inputClass}
-                                    value={form.countryOfOrigin || ''}
-                                    onFocus={() => setShowCountries(true)}
-                                    onChange={(e) => { setForm({...form, countryOfOrigin: e.target.value}); setCountrySearch(e.target.value); setShowCountries(true); }}
-                                    placeholder="Hledat zemi..."
-                                />
-                                {showCountries && (
-                                    <div className="absolute left-0 right-0 mt-1 max-h-[220px] overflow-y-auto bg-[#1a2026] border border-white/10 rounded-lg shadow-2xl z-[9999]">
-                                        {dicts.countries?.filter((c: string) => c.toLowerCase().includes(countrySearch.toLowerCase())).map((c: string) => (
-                                            <div key={c} onClick={() => { setForm({...form, countryOfOrigin: c}); setCountrySearch(''); setShowCountries(false); }} className="px-4 py-2 text-sm text-gray-300 hover:bg-[#ffbc34] hover:text-black cursor-pointer transition-colors border-b border-white/5 last:border-0">
-                                                {c}
-                                            </div>
-                                        ))}
-                                    </div>
+                                {(!form.imageUrls || form.imageUrls.length === 0) && (
+                                    <p className="text-xs italic text-gray-400 py-3">Zatím nebyly nahrány žádné doplňující fotografie.</p>
                                 )}
                             </div>
                         </div>
-                        <div className="col-md-6">
-                            <label className={labelClass}>Způsob nabytí</label>
-                            <select className={selectClass} value={form.acquisitionMethod || ''} onChange={e => setForm({...form, acquisitionMethod: e.target.value})}>
-                                <option>Dar</option><option>Koupě</option><option>Vlastní sběr</option><option>Archeologický výzkum</option>
-                            </select>
+                    </div>
+                )}
+
+                {/* 3. PŮVOD */}
+                {activeTab === 'provenance' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-200">
+                        {/* Vyhledávání země z Dictionaries */}
+                        <div className="space-y-1" ref={countryDropdownRef}>
+                            <GovFormLabel htmlFor="countryOfOrigin">Země původu (Číselník)</GovFormLabel>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    id="countryOfOrigin"
+                                    className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                    value={form.countryOfOrigin || ''}
+                                    onFocus={() => setShowCountries(true)}
+                                    onChange={(e) => { setForm({...form, countryOfOrigin: e.target.value}); setCountrySearch(e.target.value); setShowCountries(true); }}
+                                    placeholder="Hledat stát v číselníku..."
+                                />
+                                {showCountries && (
+                                    <div className="absolute left-0 right-0 mt-1 max-h-[180px] overflow-y-auto bg-white border border-gray-200 rounded shadow-lg z-[999]">
+                                        {dicts.countries
+                                            ?.filter((c: string) => c.toLowerCase().includes(countrySearch.toLowerCase()))
+                                            .sort()
+                                            .map((c: string) => (
+                                                <div
+                                                    key={c}
+                                                    onClick={() => { setForm({...form, countryOfOrigin: c}); setCountrySearch(''); setShowCountries(false); }}
+                                                    className="px-4 py-2 text-xs hover:bg-gray-100 cursor-pointer transition-colors border-b last:border-0"
+                                                >
+                                                    {c}
+                                                </div>
+                                            ))}
+                                    </div>
+                                )}
+                            </div>
+                            {fieldErrors.countryOfOrigin && <p className="text-xs font-bold text-red-600">{fieldErrors.countryOfOrigin}</p>}
                         </div>
-                        <div className="col-md-6">
-                            <label className={labelClass}>Datum nabytí</label>
-                            <input type="date" className={inputClass} value={form.acquisitionDate || ''} onChange={e => setForm({...form, acquisitionDate: e.target.value})} />
+
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="acquisitionMethod">Způsob nabytí</GovFormLabel>
+                            <select
+                                id="acquisitionMethod"
+                                className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                value={form.acquisitionMethod || ''}
+                                onChange={e => setForm({...form, acquisitionMethod: e.target.value})}
+                            >
+                                <option>Dar</option>
+                                <option>Koupě</option>
+                                <option>Vlastní sběr</option>
+                                <option>Archeologický výzkum</option>
+                            </select>
+                            {fieldErrors.acquisitionMethod && <p className="text-xs font-bold text-red-600">{fieldErrors.acquisitionMethod}</p>}
+                        </div>
+
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="acquisitionDate">Datum nabytí do muzea</GovFormLabel>
+                            <GovFormInput type="date" id="acquisitionDate" value={form.acquisitionDate || ''} onChange={(e: any) => setForm({...form, acquisitionDate: e.target.value})} />
+                            {fieldErrors.acquisitionDate && <p className="text-xs font-bold text-red-600">{fieldErrors.acquisitionDate}</p>}
                         </div>
                     </div>
                 )}
 
+                {/* 4. UMÍSTĚNÍ */}
                 {activeTab === 'storage' && (
-                    <div className="row g-4 animate-in fade-in duration-300">
-                        <div className="col-md-4"><label className={labelClass}>Budova</label><input className={inputClass} value={form.locationBuilding || ''} onChange={e => setForm({...form, locationBuilding: e.target.value})} /></div>
-                        <div className="col-md-4"><label className={labelClass}>Místnost</label><input className={inputClass} value={form.locationRoom || ''} onChange={e => setForm({...form, locationRoom: e.target.value})} /></div>
-                        <div className="col-md-4">
-                            <label className={labelClass}>Stav předmětu</label>
-                            <select className={selectClass} value={form.objectCondition || ''} onChange={e => setForm({...form, objectCondition: e.target.value})}>
-                                <option>Výborný</option><option>Dobrý</option><option>Poškozeno</option><option>Havarijní</option>
-                            </select>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-200">
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="locationBuilding">Depozitář (Budova)</GovFormLabel>
+                            <GovFormInput id="locationBuilding" value={form.locationBuilding || ''} onChange={(e: any) => setForm({...form, locationBuilding: e.target.value})} />
+                            {fieldErrors.locationBuilding && <p className="text-xs font-bold text-red-600">{fieldErrors.locationBuilding}</p>}
                         </div>
-                        <div className="col-md-6">
-                            <label className={labelClass}>Správce</label>
-                            <select className={selectClass} value={form.spravce || ''} onChange={e => setForm({...form, spravce: e.target.value})}>
+
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="locationRoom">Místnost</GovFormLabel>
+                            <GovFormInput id="locationRoom" value={form.locationRoom || ''} onChange={(e: any) => setForm({...form, locationRoom: e.target.value})} />
+                            {fieldErrors.locationRoom && <p className="text-xs font-bold text-red-600">{fieldErrors.locationRoom}</p>}
+                        </div>
+
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="objectCondition">Fyzický stav předmětu</GovFormLabel>
+                            <select
+                                id="objectCondition"
+                                className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                value={form.objectCondition || ''}
+                                onChange={e => setForm({...form, objectCondition: e.target.value})}
+                            >
+                                <option>Výborný</option>
+                                <option>Dobrý</option>
+                                <option>Poškozeno</option>
+                                <option>Havarijní</option>
+                            </select>
+                            {fieldErrors.objectCondition && <p className="text-xs font-bold text-red-600">{fieldErrors.objectCondition}</p>}
+                        </div>
+
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="spravce">Zodpovědný správce (Číselník)</GovFormLabel>
+                            <select
+                                id="spravce"
+                                className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                value={form.spravce || ''}
+                                onChange={e => setForm({...form, spravce: e.target.value})}
+                            >
                                 <option value="">-- Vyberte správce --</option>
                                 {dicts.spravci?.map((s: string) => <option key={s} value={s}>{s}</option>)}
                             </select>
+                            {fieldErrors.spravce && <p className="text-xs font-bold text-red-600">{fieldErrors.spravce}</p>}
                         </div>
-                        <div className="col-md-6">
-                            <label className={labelClass}>Pojistná hodnota (Kč)</label>
-                            <input type="number" className={inputClass} value={form.insuranceValue || ''} onChange={e => setForm({...form, insuranceValue: e.target.value})} />
+
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="insuranceValue">Pojistná hodnota (Kč)</GovFormLabel>
+                            <GovFormInput type="number" id="insuranceValue" value={form.insuranceValue || ''} onChange={(e: any) => setForm({...form, insuranceValue: e.target.value})} />
+                            {fieldErrors.insuranceValue && <p className="text-xs font-bold text-red-600">{fieldErrors.insuranceValue}</p>}
                         </div>
                     </div>
                 )}
 
+                {/* 5. DEMUS */}
                 {activeTab === 'demus' && (
-                    <div className="row g-4 bg-gray-50 p-4 border rounded animate-in fade-in duration-300">
-                        <div className="col-md-12 mb-2"><h6 className="font-bold text-[#3e5569] m-0">Historická evidence Demus</h6></div>
-                        <div className="col-md-6"><label className={labelClass}>Původní způsob nabytí</label><input className={inputClass} value={form.legacyData?.zpusob_nabyti || ''} onChange={e => handleLegacyChange('zpusob_nabyti', e.target.value)} /></div>
-                        <div className="col-md-6"><label className={labelClass}>Předchozí majitel</label><input className={inputClass} value={form.legacyData?.predchozi_majitel || ''} onChange={e => handleLegacyChange('predchozi_majitel', e.target.value)} /></div>
+                    <div className="p-6 bg-gray-50 border border-gray-200 rounded grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-200">
+                        <div className="md:col-span-2 pb-2 border-b">
+                            <h4 className="text-xs font-black text-gray-800 uppercase tracking-widest">Migrovaná Demus metadata (MS Access Parita)</h4>
+                        </div>
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="zpusobNabyti">Původní způsob nabytí (Demus)</GovFormLabel>
+                            <GovFormInput id="zpusobNabyti" value={form.legacyData?.zpusob_nabyti || ''} onChange={(e: any) => handleLegacyChange('zpusob_nabyti', e.target.value)} />
+                        </div>
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="predchoziMajitel">Předchozí vlastník (Demus)</GovFormLabel>
+                            <GovFormInput id="predchoziMajitel" value={form.legacyData?.predchozi_majitel || ''} onChange={(e: any) => handleLegacyChange('predchozi_majitel', e.target.value)} />
+                        </div>
                     </div>
                 )}
 
+                {/* 6. AUDITNÍ STOPA */}
                 {activeTab === 'audit' && (
-                    <div className="bg-yellow-50 p-6 border-l-4 border-[#ffbc34]">
-                        <label className={labelClass}>Důvod provedené změny (Auditní stopa) *</label>
-                        <textarea className={`${inputClass} mt-2 bg-white`} rows={4} value={form.auditComment || ''} onChange={e => setForm({...form, auditComment: e.target.value})} required={!!id} />
+                    <div className="p-6 bg-yellow-50 border-l-4 border-[#00204a] space-y-2 animate-in fade-in duration-200">
+                        <GovFormLabel htmlFor="auditComment">Zdůvodnění provedených změn (Auditní záznam) *</GovFormLabel>
+                        <p className="text-[10px] text-gray-400 italic">Podle interních předpisů Moravského zemského muzea vyžaduje každá editace schváleného záznamu zadání odůvodnění.</p>
+                        <textarea
+                            id="auditComment"
+                            rows={4}
+                            className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
+                            value={form.auditComment || ''}
+                            onChange={e => setForm({...form, auditComment: e.target.value})}
+                            required={!!id}
+                        />
+                        {fieldErrors.auditComment && <p className="text-xs font-bold text-red-600">{fieldErrors.auditComment}</p>}
                     </div>
                 )}
 
-                <div className="mt-10 pt-6 border-t flex gap-3">
-                    <button
-                        type="submit"
+                {/* AKČNÍ BUTTTONY */}
+                <div className="pt-6 border-t border-gray-200 flex gap-3">
+                    <GovButton
+                        nativeType="submit"
                         disabled={loading || !validity.accession || !validity.inventory}
-                        className="genric-btn warning radius px-8 font-black text-[#1f262d] shadow-md hover:shadow-lg transition-all"
+                        type="solid"
+                        color="primary"
                     >
-                        {loading ? 'Pracuji...' : 'ULOŽIT ZÁZNAM'}
-                    </button>
-                    <button type="button" onClick={() => navigate('/admin/items')} className="genric-btn default-border radius px-8 text-xs font-bold uppercase">Zrušit</button>
+                        {loading ? 'Ukládám...' : 'Uložit záznam'}
+                    </GovButton>
+                    <GovButton
+                        type="outlined"
+                        color="neutral"
+                        onClick={() => navigate('/admin/items')}
+                    >
+                        Zrušit změny
+                    </GovButton>
                 </div>
+
             </form>
         </div>
     );

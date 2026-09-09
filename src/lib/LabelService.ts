@@ -19,10 +19,10 @@ export const printItemLabel = (item: any) => {
         <title>Štítek: ${item.inventoryNumber}</title>
         <style>
           @page { size: 62mm 29mm; margin: 0; }
-          body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0; padding: 2mm;
-            display: flex; align-items: center; 
+            display: flex; align-items: center;
             width: 58mm; height: 25mm; overflow: hidden;
           }
           .qr-box { width: 22mm; height: 22mm; margin-right: 2mm; }

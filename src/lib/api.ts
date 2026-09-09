@@ -24,7 +24,8 @@ export async function listPublicItems(params: {
     location?: string,
     spravce?: string,
     page?: number,
-    size?: number
+    size?: number,
+    sort?: string
 }) {
     const u = new URL(`${API_BASE}/public/v1/catalog/items`);
 
@@ -102,13 +103,42 @@ export async function login(credentials: { username: string; password: string })
     return data;
 }
 
+export class ApiError extends Error {
+    constructor(
+        public status: number,
+        public message: string,
+        public fieldErrors?: Record<string, string>
+    ) {
+        super(message);
+        this.name = 'ApiError';
+    }
+}
+
 export async function createItem(body: any) {
     const r = await fetch(`${API_BASE}/api/v1/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(body)
     });
-    if (!r.ok) throw new Error('Vytvoření selhalo');
+    if (!r.ok) {
+        let fieldErrors: Record<string, string> | undefined = undefined;
+        let errMsg = 'Vytvoření selhalo';
+        try {
+            const data = await r.json();
+            if (data.message) errMsg = data.message;
+            if (data.fieldErrors) {
+                if (Array.isArray(data.fieldErrors)) {
+                    fieldErrors = {};
+                    data.fieldErrors.forEach((fe: any) => {
+                        fieldErrors![fe.field] = fe.message;
+                    });
+                } else if (typeof data.fieldErrors === 'object') {
+                    fieldErrors = data.fieldErrors;
+                }
+            }
+        } catch (e) { /* ignore JSON parse error */ }
+        throw new ApiError(r.status, errMsg, fieldErrors);
+    }
     return r.json();
 }
 
@@ -118,7 +148,25 @@ export async function updateItem(id: number, body: any) {
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(body)
     });
-    if (!r.ok) throw new Error('Aktualizace selhala');
+    if (!r.ok) {
+        let fieldErrors: Record<string, string> | undefined = undefined;
+        let errMsg = 'Aktualizace selhala';
+        try {
+            const data = await r.json();
+            if (data.message) errMsg = data.message;
+            if (data.fieldErrors) {
+                if (Array.isArray(data.fieldErrors)) {
+                    fieldErrors = {};
+                    data.fieldErrors.forEach((fe: any) => {
+                        fieldErrors![fe.field] = fe.message;
+                    });
+                } else if (typeof data.fieldErrors === 'object') {
+                    fieldErrors = data.fieldErrors;
+                }
+            }
+        } catch (e) { /* ignore JSON parse error */ }
+        throw new ApiError(r.status, errMsg, fieldErrors);
+    }
     return r.json();
 }
 
