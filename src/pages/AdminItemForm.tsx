@@ -9,10 +9,16 @@ import {
     getDictionaries,
     getNextAvailableNumbers,
     checkUniqueness,
-    ApiError
+    ApiError,
+    listAttachments,
+    uploadAttachment,
+    deleteAttachment,
+    API_BASE
 } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { GovButton, GovFormInput, GovFormLabel, GovMessage } from '@gov-design-system-ce/react';
+import AddDictionaryModal from '../components/AddDictionaryModal';
+import { FaPlus, FaTrash, FaMapMarkerAlt, FaExternalLinkAlt, FaPaperclip, FaFileAlt, FaFileDownload, FaUpload } from 'react-icons/fa';
 
 export default function AdminItemForm() {
     const { id } = useParams();
@@ -32,6 +38,119 @@ export default function AdminItemForm() {
     const [forbiddenError, setForbiddenError] = useState(false);
     const [conflictError, setConflictError] = useState<string | null>(null);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+    // --- STAVY PRO PŘÍLOHY ---
+    const [attachments, setAttachments] = useState<any[]>([]);
+    const [attFile, setAttFile] = useState<File | null>(null);
+    const [attCaption, setAttCaption] = useState('');
+    const [attUploading, setAttUploading] = useState(false);
+
+    // --- STAV PRO INLINE MODÁL ČÍSELNÍKU ---
+    const [dictModal, setDictModal] = useState<{
+        isOpen: boolean;
+        type: string;
+        title: string;
+        targetField: string;
+    }>({
+        isOpen: false,
+        type: '',
+        title: '',
+        targetField: ''
+    });
+
+    const openDictModal = (type: string, title: string, targetField: string) => {
+        setDictModal({ isOpen: true, type, title, targetField });
+    };
+
+    const handleDictCreated = (newItem: { code: string; label: string; type: string }) => {
+        const fieldMap: Record<string, string> = {
+            'OBJECT_TYPE': 'objectTypes',
+            'MATERIAL': 'materials',
+            'TECHNIQUE': 'techniques',
+            'SPRAVCE': 'spravci',
+            'COUNTRY': 'countries',
+            'AUTHOR': 'authors'
+        };
+        const dictKey = fieldMap[newItem.type];
+        if (dictKey) {
+            setDicts((prev: any) => ({
+                ...prev,
+                [dictKey]: [...(prev[dictKey] || []), newItem.label]
+            }));
+        }
+        if (dictModal.targetField) {
+            setForm((prev: any) => ({
+                ...prev,
+                [dictModal.targetField]: newItem.label
+            }));
+        }
+        setDictModal({ isOpen: false, type: '', title: '', targetField: '' });
+    };
+
+    const loadAttachments = async () => {
+        if (id) {
+            try {
+                const list = await listAttachments(Number(id));
+                setAttachments(list);
+            } catch (e) {
+                console.error('Chyba načítání příloh:', e);
+            }
+        }
+    };
+
+    useEffect(() => {
+        if (id) {
+            loadAttachments();
+        }
+    }, [id]);
+
+    const handleUploadAttachment = async () => {
+        if (!attFile || !id) return;
+        setAttUploading(true);
+        try {
+            await uploadAttachment(Number(id), attFile, attCaption);
+            setAttFile(null);
+            setAttCaption('');
+            await loadAttachments();
+            alert('Příloha byla úspěšně nahrána.');
+        } catch (err: any) {
+            alert('Chyba při nahrávání přílohy: ' + err.message);
+        } finally {
+            setAttUploading(false);
+        }
+    };
+
+    const handleDeleteAttachment = async (attId: number) => {
+        if (!id || !window.confirm('Opravdu chcete tuto přílohu smazat?')) return;
+        try {
+            await deleteAttachment(Number(id), attId);
+            await loadAttachments();
+        } catch (err: any) {
+            alert('Chyba při mazání přílohy: ' + err.message);
+        }
+    };
+
+    const addDimensionRow = () => {
+        setForm((prev: any) => ({
+            ...prev,
+            dimensions: [...(prev.dimensions || []), { dimensionType: 'Výška', value: '', unit: 'cm' }]
+        }));
+    };
+
+    const removeDimensionRow = (idx: number) => {
+        setForm((prev: any) => ({
+            ...prev,
+            dimensions: prev.dimensions.filter((_: any, i: number) => i !== idx)
+        }));
+    };
+
+    const updateDimensionRow = (idx: number, field: string, val: any) => {
+        setForm((prev: any) => {
+            const updated = [...(prev.dimensions || [])];
+            updated[idx] = { ...updated[idx], [field]: val };
+            return { ...prev, dimensions: updated };
+        });
+    };
 
     // --- STAVY PRO VLASTNÍ DROPDOWNY ČÍSELNÍKŮ ---
     const [showCountries, setShowCountries] = useState(false);
@@ -86,6 +205,9 @@ export default function AdminItemForm() {
         insuranceValue: '',
         weight: '',
         dimensions: [],
+        latitude: '',
+        longitude: '',
+        coordinateSystem: 'WGS-84',
         published: true,
         auditComment: '',
         imageUrls: [],
@@ -116,6 +238,16 @@ export default function AdminItemForm() {
                         objectCondition: safeVal(data.objectCondition),
                         spravce: safeVal(data.spravce),
                         oddeleni: safeVal(data.oddeleni),
+                        latitude: safeVal(data.latitude),
+                        longitude: safeVal(data.longitude),
+                        coordinateSystem: safeVal(data.coordinateSystem) || 'WGS-84',
+                        dimensions: Array.isArray(data.dimensions)
+                            ? data.dimensions.map((d: any) => ({
+                                dimensionType: d.type || d.dimensionType || '',
+                                value: d.value !== undefined && d.value !== null ? d.value : '',
+                                unit: d.unit || 'cm'
+                            }))
+                            : [],
                         auditComment: '',
                         legacyData: data.legacyData || {}
                     });
@@ -137,7 +269,11 @@ export default function AdminItemForm() {
                     author: '',
                     material: '',
                     technique: '',
-                    weight: ''
+                    weight: '',
+                    latitude: '',
+                    longitude: '',
+                    coordinateSystem: 'WGS-84',
+                    dimensions: []
                 }));
             }).catch(console.error);
         }
@@ -209,6 +345,24 @@ export default function AdminItemForm() {
             return;
         }
 
+        if (form.latitude !== '' && form.latitude !== null && form.latitude !== undefined) {
+            const lat = parseFloat(form.latitude);
+            if (isNaN(lat) || lat < -90 || lat > 90) {
+                setGlobalError("Zeměpisná šířka (Latitude) musí být v rozsahu od -90 do 90 stupňů.");
+                setActiveTab('storage');
+                return;
+            }
+        }
+
+        if (form.longitude !== '' && form.longitude !== null && form.longitude !== undefined) {
+            const lon = parseFloat(form.longitude);
+            if (isNaN(lon) || lon < -180 || lon > 180) {
+                setGlobalError("Zeměpisná délka (Longitude) musí být v rozsahu od -180 do 180 stupňů.");
+                setActiveTab('storage');
+                return;
+            }
+        }
+
         setLoading(true);
 
         const payload = {
@@ -237,6 +391,16 @@ export default function AdminItemForm() {
             weight: form.weight || '',
             published: form.published,
             auditComment: form.auditComment || '',
+            latitude: (form.latitude !== '' && form.latitude !== null && !isNaN(parseFloat(form.latitude))) ? parseFloat(form.latitude) : null,
+            longitude: (form.longitude !== '' && form.longitude !== null && !isNaN(parseFloat(form.longitude))) ? parseFloat(form.longitude) : null,
+            coordinateSystem: form.coordinateSystem || 'WGS-84',
+            dimensions: (form.dimensions || [])
+                .filter((d: any) => d.value !== '' && d.value !== null && !isNaN(Number(d.value)))
+                .map((d: any) => ({
+                    type: d.dimensionType || 'Rozměr',
+                    value: Number(d.value),
+                    unit: d.unit || 'cm'
+                })),
             legacyData: form.legacyData || {}
         };
 
@@ -258,7 +422,7 @@ export default function AdminItemForm() {
                 } else if (err.status === 403) {
                     setForbiddenError(true);
                 } else if (err.status === 409) {
-                    setConflictError(err.message || "Střet verzí nebo duplicitní unikátní identifikátor.");
+                    setConflictError(err.message || "Předmět s tímto inventárním číslem již existuje. Zvolte prosím unikátní číslo.");
                 } else {
                     setGlobalError(err.message || "Nepodařilo se uložit záznam.");
                 }
@@ -367,9 +531,10 @@ export default function AdminItemForm() {
                     { id: 'identity', label: '1. Identita' },
                     { id: 'description', label: '2. Popis & Rozměry' },
                     { id: 'provenance', label: '3. Původ' },
-                    { id: 'storage', label: '4. Umístění' },
+                    { id: 'storage', label: '4. Umístění & GPS' },
                     { id: 'demus', label: '5. Demus' },
-                    { id: 'audit', label: '6. Audit' }
+                    { id: 'audit', label: '6. Audit' },
+                    { id: 'attachments', label: '7. Přílohy' }
                 ].map(tab => (
                     <button
                         key={tab.id}
@@ -445,7 +610,16 @@ export default function AdminItemForm() {
                         </div>
 
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="objectType">Typ předmětu</GovFormLabel>
+                            <div className="flex items-center justify-between">
+                                <GovFormLabel htmlFor="objectType">Typ předmětu</GovFormLabel>
+                                <button
+                                    type="button"
+                                    onClick={() => openDictModal('OBJECT_TYPE', 'Typ předmětu', 'objectType')}
+                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline"
+                                >
+                                    + Nový typ
+                                </button>
+                            </div>
                             <select
                                 id="objectType"
                                 className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
@@ -514,7 +688,16 @@ export default function AdminItemForm() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-200">
                         {/* Autor s Autocomplete vyhledáváním z Dictionaries */}
                         <div className="space-y-1" ref={authorDropdownRef}>
-                            <GovFormLabel htmlFor="author">Autor / Původce (Číselník)</GovFormLabel>
+                            <div className="flex items-center justify-between">
+                                <GovFormLabel htmlFor="author">Autor / Původce (Číselník)</GovFormLabel>
+                                <button
+                                    type="button"
+                                    onClick={() => openDictModal('AUTHOR', 'Autor / Původce', 'author')}
+                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline"
+                                >
+                                    + Nový autor
+                                </button>
+                            </div>
                             <div className="relative">
                                 <input
                                     type="text"
@@ -531,7 +714,7 @@ export default function AdminItemForm() {
                                             .filter((a: any) => a.toLowerCase().includes(authorSearch.toLowerCase()))
                                             .sort()
                                             .map((a: any) => (
-                                                <div
+                                                 <div
                                                     key={a}
                                                     onClick={() => { setForm({...form, author: a}); setAuthorSearch(''); setShowAuthors(false); }}
                                                     className="px-4 py-2 text-xs hover:bg-gray-100 cursor-pointer transition-colors border-b last:border-0"
@@ -557,7 +740,16 @@ export default function AdminItemForm() {
                         </div>
 
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="material">Materiál</GovFormLabel>
+                            <div className="flex items-center justify-between">
+                                <GovFormLabel htmlFor="material">Materiál</GovFormLabel>
+                                <button
+                                    type="button"
+                                    onClick={() => openDictModal('MATERIAL', 'Materiál', 'material')}
+                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline"
+                                >
+                                    + Nový materiál
+                                </button>
+                            </div>
                             <select
                                 id="material"
                                 className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
@@ -571,7 +763,16 @@ export default function AdminItemForm() {
                         </div>
 
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="technique">Technika</GovFormLabel>
+                            <div className="flex items-center justify-between">
+                                <GovFormLabel htmlFor="technique">Technika</GovFormLabel>
+                                <button
+                                    type="button"
+                                    onClick={() => openDictModal('TECHNIQUE', 'Technika', 'technique')}
+                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline"
+                                >
+                                    + Nová technika
+                                </button>
+                            </div>
                             <select
                                 id="technique"
                                 className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
@@ -585,8 +786,8 @@ export default function AdminItemForm() {
                         </div>
 
                         {/* SEKCE PRO FYZICKÉ ROZMĚRY */}
-                        <div className="md:col-span-2 bg-gray-50 p-5 rounded border border-gray-200">
-                            <h4 className="text-xs font-black text-gray-800 uppercase tracking-widest mb-3">Fyzické rozměry & Hmotnost</h4>
+                        <div className="md:col-span-2 bg-gray-50 p-5 rounded border border-gray-200 space-y-4">
+                            <h4 className="text-xs font-black text-gray-800 uppercase tracking-widest">Fyzické rozměry & Hmotnost</h4>
                             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                                 <div className="space-y-1">
                                     <GovFormLabel htmlFor="weight">Váha (g / kg)</GovFormLabel>
@@ -604,6 +805,82 @@ export default function AdminItemForm() {
                                     <GovFormLabel htmlFor="legacyHloubka">Hloubka (cm)</GovFormLabel>
                                     <GovFormInput id="legacyHloubka" value={form.legacyData?.hloubka || ''} onChange={(e: any) => handleLegacyChange('hloubka', e.target.value)} />
                                 </div>
+                            </div>
+
+                            {/* OPAKOVATELNÉ DETAILNÍ ROZMĚRY */}
+                            <div className="pt-4 border-t border-gray-200">
+                                <div className="flex justify-between items-center mb-3">
+                                    <div>
+                                        <h5 className="text-xs font-black text-gray-700 uppercase tracking-wider">Detailní opakovatelné rozměry</h5>
+                                        <p className="text-[11px] text-gray-500">Zadání specifických rozměrů předmětu (výška, šířka, hloubka, průměr, tloušťka...)</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={addDimensionRow}
+                                        className="px-3 py-1 bg-[#00204a] text-white text-xs font-bold rounded hover:bg-[#003366] transition-colors flex items-center gap-1.5"
+                                    >
+                                        <FaPlus className="text-[10px]" /> Přidat rozměr
+                                    </button>
+                                </div>
+
+                                {(!form.dimensions || form.dimensions.length === 0) ? (
+                                    <p className="text-xs italic text-gray-400 py-2">Zatím nebyly zadány žádné detailní rozměry.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {form.dimensions.map((dim: any, idx: number) => (
+                                            <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200">
+                                                <div className="w-1/3">
+                                                    <select
+                                                        value={dim.dimensionType}
+                                                        onChange={(e) => updateDimensionRow(idx, 'dimensionType', e.target.value)}
+                                                        className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                                    >
+                                                        <option>Výška</option>
+                                                        <option>Šířka</option>
+                                                        <option>Hloubka</option>
+                                                        <option>Průměr</option>
+                                                        <option>Tloušťka</option>
+                                                        <option>Délka</option>
+                                                        <option>Rozpětí</option>
+                                                        <option>Hmotnost</option>
+                                                        <option>Jiné</option>
+                                                    </select>
+                                                </div>
+                                                <div className="w-1/3">
+                                                    <input
+                                                        type="number"
+                                                        step="any"
+                                                        placeholder="Hodnota"
+                                                        value={dim.value}
+                                                        onChange={(e) => updateDimensionRow(idx, 'value', e.target.value)}
+                                                        className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                                    />
+                                                </div>
+                                                <div className="w-1/4">
+                                                    <select
+                                                        value={dim.unit}
+                                                        onChange={(e) => updateDimensionRow(idx, 'unit', e.target.value)}
+                                                        className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                                    >
+                                                        <option>cm</option>
+                                                        <option>mm</option>
+                                                        <option>m</option>
+                                                        <option>g</option>
+                                                        <option>kg</option>
+                                                    </select>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeDimensionRow(idx)}
+                                                    className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                                    title="Odebrat rozměr"
+                                                >
+                                                    <FaTrash className="text-xs" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -646,7 +923,16 @@ export default function AdminItemForm() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-200">
                         {/* Vyhledávání země z Dictionaries */}
                         <div className="space-y-1" ref={countryDropdownRef}>
-                            <GovFormLabel htmlFor="countryOfOrigin">Země původu (Číselník)</GovFormLabel>
+                            <div className="flex items-center justify-between">
+                                <GovFormLabel htmlFor="countryOfOrigin">Země původu (Číselník)</GovFormLabel>
+                                <button
+                                    type="button"
+                                    onClick={() => openDictModal('COUNTRY', 'Země původu', 'countryOfOrigin')}
+                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline"
+                                >
+                                    + Nová země
+                                </button>
+                            </div>
                             <div className="relative">
                                 <input
                                     type="text"
@@ -701,7 +987,7 @@ export default function AdminItemForm() {
                     </div>
                 )}
 
-                {/* 4. UMÍSTĚNÍ */}
+                {/* 4. UMÍSTĚNÍ & GPS */}
                 {activeTab === 'storage' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-200">
                         <div className="space-y-1">
@@ -733,7 +1019,16 @@ export default function AdminItemForm() {
                         </div>
 
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="spravce">Zodpovědný správce (Číselník)</GovFormLabel>
+                            <div className="flex items-center justify-between">
+                                <GovFormLabel htmlFor="spravce">Zodpovědný správce (Číselník)</GovFormLabel>
+                                <button
+                                    type="button"
+                                    onClick={() => openDictModal('SPRAVCE', 'Správce fondu', 'spravce')}
+                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline"
+                                >
+                                    + Nový správce
+                                </button>
+                            </div>
                             <select
                                 id="spravce"
                                 className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
@@ -750,6 +1045,74 @@ export default function AdminItemForm() {
                             <GovFormLabel htmlFor="insuranceValue">Pojistná hodnota (Kč)</GovFormLabel>
                             <GovFormInput type="number" id="insuranceValue" value={form.insuranceValue || ''} onChange={(e: any) => setForm({...form, insuranceValue: e.target.value})} />
                             {fieldErrors.insuranceValue && <p className="text-xs font-bold text-red-600">{fieldErrors.insuranceValue}</p>}
+                        </div>
+
+                        {/* GPS A GEOGRAFICKÁ LOKACE */}
+                        <div className="md:col-span-2 bg-gray-50 p-5 rounded border border-gray-200 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-xs font-black text-gray-800 uppercase tracking-widest flex items-center gap-1.5">
+                                    <FaMapMarkerAlt className="text-[#00204a]" /> Geografické souřadnice & Naleziště (GPS)
+                                </h4>
+                                {form.latitude && form.longitude && (
+                                    <div className="flex gap-2">
+                                        <a
+                                            href={`https://mapy.cz/zakladni?q=${form.latitude},${form.longitude}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline"
+                                        >
+                                            <FaExternalLinkAlt className="text-[9px]" /> Mapy.cz
+                                        </a>
+                                        <a
+                                            href={`https://www.google.com/maps?q=${form.latitude},${form.longitude}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-600 hover:underline"
+                                        >
+                                            <FaExternalLinkAlt className="text-[9px]" /> Google Maps
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div className="space-y-1">
+                                    <GovFormLabel htmlFor="latitude">Zeměpisná šířka (Lat, -90 až 90)</GovFormLabel>
+                                    <GovFormInput
+                                        id="latitude"
+                                        type="number"
+                                        step="any"
+                                        value={form.latitude !== null && form.latitude !== undefined ? form.latitude : ''}
+                                        onChange={(e: any) => setForm({...form, latitude: e.target.value})}
+                                        placeholder="např. 49.1951"
+                                    />
+                                    {fieldErrors.latitude && <p className="text-xs font-bold text-red-600">{fieldErrors.latitude}</p>}
+                                </div>
+                                <div className="space-y-1">
+                                    <GovFormLabel htmlFor="longitude">Zeměpisná délka (Lon, -180 až 180)</GovFormLabel>
+                                    <GovFormInput
+                                        id="longitude"
+                                        type="number"
+                                        step="any"
+                                        value={form.longitude !== null && form.longitude !== undefined ? form.longitude : ''}
+                                        onChange={(e: any) => setForm({...form, longitude: e.target.value})}
+                                        placeholder="např. 16.6068"
+                                    />
+                                    {fieldErrors.longitude && <p className="text-xs font-bold text-red-600">{fieldErrors.longitude}</p>}
+                                </div>
+                                <div className="space-y-1">
+                                    <GovFormLabel htmlFor="coordinateSystem">Souřadnicový systém</GovFormLabel>
+                                    <select
+                                        id="coordinateSystem"
+                                        className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                        value={form.coordinateSystem || 'WGS-84'}
+                                        onChange={e => setForm({...form, coordinateSystem: e.target.value})}
+                                    >
+                                        <option value="WGS-84">WGS-84 (GPS standard)</option>
+                                        <option value="S-JTSK">S-JTSK (Křovák, Česko)</option>
+                                        <option value="ETRS89">ETRS89 (Evropský systém)</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -788,6 +1151,107 @@ export default function AdminItemForm() {
                     </div>
                 )}
 
+                {/* 7. PŘÍLOHY & DOKUMENTY */}
+                {activeTab === 'attachments' && (
+                    <div className="space-y-6 animate-in fade-in duration-200">
+                        {!id ? (
+                            <div className="p-8 text-center bg-gray-50 border border-gray-200 rounded text-gray-500">
+                                <FaPaperclip className="mx-auto text-3xl text-gray-400 mb-2" />
+                                <p className="font-bold text-sm">Dokumenty a přílohy lze nahrávat po prvotním uložení předmětu.</p>
+                                <p className="text-xs mt-1">Uložte prosím základní identifikační údaje předmětu, poté se zpřístupní nahrávání dokladové přílohy.</p>
+                            </div>
+                        ) : (
+                            <>
+                                {/* FORMULÁŘ NAHRÁNÍ PŘÍLOHY */}
+                                <div className="p-6 bg-gray-50 border border-gray-200 rounded space-y-4">
+                                    <h4 className="text-xs font-black text-gray-800 uppercase tracking-widest flex items-center gap-1.5">
+                                        <FaUpload className="text-[#00204a]" /> Nahrát novou přílohu k předmětu
+                                    </h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <GovFormLabel htmlFor="attachmentFile">Soubor (PDF, JPG, PNG, DOCX, ZIP...)</GovFormLabel>
+                                            <input
+                                                id="attachmentFile"
+                                                type="file"
+                                                onChange={(e) => setAttFile(e.target.files?.[0] || null)}
+                                                className="w-full text-xs text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-[#00204a] file:text-white hover:file:bg-[#003366] cursor-pointer"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <GovFormLabel htmlFor="attachmentCaption">Popisek / Popis dokumentu</GovFormLabel>
+                                            <GovFormInput
+                                                id="attachmentCaption"
+                                                value={attCaption}
+                                                onChange={(e: any) => setAttCaption(e.target.value)}
+                                                placeholder="např. Restaurátorská zpráva 2024, Nabývací doklad"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <GovButton
+                                            type="solid"
+                                            color="primary"
+                                            size="s"
+                                            disabled={!attFile || attUploading}
+                                            onClick={handleUploadAttachment}
+                                        >
+                                            {attUploading ? 'Nahrávám přílohu...' : 'Nahrát přílohu'}
+                                        </GovButton>
+                                    </div>
+                                </div>
+
+                                {/* SEZNAM NAHRANÝCH PŘÍLOH */}
+                                <div className="bg-white rounded border border-gray-200 overflow-hidden">
+                                    <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+                                        <h4 className="text-xs font-black uppercase text-gray-500 flex items-center gap-1.5">
+                                            <FaPaperclip /> Evidované přílohy ({attachments.length})
+                                        </h4>
+                                    </div>
+                                    {attachments.length === 0 ? (
+                                        <p className="p-6 text-xs italic text-gray-400 text-center">K tomuto předmětu zatím nebyly nahrány žádné soubory ani dokumenty.</p>
+                                    ) : (
+                                        <div className="divide-y divide-gray-100">
+                                            {attachments.map((att: any) => (
+                                                <div key={att.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <FaFileAlt className="text-gray-400 text-lg flex-shrink-0" />
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm font-bold text-gray-900 truncate">{att.fileName}</p>
+                                                            <p className="text-xs text-gray-500">
+                                                                {att.caption && <span className="font-semibold text-gray-700 mr-2">{att.caption}</span>}
+                                                                <span>{(att.fileSize / 1024).toFixed(1)} KB</span>
+                                                                {att.createdAt && <span> • {new Date(att.createdAt).toLocaleDateString('cs-CZ')}</span>}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <a
+                                                            href={`${API_BASE}/api/v1/items/${id}/attachments/${att.id}/file`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1 text-xs font-bold text-[#00204a] hover:underline px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                                                        >
+                                                            <FaFileDownload /> Stáhnout
+                                                        </a>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteAttachment(att.id)}
+                                                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                                            title="Smazat přílohu"
+                                                        >
+                                                            <FaTrash className="text-xs" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+
                 {/* AKČNÍ BUTTTONY */}
                 <div className="pt-6 border-t border-gray-200 flex gap-3">
                     <GovButton
@@ -808,6 +1272,15 @@ export default function AdminItemForm() {
                 </div>
 
             </form>
+
+            {/* INLINE MODÁL PRO ČÍSELNÍK */}
+            <AddDictionaryModal
+                isOpen={dictModal.isOpen}
+                dictionaryType={dictModal.type}
+                dictionaryTitle={dictModal.title}
+                onClose={() => setDictModal({ isOpen: false, type: '', title: '', targetField: '' })}
+                onSuccess={handleDictCreated}
+            />
         </div>
     );
 }

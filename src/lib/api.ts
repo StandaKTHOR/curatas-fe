@@ -324,3 +324,235 @@ export const fetchLabelData = async (id: number): Promise<LabelDto> => {
     // Vracíme zformátovaný JSON, který odpovídá struktuře LabelDto
     return await response.json();
 };
+
+// ==========================================
+// PRACOVNÍ SADY (WORKSETS)
+// ==========================================
+
+export interface WorksetSummary {
+    id: string;
+    name: string;
+    description: string;
+    itemCount: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export async function listWorksets(): Promise<WorksetSummary[]> {
+    const r = await fetch(`${API_BASE}/api/v1/worksets`, {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Načítání pracovních sad selhalo');
+    return r.json();
+}
+
+export async function createWorkset(data: { name: string; description?: string; itemIds?: number[] }): Promise<WorksetSummary> {
+    const r = await fetch(`${API_BASE}/api/v1/worksets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Vytvoření pracovní sady selhalo');
+    }
+    return r.json();
+}
+
+export async function createWorksetFromFilter(data: { name: string; description?: string; filter: any }): Promise<WorksetSummary> {
+    const r = await fetch(`${API_BASE}/api/v1/worksets/from-filter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Vytvoření sady z filtru selhalo');
+    }
+    return r.json();
+}
+
+export async function getWorksetDetail(id: string, page = 0, size = 50) {
+    const r = await fetch(`${API_BASE}/api/v1/worksets/${id}?page=${page}&size=${size}`, {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Načítání detailu pracovní sady selhalo');
+    return r.json();
+}
+
+export async function addItemsToWorkset(id: string, itemIds: number[]) {
+    const r = await fetch(`${API_BASE}/api/v1/worksets/${id}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify({ itemIds })
+    });
+    if (!r.ok) throw new Error('Přidání položek do sady selhalo');
+    return r.json();
+}
+
+export async function removeWorksetItem(worksetId: string, itemId: number) {
+    const r = await fetch(`${API_BASE}/api/v1/worksets/${worksetId}/items/${itemId}`, {
+        method: 'DELETE',
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Odebrání položky ze sady selhalo');
+}
+
+export async function deleteWorkset(id: string) {
+    const r = await fetch(`${API_BASE}/api/v1/worksets/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Smazání pracovní sady selhalo');
+}
+
+// ==========================================
+// SELEKTIVNÍ KLONOVÁNÍ PŘEDMĚTU
+// ==========================================
+
+export interface CloneItemOptions {
+    copyDescription?: boolean;
+    copyDating?: boolean;
+    copyLocation?: boolean;
+    copyAuthors?: boolean;
+    copyMaterials?: boolean;
+    copyClassification?: boolean;
+    copyDimensions?: boolean;
+    targetInventoryNumber?: string;
+}
+
+export async function cloneItemSelective(id: number, options: CloneItemOptions) {
+    const r = await fetch(`${API_BASE}/api/v1/items/${id}/clone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(options)
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Klonování předmětu selhalo');
+    }
+    return r.json();
+}
+
+// ==========================================
+// VYŘAZENÍ Z EVIDENCE (DEACCESSION)
+// ==========================================
+
+export interface DeaccessionData {
+    reason: string;
+    deaccessionDate?: string;
+    documentNumber?: string;
+}
+
+export async function deaccessionItem(id: number, data: DeaccessionData) {
+    const r = await fetch(`${API_BASE}/api/v1/items/${id}/deaccession`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Vyřazení z evidence selhalo');
+    }
+    return r.json();
+}
+
+// ==========================================
+// TISK KARTY PŘEDMĚTU (PRINT BASIC)
+// ==========================================
+
+export async function getPrintBasic(id: number) {
+    const r = await fetch(`${API_BASE}/api/v1/items/${id}/print-basic`, {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Načtení tiskových dat selhalo');
+    return r.json();
+}
+
+// ==========================================
+// ČÍSELNÍKY - INLINE PŘIDÁVÁNÍ A STROM
+// ==========================================
+
+export async function createDictionaryItem(data: { type: string; code: string; label: string; parentId?: number; sortOrder?: number }) {
+    const r = await fetch(`${API_BASE}/api/v1/dictionaries`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Uložení do číselníku selhalo');
+    }
+    return r.json();
+}
+
+export async function getDictionaryTree(type: string) {
+    const r = await fetch(`${API_BASE}/api/v1/dictionaries/tree?type=${encodeURIComponent(type)}`, {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Načtení stromu číselníku selhalo');
+    return r.json();
+}
+
+// ==========================================
+// PŘÍLOHY (DOKUMENTY A SOUBORY)
+// ==========================================
+
+export async function listAttachments(itemId: number) {
+    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/attachments`, {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Načtení příloh selhalo');
+    return r.json();
+}
+
+export async function uploadAttachment(itemId: number, file: File, caption?: string, isPrimary = false) {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (caption) formData.append('caption', caption);
+    formData.append('isPrimary', isPrimary.toString());
+
+    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/attachments`, {
+        method: 'POST',
+        headers: getAuthHeader(),
+        body: formData
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Nahrání přílohy selhalo');
+    }
+    return r.json();
+}
+
+export async function deleteAttachment(itemId: number, attachmentId: number) {
+    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/attachments/${attachmentId}`, {
+        method: 'DELETE',
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Smazání přílohy selhalo');
+}
+
+// ==========================================
+// REJSTŘÍK SUBJEKTŮ / AUTORŮ (PARTIES)
+// ==========================================
+
+export async function searchParties(q: string) {
+    const r = await fetch(`${API_BASE}/api/v1/parties?q=${encodeURIComponent(q)}`, {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Hledání subjektů selhalo');
+    return r.json();
+}
+
+export async function createParty(data: { type: string; firstName?: string; lastName: string; birthDate?: string; deathDate?: string; note?: string }) {
+    const r = await fetch(`${API_BASE}/api/v1/parties`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Vytvoření subjektu selhalo');
+    }
+    return r.json();
+}
