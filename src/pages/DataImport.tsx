@@ -145,9 +145,12 @@ export default function DataImport({ api = importApi, pollInterval = 2000 }: { a
             <p className="text-sm text-gray-500 text-center italic">{t.empty}</p>
           )}
           <div className="flex justify-end pt-2">
-            <GovButton nativeType="submit" disabled={!file || flow.busy || flow.checking || !!flow.error} type="solid" color="primary">
+            <button
+                type="submit"
+                disabled={!file || flow.busy || flow.checking || !!flow.error}
+                className="px-6 py-3 rounded-md bg-[#ffb511] text-gray-900 font-bold disabled:opacity-50 disabled:cursor-not-allowed">
               {t.upload}
-            </GovButton>
+            </button>
           </div>
         </form>
       )}
