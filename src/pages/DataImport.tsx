@@ -248,19 +248,27 @@ export default function DataImport({ api = importApi, pollInterval = 2000 }: { a
           )}
 
           {data.status === 'UPLOADED' && (
-            <div className="flex justify-end">
-              <GovButton disabled={flow.busy || flow.checking || !!flow.error} onClick={flow.validate} type="solid" color="primary">
-                {t.validate}
-              </GovButton>
-            </div>
+              <div className="flex justify-end">
+                <button
+                    type="button"
+                    disabled={flow.busy || flow.checking || !!flow.error}
+                    onClick={flow.validate}
+                    className="px-6 py-3 rounded-md bg-[#ffb511] text-gray-900 font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                  {t.validate}
+                </button>
+              </div>
           )}
 
           {(data.status === 'VALID' || data.status === 'READY') && (
-            <div className="flex justify-end">
-              <GovButton disabled={flow.busy || flow.checking || !!flow.error} onClick={() => flow.start()} type="solid" color="primary">
-                {t.start}
-              </GovButton>
-            </div>
+              <div className="flex justify-end">
+                <button
+                    type="button"
+                    disabled={flow.busy || flow.checking || !!flow.error}
+                    onClick={() => flow.start()}
+                    className="px-6 py-3 rounded-md bg-[#ffb511] text-gray-900 font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                  {t.start}
+                </button>
+              </div>
           )}
 
           {(data.status === 'IMPORTING' || done || data.status === 'FAILED') && (
