@@ -7,6 +7,7 @@ import {
     bulkCopyItem,
     fetchLabelData,
     listWorksets,
+    searchPrintItems,
     WorksetSummary
 } from '../lib/api'
 import { FaEdit, FaTrash, FaPrint, FaCopy, FaFileExcel, FaPlus, FaSearch, FaChevronLeft, FaChevronRight, FaFilter, FaIdCard, FaLayerGroup } from 'react-icons/fa'
@@ -15,12 +16,29 @@ import DeaccessionModal from '@/components/DeaccessionModal';
 import SelectiveCloneModal from '@/components/SelectiveCloneModal';
 import WorksetModal from '@/components/WorksetModal';
 import MuseumCardPrint from '@/components/MuseumCardPrint';
+import ItemListPrint from '@/components/ItemListPrint';
+import AdvancedFilterBuilder, { FilterGroup, createEmptyGroup } from '@/components/AdvancedFilterBuilder';
 
 export default function AdminItems() {
     const [data, setData] = useState<any>(null);
     const [page, setPage] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [showAdvancedBuilder, setShowAdvancedBuilder] = useState(false);
+    const [advancedFilterGroup, setAdvancedFilterGroup] = useState<FilterGroup>(createEmptyGroup('AND'));
+    const [isAdvancedFilterActive, setIsAdvancedFilterActive] = useState(false);
+    const [listPrintModal, setListPrintModal] = useState<{
+        isOpen: boolean;
+        mode: 'list' | 'cards';
+        items: any[];
+        totalCount?: number;
+    }>({
+        isOpen: false,
+        mode: 'list',
+        items: [],
+        totalCount: undefined
+    });
+    const [isPrintLoading, setIsPrintLoading] = useState(false);
     const navigate = useNavigate();
 
     // --- STAVY PRO PRACOVNÍ SADY & VÝBĚR ---
@@ -59,6 +77,9 @@ export default function AdminItems() {
     const loadData = () => {
         const queryParams: any = { page, size: 50, q: searchTerm, ...filters };
         if (selectedWorkset) queryParams.worksetId = selectedWorkset;
+        if (isAdvancedFilterActive && (advancedFilterGroup.conditions.length > 0 || advancedFilterGroup.groups.length > 0)) {
+            queryParams.advancedFilter = JSON.stringify(advancedFilterGroup);
+        }
 
         listAdminItems(queryParams)
             .then(setData)
@@ -74,7 +95,7 @@ export default function AdminItems() {
             loadData();
         }, 400);
         return () => clearTimeout(delayDebounceFn);
-    }, [page, searchTerm, filters]);
+    }, [page, searchTerm, filters, isAdvancedFilterActive, advancedFilterGroup]);
 
     const handleFilterChange = (key: string, value: string) => {
         setPage(0);
@@ -87,6 +108,8 @@ export default function AdminItems() {
             objectType: '', author: '', datingFrom: '', datingTo: '',
             originPlace: '', material: '', technique: '', location: '', spravce: ''
         });
+        setAdvancedFilterGroup(createEmptyGroup('AND'));
+        setIsAdvancedFilterActive(false);
         setSearchTerm('');
         setPage(0);
     };
@@ -98,9 +121,37 @@ export default function AdminItems() {
         }
     };
 
+    const handlePrintList = async () => {
+        setIsPrintLoading(true);
+        try {
+            const queryParams: any = { q: searchTerm, ...filters };
+            if (selectedWorkset) queryParams.worksetId = selectedWorkset;
+            if (isAdvancedFilterActive && (advancedFilterGroup.conditions.length > 0 || advancedFilterGroup.groups.length > 0)) {
+                queryParams.advancedFilter = JSON.stringify(advancedFilterGroup);
+            }
+            const printItems = await searchPrintItems(queryParams);
+            setListPrintModal({
+                isOpen: true,
+                mode: 'list',
+                items: printItems,
+                totalCount: data?.totalElements ?? printItems.length
+            });
+        } catch (err) {
+            console.error("Chyba při načítání tiskové sestavy:", err);
+            alert("Nepodařilo se načíst data pro tisk soupisu.");
+        } finally {
+            setIsPrintLoading(false);
+        }
+    };
+
     const handleExportExcel = async () => {
         try {
-            await exportItemsToExcel({ q: searchTerm, ...filters });
+            const queryParams: any = { q: searchTerm, ...filters };
+            if (selectedWorkset) queryParams.worksetId = selectedWorkset;
+            if (isAdvancedFilterActive && (advancedFilterGroup.conditions.length > 0 || advancedFilterGroup.groups.length > 0)) {
+                queryParams.advancedFilter = JSON.stringify(advancedFilterGroup);
+            }
+            await exportItemsToExcel(queryParams);
         } catch (error) {
             alert("Export se nezdařil.");
         }
@@ -132,7 +183,15 @@ export default function AdminItems() {
                     <h4 className="card-title m-0 font-bold text-[#1f262d] uppercase tracking-tighter">
                         Správa exponátů <span className="text-[#ffbc34] ml-2">({data.totalElements})</span>
                     </h4>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            onClick={handlePrintList}
+                            disabled={isPrintLoading}
+                            className="genric-btn info-border radius px-3 py-2 text-[10px] font-bold uppercase flex items-center gap-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                            title="Vytisknout úřední inventární soupis všech vyfiltrovaných položek"
+                        >
+                            <FaPrint /> {isPrintLoading ? 'Načítám tisk...' : 'Tisk soupisu (A4)'}
+                        </button>
                         <button onClick={handleExportExcel} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">
                             <FaFileExcel /> Export .xlsx
                         </button>
@@ -142,11 +201,11 @@ export default function AdminItems() {
                     </div>
                 </div>
 
-                <div className="flex gap-3">
-                    <div className="flex-grow relative">
+                <div className="flex flex-wrap gap-3">
+                    <div className="flex-grow relative min-w-[240px]">
                         <input
                             className="form-control pl-10 border-gray-200 focus:border-[#ffbc34] focus:ring-0 rounded-pill text-sm py-2 bg-gray-50"
-                            placeholder="Hledat podle názvu, čísla nebo popisu..."
+                            placeholder="Rychlé hledání: název, inv. číslo, popis, autor..."
                             value={searchTerm}
                             onChange={e => { setPage(0); setSearchTerm(e.target.value); }}
                         />
@@ -169,12 +228,37 @@ export default function AdminItems() {
                         </select>
                     )}
                     <button
-                        onClick={() => setShowAdvanced(!showAdvanced)}
-                        className={`genric-btn ${showAdvanced ? 'warning' : 'default-border'} radius px-6 text-[10px] uppercase font-black transition-all flex items-center gap-2`}
+                        onClick={() => setShowAdvancedBuilder(!showAdvancedBuilder)}
+                        className={`genric-btn ${showAdvancedBuilder || isAdvancedFilterActive ? 'warning' : 'default-border'} radius px-4 text-[10px] uppercase font-black transition-all flex items-center gap-2`}
+                        title="Otevřít stavitel pokročilých podmínek (AND/OR/NOT)"
                     >
-                        <FaFilter /> {showAdvanced ? 'Skrýt filtry' : 'Filtrovat'}
+                        <FaLayerGroup /> {isAdvancedFilterActive ? 'Pokročilý filtr (aktivní)' : 'Pokročilý filtr (AND/OR)'}
+                    </button>
+                    <button
+                        onClick={() => setShowAdvanced(!showAdvanced)}
+                        className={`genric-btn ${showAdvanced ? 'warning' : 'default-border'} radius px-4 text-[10px] uppercase font-black transition-all flex items-center gap-2`}
+                    >
+                        <FaFilter /> {showAdvanced ? 'Skrýt filtry' : 'Rychlé filtry'}
                     </button>
                 </div>
+
+                {showAdvancedBuilder && (
+                    <AdvancedFilterBuilder
+                        filterGroup={advancedFilterGroup}
+                        onChange={setAdvancedFilterGroup}
+                        onApply={() => {
+                            setIsAdvancedFilterActive(true);
+                            setPage(0);
+                            loadData();
+                        }}
+                        onReset={() => {
+                            setAdvancedFilterGroup(createEmptyGroup('AND'));
+                            setIsAdvancedFilterActive(false);
+                            setPage(0);
+                            loadData();
+                        }}
+                    />
+                )}
 
                 {showAdvanced && (
                     <div className="p-4 bg-gray-50 border border-gray-100 rounded-lg animate-in slide-in-from-top-2 duration-300">
@@ -354,6 +438,28 @@ export default function AdminItems() {
 
                     <div className="flex items-center gap-2">
                         <button
+                            onClick={() => {
+                                const selectedItems = data.content.filter((it: any) => selectedIds.includes(it.id));
+                                setListPrintModal({ isOpen: true, mode: 'cards', items: selectedItems, totalCount: selectedItems.length });
+                            }}
+                            className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold text-xs uppercase rounded transition-colors flex items-center gap-1.5"
+                            title="Vytisknout katalogizační karty vybraných předmětů"
+                        >
+                            <FaIdCard /> Tisk karet ({selectedIds.length})
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                const selectedItems = data.content.filter((it: any) => selectedIds.includes(it.id));
+                                setListPrintModal({ isOpen: true, mode: 'list', items: selectedItems, totalCount: selectedItems.length });
+                            }}
+                            className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold text-xs uppercase rounded transition-colors flex items-center gap-1.5"
+                            title="Vytisknout soupis vybraných předmětů"
+                        >
+                            <FaPrint /> Tisk soupisu ({selectedIds.length})
+                        </button>
+
+                        <button
                             onClick={() => setShowWorksetModal(true)}
                             className="px-3 py-1 bg-[#ffbc34] text-black font-extrabold text-xs uppercase rounded hover:bg-yellow-400 transition-colors shadow flex items-center gap-1.5"
                         >
@@ -368,6 +474,18 @@ export default function AdminItems() {
                         </button>
                     </div>
                 </div>
+            )}
+
+            {/* MODÁL TISKU SOUPISU A HROMADNÝCH KARET */}
+            {listPrintModal.isOpen && (
+                <ItemListPrint
+                    items={listPrintModal.items}
+                    mode={listPrintModal.mode}
+                    title={listPrintModal.mode === 'cards' ? 'KATALOGIZAČNÍ KARTY SBÍRKOVÝCH PŘEDMĚTŮ' : 'INVENTÁRNÍ SOUPIS SBÍRKOVÝCH PŘEDMĚTŮ'}
+                    filterDescription={searchTerm ? `Hledáno: "${searchTerm}"` : undefined}
+                    totalCount={listPrintModal.totalCount ?? data?.totalElements}
+                    onClose={() => setListPrintModal({ isOpen: false, mode: 'list', items: [], totalCount: undefined })}
+                />
             )}
 
             {/* MODÁL PRO PRACOVNÍ SADU */}

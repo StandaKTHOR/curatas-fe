@@ -1,12 +1,91 @@
 import {useEffect, useState} from "react";
 import {LabelDto} from "@/components/LabelPrinter";
+import {PrintItemRow} from "@/components/ItemListPrint";
 
 export const API_BASE = import.meta.env.VITE_API_BASE;
+
+export type MuseumRecordKind = 'DOCUMENTATION' | 'CLASSIFICATION' | 'DETERMINATION' | 'DEACCESSION';
+export interface MuseumRecord {
+    id: number;
+    kind: MuseumRecordKind;
+    dictionaryId: number | null;
+    partyId: number | null;
+    payload: Record<string, unknown>;
+    sourceTable: string | null;
+    sourceKey: string | null;
+    legacyData: Record<string, unknown> | null;
+}
+export interface MuseumItemDetail {
+    itemId: number;
+    markant: string | null;
+    signature: string | null;
+    legacyArchived: boolean | null;
+    legacyCard: boolean | null;
+    legacyCopied: boolean | null;
+    legacyVerified: boolean | null;
+    legacyMarked: boolean | null;
+    localityLegacyCode: string | null;
+    fundLegacyCode: string | null;
+    groupLegacyCode: string | null;
+    subjectLegacyCode: string | null;
+    materialDictionaryId: number | null;
+    techniqueDictionaryId: number | null;
+    localityDictionaryId: number | null;
+    fundDictionaryId: number | null;
+    groupDictionaryId: number | null;
+    subjectDictionaryId: number | null;
+    legacyCreatedBy: string | null;
+    legacyCreatedAt: string | null;
+    legacyUpdatedBy: string | null;
+    legacyUpdatedAt: string | null;
+    records: MuseumRecord[];
+}
+
+export interface MuseumAcquisition {
+    id: number;
+    accessionNumber: string | null;
+    acquisitionMethod: string | null;
+    methodDictionaryId: number | null;
+    acquisitionDate: string | null;
+    acquiredFrom: string | null;
+    circumstances: string | null;
+    documentNumber: string | null;
+    message: string | null;
+    orderNumber: number | null;
+    legacyData: Record<string, unknown> | null;
+}
+export type MuseumAcquisitionInput = Omit<MuseumAcquisition, 'id' | 'legacyData'>;
 
 const getAuthHeader = (): HeadersInit => {
     const token = localStorage.getItem('token');
     return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
+
+async function museumRequest<T>(itemId: number, suffix = '', init: RequestInit = {}): Promise<T> {
+    const response = await fetch(`${API_BASE}/api/v1/items/${itemId}/museum${suffix}`, {
+        ...init,
+        headers: { ...getAuthHeader(), 'Content-Type': 'application/json', ...init.headers },
+    });
+    if (!response.ok) throw new Error(`Museum data request failed (${response.status})`);
+    return response.status === 204 ? undefined as T : response.json();
+}
+
+export const getMuseumItem = (itemId: number) => museumRequest<MuseumItemDetail>(itemId);
+export const patchMuseumItem = (itemId: number, changes: Record<string, unknown>) =>
+    museumRequest<MuseumItemDetail>(itemId, '', { method: 'PATCH', body: JSON.stringify(changes) });
+export const createMuseumRecord = (itemId: number, kind: MuseumRecordKind, payload: Record<string, unknown>, dictionaryId: number | null = null, partyId: number | null = null) =>
+    museumRequest<MuseumRecord>(itemId, `/${kind}`, { method: 'POST', body: JSON.stringify({ payload, dictionaryId, partyId }) });
+export const updateMuseumRecord = (itemId: number, kind: MuseumRecordKind, recordId: number, payload: Record<string, unknown>, dictionaryId: number | null = null, partyId: number | null = null) =>
+    museumRequest<MuseumRecord>(itemId, `/${kind}/${recordId}`, { method: 'PUT', body: JSON.stringify({ payload, dictionaryId, partyId }) });
+export const deleteMuseumRecord = (itemId: number, kind: MuseumRecordKind, recordId: number) =>
+    museumRequest<void>(itemId, `/${kind}/${recordId}`, { method: 'DELETE' });
+export const listMuseumAcquisitions = (itemId: number) => museumRequest<MuseumAcquisition[]>(itemId, '/acquisitions');
+export const createMuseumAcquisition = (itemId: number, input: MuseumAcquisitionInput) =>
+    museumRequest<MuseumAcquisition>(itemId, '/acquisitions', { method: 'POST', body: JSON.stringify(input) });
+export const updateMuseumAcquisition = (itemId: number, id: number, input: MuseumAcquisitionInput) =>
+    museumRequest<MuseumAcquisition>(itemId, `/acquisitions/${id}`, { method: 'PUT', body: JSON.stringify(input) });
+export const deleteMuseumAcquisition = (itemId: number, id: number) =>
+    museumRequest<void>(itemId, `/acquisitions/${id}`, { method: 'DELETE' });
 
 export async function listPublicItems(params: {
     q?: string,
@@ -466,6 +545,23 @@ export async function getPrintBasic(id: number) {
     });
     if (!r.ok) throw new Error('Načtení tiskových dat selhalo');
     return r.json();
+}
+
+export async function searchPrintItems(params: any): Promise<PrintItemRow[]> {
+    const response = await fetch(`${API_BASE}/api/v1/items/search/print`, {
+        method: 'POST',
+        headers: {
+            ...getAuthHeader(),
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+        throw new Error('Načtení tiskových dat selhalo');
+    }
+
+    return response.json();
 }
 
 // ==========================================

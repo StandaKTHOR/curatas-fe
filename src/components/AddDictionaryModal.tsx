@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GovButton, GovFormInput, GovFormLabel, GovMessage } from '@gov-design-system-ce/react';
 import { createDictionaryItem } from '../lib/api';
 
@@ -22,7 +22,35 @@ export default function AddDictionaryModal({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    useEffect(() => {
+        if (isOpen) {
+            setLabel('');
+            setCode('');
+            setError(null);
+            setLoading(false);
+        }
+    }, [isOpen]);
+
     if (!isOpen) return null;
+
+    const getPlaceholders = (type: string) => {
+        switch (type.toUpperCase()) {
+            case 'COUNTRY':
+                return { label: 'např. Francie', code: 'např. FRANCIE' };
+            case 'OBJECT_TYPE':
+                return { label: 'např. Porcelán malovaný', code: 'např. PORCELAN_MALOVANY' };
+            case 'MATERIAL':
+                return { label: 'např. Bukové dřevo', code: 'např. BUKOVE_DREVO' };
+            case 'TECHNIQUE':
+                return { label: 'např. Kresba tuší', code: 'např. KRESBA_TUSI' };
+            case 'SPRAVCE':
+                return { label: 'např. Mgr. Jan Novák', code: 'např. NOVAK_J' };
+            default:
+                return { label: 'např. Nová hodnota', code: 'např. NOVA_HODNOTA' };
+        }
+    };
+
+    const placeholders = getPlaceholders(dictionaryType);
 
     const handleLabelChange = (val: string) => {
         setLabel(val);
@@ -32,8 +60,8 @@ export default function AddDictionaryModal({
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
         if (!label.trim()) {
             setError('Název položky číselníku je povinný.');
             return;
@@ -93,7 +121,7 @@ export default function AddDictionaryModal({
                             id="dictLabel"
                             value={label}
                             onChange={(e: any) => handleLabelChange(e.target.value)}
-                            placeholder="např. Porcelán malovaný"
+                            placeholder={placeholders.label}
                             required
                         />
                     </div>
@@ -104,7 +132,7 @@ export default function AddDictionaryModal({
                             id="dictCode"
                             value={code}
                             onChange={(e: any) => setCode(e.target.value)}
-                            placeholder="např. PORCELAN_MALOVANY"
+                            placeholder={placeholders.code}
                         />
                         <p className="text-[10px] text-gray-400">Generuje se automaticky z názvu.</p>
                     </div>
@@ -123,7 +151,9 @@ export default function AddDictionaryModal({
                             type="solid"
                             color="primary"
                             size="s"
+                            nativeType="submit"
                             disabled={loading || !label.trim()}
+                            onClick={handleSubmit}
                         >
                             {loading ? 'Ukládám...' : 'Přidat a vybrat'}
                         </GovButton>
