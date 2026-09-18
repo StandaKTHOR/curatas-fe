@@ -7,6 +7,7 @@ import {
     bulkCopyItem,
     fetchLabelData,
     listWorksets,
+    searchPrintItems,
     WorksetSummary
 } from '../lib/api'
 import { FaEdit, FaTrash, FaPrint, FaCopy, FaFileExcel, FaPlus, FaSearch, FaChevronLeft, FaChevronRight, FaFilter, FaIdCard, FaLayerGroup } from 'react-icons/fa'
@@ -26,11 +27,18 @@ export default function AdminItems() {
     const [showAdvancedBuilder, setShowAdvancedBuilder] = useState(false);
     const [advancedFilterGroup, setAdvancedFilterGroup] = useState<FilterGroup>(createEmptyGroup('AND'));
     const [isAdvancedFilterActive, setIsAdvancedFilterActive] = useState(false);
-    const [listPrintModal, setListPrintModal] = useState<{ isOpen: boolean; mode: 'list' | 'cards'; items: any[] }>({
+    const [listPrintModal, setListPrintModal] = useState<{
+        isOpen: boolean;
+        mode: 'list' | 'cards';
+        items: any[];
+        totalCount?: number;
+    }>({
         isOpen: false,
         mode: 'list',
-        items: []
+        items: [],
+        totalCount: undefined
     });
+    const [isPrintLoading, setIsPrintLoading] = useState(false);
     const navigate = useNavigate();
 
     // --- STAVY PRO PRACOVNÍ SADY & VÝBĚR ---
@@ -113,6 +121,29 @@ export default function AdminItems() {
         }
     };
 
+    const handlePrintList = async () => {
+        setIsPrintLoading(true);
+        try {
+            const queryParams: any = { q: searchTerm, ...filters };
+            if (selectedWorkset) queryParams.worksetId = selectedWorkset;
+            if (isAdvancedFilterActive && (advancedFilterGroup.conditions.length > 0 || advancedFilterGroup.groups.length > 0)) {
+                queryParams.advancedFilter = JSON.stringify(advancedFilterGroup);
+            }
+            const printItems = await searchPrintItems(queryParams);
+            setListPrintModal({
+                isOpen: true,
+                mode: 'list',
+                items: printItems,
+                totalCount: data?.totalElements ?? printItems.length
+            });
+        } catch (err) {
+            console.error("Chyba při načítání tiskové sestavy:", err);
+            alert("Nepodařilo se načíst data pro tisk soupisu.");
+        } finally {
+            setIsPrintLoading(false);
+        }
+    };
+
     const handleExportExcel = async () => {
         try {
             const queryParams: any = { q: searchTerm, ...filters };
@@ -154,11 +185,12 @@ export default function AdminItems() {
                     </h4>
                     <div className="flex flex-wrap gap-2">
                         <button
-                            onClick={() => setListPrintModal({ isOpen: true, mode: 'list', items: data.content })}
-                            className="genric-btn info-border radius px-3 py-2 text-[10px] font-bold uppercase flex items-center gap-1.5 hover:bg-blue-50 transition-colors"
-                            title="Vytisknout úřední inventární soupis aktuálně vyfiltrovaných položek"
+                            onClick={handlePrintList}
+                            disabled={isPrintLoading}
+                            className="genric-btn info-border radius px-3 py-2 text-[10px] font-bold uppercase flex items-center gap-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                            title="Vytisknout úřední inventární soupis všech vyfiltrovaných položek"
                         >
-                            <FaPrint /> Tisk soupisu (A4)
+                            <FaPrint /> {isPrintLoading ? 'Načítám tisk...' : 'Tisk soupisu (A4)'}
                         </button>
                         <button onClick={handleExportExcel} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">
                             <FaFileExcel /> Export .xlsx
@@ -408,7 +440,7 @@ export default function AdminItems() {
                         <button
                             onClick={() => {
                                 const selectedItems = data.content.filter((it: any) => selectedIds.includes(it.id));
-                                setListPrintModal({ isOpen: true, mode: 'cards', items: selectedItems });
+                                setListPrintModal({ isOpen: true, mode: 'cards', items: selectedItems, totalCount: selectedItems.length });
                             }}
                             className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold text-xs uppercase rounded transition-colors flex items-center gap-1.5"
                             title="Vytisknout katalogizační karty vybraných předmětů"
@@ -419,7 +451,7 @@ export default function AdminItems() {
                         <button
                             onClick={() => {
                                 const selectedItems = data.content.filter((it: any) => selectedIds.includes(it.id));
-                                setListPrintModal({ isOpen: true, mode: 'list', items: selectedItems });
+                                setListPrintModal({ isOpen: true, mode: 'list', items: selectedItems, totalCount: selectedItems.length });
                             }}
                             className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold text-xs uppercase rounded transition-colors flex items-center gap-1.5"
                             title="Vytisknout soupis vybraných předmětů"
@@ -451,7 +483,8 @@ export default function AdminItems() {
                     mode={listPrintModal.mode}
                     title={listPrintModal.mode === 'cards' ? 'KATALOGIZAČNÍ KARTY SBÍRKOVÝCH PŘEDMĚTŮ' : 'INVENTÁRNÍ SOUPIS SBÍRKOVÝCH PŘEDMĚTŮ'}
                     filterDescription={searchTerm ? `Hledáno: "${searchTerm}"` : undefined}
-                    onClose={() => setListPrintModal({ isOpen: false, mode: 'list', items: [] })}
+                    totalCount={listPrintModal.totalCount ?? data?.totalElements}
+                    onClose={() => setListPrintModal({ isOpen: false, mode: 'list', items: [], totalCount: undefined })}
                 />
             )}
 

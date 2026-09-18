@@ -26,6 +26,7 @@ interface ItemListPrintProps {
     title?: string;
     subCollection?: string;
     filterDescription?: string;
+    totalCount?: number;
     mode?: 'list' | 'cards';
     onClose: () => void;
 }
@@ -35,6 +36,7 @@ export default function ItemListPrint({
     title = 'INVENTÁRNÍ SOUPIS SBÍRKOVÝCH PŘEDMĚTŮ',
     subCollection,
     filterDescription,
+    totalCount,
     mode = 'list',
     onClose
 }: ItemListPrintProps) {
@@ -47,32 +49,62 @@ export default function ItemListPrint({
     return (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[9999] overflow-y-auto p-4 flex flex-col items-center">
             {/* OVLÁDACÍ LIŠTA PRO OBRAZOVKU */}
-            <div className="no-print bg-white rounded-lg shadow-xl p-4 mb-4 max-w-5xl w-full flex flex-wrap justify-between items-center gap-3 border border-gray-300">
-                <div className="flex items-center gap-3">
-                    <span className="text-2xl">🖨️</span>
-                    <div>
-                        <h4 className="font-extrabold text-gray-900 text-sm">
-                            {mode === 'cards' ? 'Tisk katalogizačních karet' : 'Tisk inventárního soupisu'}
-                        </h4>
-                        <p className="text-xs text-gray-500">
-                            Počet položek k tisku: <span className="font-bold text-[#00204a]">{items.length}</span>
-                        </p>
+            <div className="no-print bg-white rounded-lg shadow-xl p-4 mb-4 max-w-5xl w-full flex flex-col gap-3 border border-gray-300">
+                <div className="flex flex-wrap justify-between items-center gap-3">
+                    <div className="flex items-center gap-3">
+                        <span className="text-2xl">🖨️</span>
+                        <div>
+                            <h4 className="font-extrabold text-gray-900 text-sm">
+                                {mode === 'cards' ? 'Tisk katalogizačních karet' : 'Tisk inventárního soupisu'}
+                            </h4>
+                            <p className="text-xs text-gray-500">
+                                Počet položek k tisku: <span className="font-bold text-[#00204a]">{items.length}</span>
+                                {totalCount && totalCount > items.length ? ` (z celkových ${totalCount})` : ''}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={onClose}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded text-xs font-bold uppercase hover:bg-gray-100 transition-colors"
+                        >
+                            Zavřít náhled
+                        </button>
+                        <button
+                            onClick={handlePrint}
+                            className="px-5 py-2 bg-[#00204a] text-white rounded text-xs font-bold uppercase hover:bg-[#00173a] shadow transition-colors"
+                        >
+                            Vytisknout (Ctrl+P)
+                        </button>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded text-xs font-bold uppercase hover:bg-gray-100 transition-colors"
-                    >
-                        Zavřít náhled
-                    </button>
-                    <button
-                        onClick={handlePrint}
-                        className="px-5 py-2 bg-[#00204a] text-white rounded text-xs font-bold uppercase hover:bg-[#00173a] shadow transition-colors"
-                    >
-                        Vytisknout (Ctrl+P)
-                    </button>
-                </div>
+
+                {totalCount && totalCount > items.length && (
+                    <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 rounded flex items-center gap-2">
+                        <span>⚠️</span>
+                        <span>
+                            <strong>Bezpečnostní limit tisku:</strong> Tisková sestava byla z důvodu stability a výkonu omezena na prvních {items.length} z celkových {totalCount} nalezených položek. Pro kompletní export takto rozsáhlého datasetu využijte export do Excelu.
+                        </span>
+                    </div>
+                )}
+
+                {items.length > 1000 && (
+                    <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-3 py-2 rounded flex items-center gap-2">
+                        <span>💡</span>
+                        <span>
+                            Tisková sestava obsahuje velký počet položek ({items.length}). Příprava tiskového náhledu v prohlížeči může trvat několik sekund.
+                        </span>
+                    </div>
+                )}
+
+                {mode === 'cards' && items.length > 50 && items.length <= 1000 && (
+                    <div className="bg-blue-50 border border-blue-200 text-blue-800 text-xs px-3 py-2 rounded flex items-center gap-2">
+                        <span>💡</span>
+                        <span>
+                            Při tisku velkého počtu katalogizačních karet ({items.length}) s fotografiemi může generování tiskového náhledu v prohlížeči trvat několik sekund.
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* TISKOVÝ DOKUMENT */}

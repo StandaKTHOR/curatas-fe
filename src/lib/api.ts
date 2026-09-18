@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import {LabelDto} from "@/components/LabelPrinter";
+import {PrintItemRow} from "@/components/ItemListPrint";
 
 export const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -544,6 +545,23 @@ export async function getPrintBasic(id: number) {
     });
     if (!r.ok) throw new Error('Načtení tiskových dat selhalo');
     return r.json();
+}
+
+export async function searchPrintItems(params: any): Promise<PrintItemRow[]> {
+    const response = await fetch(`${API_BASE}/api/v1/items/search/print`, {
+        method: 'POST',
+        headers: {
+            ...getAuthHeader(),
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+        throw new Error('Načtení tiskových dat selhalo');
+    }
+
+    return response.json();
 }
 
 // ==========================================
