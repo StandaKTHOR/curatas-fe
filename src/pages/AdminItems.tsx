@@ -10,7 +10,7 @@ import {
     searchPrintItems,
     WorksetSummary
 } from '../lib/api'
-import { FaEdit, FaTrash, FaPrint, FaCopy, FaFileExcel, FaPlus, FaSearch, FaChevronLeft, FaChevronRight, FaFilter, FaIdCard, FaLayerGroup } from 'react-icons/fa'
+import { FaEdit, FaTrash, FaPrint, FaCopy, FaFileExcel, FaPlus, FaSearch, FaChevronLeft, FaChevronRight, FaFilter, FaIdCard, FaLayerGroup, FaEye } from 'react-icons/fa'
 import { printLabels } from "@/components/LabelPrinter";
 import DeaccessionModal from '@/components/DeaccessionModal';
 import SelectiveCloneModal from '@/components/SelectiveCloneModal';
@@ -434,6 +434,12 @@ export default function AdminItems() {
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex justify-end gap-1 transition-opacity">
+                                            <button
+                                                onClick={() => navigate(`/admin/items/view/${item.id}`, { state: { fromSearch: location.search } })}
+                                                className="p-2 text-gray-400 hover:text-green-600 rounded"
+                                                title="Prohlédnout předmět (pouze pro čtení)"
+                                                aria-label="Prohlédnout předmět"
+                                            ><FaEye /></button>
                                             <button
                                                 onClick={() => handlePrint(item.id)}
                                                 className="p-2 text-gray-400 hover:text-blue-600 rounded"

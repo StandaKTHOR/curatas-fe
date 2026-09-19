@@ -70,6 +70,7 @@ function AppContent() {
         if (pathname === '/admin/import') return 'Import databáze';
         if (pathname === '/admin/items') return 'Správa exponátů';
         if (pathname.includes('/admin/items/new')) return 'Nový sbírkový předmět';
+        if (pathname.includes('/admin/items/view')) return 'Prohlížení sbírkového předmětu';
         if (pathname.includes('/admin/items/edit')) return 'Editace sbírkového předmětu';
         if (pathname.includes('/items/')) return 'Detail předmětu';
         return 'Katalog';
@@ -238,6 +239,7 @@ function AppContent() {
                         <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'CURATOR']} />}>
                             <Route path="/admin/items" element={<AdminItems />} />
                             <Route path="/admin/items/new" element={<AdminItemForm />} />
+                            <Route path="/admin/items/view/:id" element={<AdminItemForm readOnly={true} />} />
                             <Route path="/admin/items/edit/:id" element={<AdminItemForm />} />
                         </Route>
 

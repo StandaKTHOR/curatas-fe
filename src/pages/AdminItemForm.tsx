@@ -33,6 +33,7 @@ import SelectiveCloneModal from '../components/SelectiveCloneModal';
 import MuseumSection from '../components/MuseumSection';
 import AcquisitionSection from '../components/AcquisitionSection';
 import MuseumCardPrint from '../components/MuseumCardPrint';
+import DemusLegacyDataView from '../components/DemusLegacyDataView';
 
 const MAIN_TABS = [
     { id: 'identity', label: '1. Základní údaje & Identifikace' },
@@ -42,10 +43,11 @@ const MAIN_TABS = [
     { id: 'museum', label: '5. Odborná evidence & DEMUS' }
 ];
 
-export default function AdminItemForm() {
+export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean }) {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const location = useLocation();
+    const isViewMode = readOnly || location.pathname.includes('/admin/items/view/');
     const [cloneModalOpen, setCloneModalOpen] = useState(false);
     const [showPrintCard, setShowPrintCard] = useState(false);
     const [initialNumbers, setInitialNumbers] = useState({ inventory: '', accession: '' });
@@ -405,6 +407,39 @@ export default function AdminItemForm() {
         }));
     };
 
+    const handleSectionSave = async () => {
+        if (!id) return;
+        try {
+            const fresh = await getAdminItem(id);
+            if (fresh) {
+                setForm((prev: any) => ({
+                    ...prev,
+                    ...fresh,
+                    imageUrls: Array.isArray(fresh.imageUrls) ? fresh.imageUrls : (prev.imageUrls || []),
+                    markant: fresh.markant ?? prev.markant,
+                    signature: fresh.signature ?? prev.signature,
+                    subjectDictionaryId: fresh.subjectDictionaryId ?? prev.subjectDictionaryId,
+                    subjectLegacyCode: fresh.subjectLegacyCode ?? prev.subjectLegacyCode,
+                    fundDictionaryId: fresh.fundDictionaryId ?? prev.fundDictionaryId,
+                    fundLegacyCode: fresh.fundLegacyCode ?? prev.fundLegacyCode,
+                    groupDictionaryId: fresh.groupDictionaryId ?? prev.groupDictionaryId,
+                    groupLegacyCode: fresh.groupLegacyCode ?? prev.groupLegacyCode,
+                    localityDictionaryId: fresh.localityDictionaryId ?? prev.localityDictionaryId,
+                    localityLegacyCode: fresh.localityLegacyCode ?? prev.localityLegacyCode,
+                    materialDictionaryId: fresh.materialDictionaryId ?? prev.materialDictionaryId,
+                    techniqueDictionaryId: fresh.techniqueDictionaryId ?? prev.techniqueDictionaryId,
+                    legacyArchived: fresh.legacyArchived ?? prev.legacyArchived,
+                    legacyCard: fresh.legacyCard ?? prev.legacyCard,
+                    legacyCopied: fresh.legacyCopied ?? prev.legacyCopied,
+                    legacyVerified: fresh.legacyVerified ?? prev.legacyVerified,
+                    legacyMarked: fresh.legacyMarked ?? prev.legacyMarked
+                }));
+            }
+        } catch (err) {
+            console.error('Chyba při synchronizaci po uložení sekce:', err);
+        }
+    };
+
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !id) return;
@@ -689,12 +724,29 @@ export default function AdminItemForm() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2.5 flex-wrap">
+                    {isViewMode && (
+                        <span className="px-3 py-1 bg-blue-100 text-blue-900 border border-blue-300 rounded-full text-xs font-bold flex items-center gap-1.5">
+                            <span>👁️</span> Režim prohlížení (pouze pro čtení)
+                        </span>
+                    )}
+                    {isViewMode && id && (
+                        <GovButton
+                            nativeType="button"
+                            type="solid"
+                            color="primary"
+                            size="s"
+                            onClick={() => navigate(`/admin/items/edit/${id}`, { state: location.state })}
+                        >
+                            ✏️ Upravit předmět
+                        </GovButton>
+                    )}
                     <div className="flex items-center bg-gray-50 border rounded-full px-3 py-1 gap-2">
                         <span className={`text-[10px] font-black uppercase ${form.published ? 'text-green-600' : 'text-gray-400'}`}>
                             {form.published ? '● Zveřejněno' : '○ Neveřejné'}
                         </span>
                         <input
                             type="checkbox"
+                            disabled={isViewMode}
                             checked={form.published || false}
                             onChange={e => setForm({ ...form, published: e.target.checked })}
                             className="cursor-pointer rounded border-gray-300 text-[#00204a] focus:ring-0"
@@ -1000,7 +1052,7 @@ export default function AdminItemForm() {
                             <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider mb-2">
                                 Číselníkové zařazení předmětu
                             </h4>
-                            <MuseumSection itemId={id ? Number(id) : undefined} section="basic" />
+                            <MuseumSection itemId={id ? Number(id) : undefined} section="basic" onSave={handleSectionSave} />
                         </div>
                     </div>
                 )}
@@ -1217,7 +1269,7 @@ export default function AdminItemForm() {
                             <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider mb-2">
                                 Hierarchické vazby materiálů a technik
                             </h4>
-                            <MuseumSection itemId={id ? Number(id) : undefined} section="materials" />
+                            <MuseumSection itemId={id ? Number(id) : undefined} section="materials" onSave={handleSectionSave} />
                         </div>
 
                         {/* Popis předmětu */}
@@ -1484,7 +1536,7 @@ export default function AdminItemForm() {
                             <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider mb-2">
                                 Lokalita a sbírkový fond
                             </h4>
-                            <MuseumSection itemId={id ? Number(id) : undefined} section="locality" />
+                            <MuseumSection itemId={id ? Number(id) : undefined} section="locality" onSave={handleSectionSave} />
                         </div>
                     </div>
                 )}
@@ -1642,42 +1694,22 @@ export default function AdminItemForm() {
                         {/* Obsah vybrané podzáložky */}
                         <div className="p-4 bg-white rounded border border-gray-200">
                             {museumSubTab === 'documentation' && (
-                                <MuseumSection itemId={id ? Number(id) : undefined} section="documentation" />
+                                <MuseumSection itemId={id ? Number(id) : undefined} section="documentation" onSave={handleSectionSave} />
                             )}
                             {museumSubTab === 'classification' && (
-                                <MuseumSection itemId={id ? Number(id) : undefined} section="classification" />
+                                <MuseumSection itemId={id ? Number(id) : undefined} section="classification" onSave={handleSectionSave} />
                             )}
                             {museumSubTab === 'determination' && (
-                                <MuseumSection itemId={id ? Number(id) : undefined} section="determination" />
+                                <MuseumSection itemId={id ? Number(id) : undefined} section="determination" onSave={handleSectionSave} />
                             )}
                             {museumSubTab === 'deaccession' && (
-                                <MuseumSection itemId={id ? Number(id) : undefined} section="deaccession" />
+                                <MuseumSection itemId={id ? Number(id) : undefined} section="deaccession" onSave={handleSectionSave} />
                             )}
                             {museumSubTab === 'demus' && (
                                 <div className="space-y-4">
-                                    <MuseumSection itemId={id ? Number(id) : undefined} section="history" />
-                                    <div className="p-4 bg-gray-50 border border-gray-200 rounded grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="sm:col-span-2 pb-1 border-b">
-                                            <h5 className="text-xs font-black text-gray-700 uppercase tracking-widest">
-                                                Původní DEMUS metadata (Access Parita)
-                                            </h5>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <GovFormLabel htmlFor="zpusobNabyti">Původní způsob nabytí</GovFormLabel>
-                                            <GovFormInput
-                                                id="zpusobNabyti"
-                                                value={form.legacyData?.zpusob_nabyti || ''}
-                                                onChange={(e: any) => handleLegacyChange('zpusob_nabyti', e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <GovFormLabel htmlFor="predchoziMajitel">Předchozí vlastník</GovFormLabel>
-                                            <GovFormInput
-                                                id="predchoziMajitel"
-                                                value={form.legacyData?.predchozi_majitel || ''}
-                                                onChange={(e: any) => handleLegacyChange('predchozi_majitel', e.target.value)}
-                                            />
-                                        </div>
+                                    <MuseumSection itemId={id ? Number(id) : undefined} section="history" onSave={handleSectionSave} />
+                                    <div className="p-4 bg-gray-50 border border-gray-200 rounded space-y-4">
+                                        <DemusLegacyDataView legacyData={form.legacyData} />
                                     </div>
                                 </div>
                             )}
@@ -1864,15 +1896,27 @@ export default function AdminItemForm() {
                 {/* SPOLEČNÁ TLAČÍTKA ULOŽENÍ – VIDITELNÁ NA VŠECH TABECH */}
                 <div className="pt-4 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex gap-2.5">
-                        <GovButton
-                            nativeType="submit"
-                            disabled={loading || !validity.accession || !validity.inventory}
-                            type="solid"
-                            color="primary"
-                            size="s"
-                        >
-                            {loading ? 'Ukládám záznam...' : 'Uložit sbírkový předmět'}
-                        </GovButton>
+                        {isViewMode ? (
+                            <GovButton
+                                nativeType="button"
+                                type="solid"
+                                color="primary"
+                                size="s"
+                                onClick={() => navigate(`/admin/items/edit/${id}`, { state: location.state })}
+                            >
+                                ✏️ Upravit tento předmět
+                            </GovButton>
+                        ) : (
+                            <GovButton
+                                nativeType="submit"
+                                disabled={loading || !validity.accession || !validity.inventory}
+                                type="solid"
+                                color="primary"
+                                size="s"
+                            >
+                                {loading ? 'Ukládám záznam...' : 'Uložit sbírkový předmět'}
+                            </GovButton>
+                        )}
                         <GovButton
                             nativeType="button"
                             type="outlined"

@@ -18,6 +18,7 @@ import {
     FaFileDownload,
     FaExclamationTriangle
 } from 'react-icons/fa';
+import DemusLegacyDataView from '@/components/DemusLegacyDataView';
 
 // Pomocná komponenta pro čistší kód
 const DataRow = ({ label, value, fallback = 'Nezjištěno', isItalic = false }: any) => (
@@ -316,6 +317,13 @@ export default function Detail() {
                                     </>
                                 )}
                             </div>
+                        </div>
+                    )}
+
+                    {/* DEMUS HISTORICKÁ DATA */}
+                    {it.legacyData && Object.keys(it.legacyData).length > 0 && (
+                        <div className="bg-white p-6 rounded border border-gray-200 shadow-sm">
+                            <DemusLegacyDataView legacyData={it.legacyData} />
                         </div>
                     )}
 

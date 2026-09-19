@@ -9,7 +9,7 @@ import {
 
 type TreeNode = { id: number; code: string | null; label: string; children: TreeNode[] };
 type Section = 'basic' | 'materials' | 'locality' | 'classification' | 'determination' | 'documentation' | 'deaccession' | 'history' | 'manipulation' | 'action' | 'iso';
-type Props = { itemId?: number; section: Section };
+type Props = { itemId?: number; section: Section; onSave?: () => void };
 
 const recordKinds: Partial<Record<Section, MuseumRecordKind>> = {
     classification: 'CLASSIFICATION', determination: 'DETERMINATION',
@@ -97,7 +97,7 @@ export function TreeChoice({ type, value, onChange, label }: {
     </div>;
 }
 
-export default function MuseumSection({ itemId, section }: Props) {
+export default function MuseumSection({ itemId, section, onSave }: Props) {
     const [detail, setDetail] = useState<MuseumItemDetail | null>(null);
     const [changes, setChanges] = useState<Record<string, unknown>>({});
     const [record, setRecord] = useState<MuseumRecord | null>(null);
@@ -126,6 +126,7 @@ export default function MuseumSection({ itemId, section }: Props) {
             setDetail(await patchMuseumItem(itemId, changes));
             setChanges({});
             setMessage('Údaje uloženy.');
+            if (onSave) onSave();
         } catch (e) { setMessage((e as Error).message); }
     };
     const text = (key: keyof MuseumItemDetail, label: string) => <label className="block space-y-1 text-sm font-semibold text-gray-700" key={key}>
