@@ -60,6 +60,13 @@ export default function AddDictionaryModal({
         }
     };
 
+    const getTitle = () => {
+        if (dictionaryType.toUpperCase() === 'SPRAVCE') {
+            return 'Správce sbírky';
+        }
+        return dictionaryTitle || 'Číselník';
+    };
+
     const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         if (!label.trim()) {
@@ -85,7 +92,11 @@ export default function AddDictionaryModal({
             });
             onClose();
         } catch (err: any) {
-            setError(err.message || 'Uložení do číselníku selhalo');
+            if (err?.status === 409 || err?.message?.includes('409') || err?.message?.includes('existuje')) {
+                setError(`Položka "${label.trim()}" již v tomto číselníku existuje.`);
+            } else {
+                setError(err.message || 'Uložení do číselníku selhalo');
+            }
         } finally {
             setLoading(false);
         }
@@ -97,7 +108,7 @@ export default function AddDictionaryModal({
                 <div className="bg-[#00204a] text-white px-5 py-3.5 flex justify-between items-center">
                     <div>
                         <h3 className="font-extrabold text-sm uppercase tracking-tight">Přidat do číselníku</h3>
-                        <p className="text-[11px] text-blue-200">{dictionaryTitle}</p>
+                        <p className="text-[11px] text-blue-200">{getTitle()}</p>
                     </div>
                     <button
                         onClick={onClose}

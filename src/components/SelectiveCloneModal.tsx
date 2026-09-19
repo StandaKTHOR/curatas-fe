@@ -171,23 +171,21 @@ export default function SelectiveCloneModal({
                     </div>
 
                     <div className="flex justify-end gap-3 pt-2">
-                        <GovButton
-                            type="outlined"
-                            color="neutral"
-                            size="s"
+                        <button
+                            type="button"
                             disabled={loading}
                             onClick={onClose}
+                            className="px-4 py-2 text-xs font-semibold rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                         >
                             Zrušit
-                        </GovButton>
-                        <GovButton
-                            type="solid"
-                            color="primary"
-                            size="s"
+                        </button>
+                        <button
+                            type="submit"
                             disabled={loading || !options.targetInventoryNumber}
+                            className="px-4 py-2 text-xs font-semibold rounded bg-[#00204a] text-white hover:bg-[#00173a] disabled:opacity-50"
                         >
                             {loading ? 'Klonuji předmět...' : 'Vytvořit klon'}
-                        </GovButton>
+                        </button>
                     </div>
                 </form>
             </div>

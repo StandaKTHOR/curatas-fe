@@ -26,8 +26,9 @@ export default function WorksetModal({
 
     if (!isOpen) return null;
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (loading) return;
         if (!name.trim()) {
             setError('Název pracovní sady je povinný.');
             return;
@@ -52,6 +53,8 @@ export default function WorksetModal({
                 });
             }
             onSuccess(res);
+            setName('');
+            setDescription('');
             onClose();
         } catch (err: any) {
             setError(err.message || 'Vytvoření sady selhalo');
@@ -123,7 +126,9 @@ export default function WorksetModal({
                             type="solid"
                             color="primary"
                             size="s"
+                            nativeType="submit"
                             disabled={loading || !name.trim()}
+                            onClick={handleSubmit}
                         >
                             {loading ? 'Ukládám...' : 'Vytvořit sadu'}
                         </GovButton>

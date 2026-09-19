@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import AddDictionaryModal from './AddDictionaryModal';
 import {
     createMuseumRecord, deleteMuseumRecord, getDictionaryTree, getMuseumItem,
     patchMuseumItem, updateMuseumRecord, deaccessionItem,
@@ -7,21 +8,25 @@ import {
 } from '../lib/api';
 
 type TreeNode = { id: number; code: string | null; label: string; children: TreeNode[] };
-type Section = 'basic' | 'materials' | 'locality' | 'classification' | 'determination' | 'documentation' | 'deaccession' | 'history';
+type Section = 'basic' | 'materials' | 'locality' | 'classification' | 'determination' | 'documentation' | 'deaccession' | 'history' | 'manipulation' | 'action' | 'iso';
 type Props = { itemId?: number; section: Section };
 
 const recordKinds: Partial<Record<Section, MuseumRecordKind>> = {
     classification: 'CLASSIFICATION', determination: 'DETERMINATION',
     documentation: 'DOCUMENTATION', deaccession: 'DEACCESSION',
+    manipulation: 'MANIPULATION', action: 'ACTION', iso: 'ISO'
 };
 const recordFields: Record<MuseumRecordKind, [string, string][]> = {
     CLASSIFICATION: [['SysKat_ZS', 'Systematická kategorie'], ['Poradi_ZS', 'Pořadí']],
     DETERMINATION: [['Predmet_UR', 'Určený předmět'], ['Urcil_UR', 'Určil (DEMUS kód)'], ['DatUrc_UR', 'Datum určení'], ['Pozn_UR', 'Poznámka']],
     DOCUMENTATION: [['TypDok_DK', 'Typ dokumentace (DEMUS kód)'], ['CDok_DK', 'Číslo dokumentu'], ['Dokument_DK', 'Dokument / název'], ['MediumDok_DK', 'Médium / cesta'], ['Export_DK', 'Export'], ['Pozn_DK', 'Poznámka'], ['Poradi_DK', 'Pořadí']],
     DEACCESSION: [['DuvVyr_VS', 'Důvod (DEMUS kód)'], ['DatVyr_VS', 'Datum vyřazení'], ['CDoklVyr_VS', 'Číslo dokumentu'], ['CESVyr_VS', 'Číslo CES'], ['SchvalVyr_VS', 'Schválil'], ['ZpUb_VS', 'Způsob úbytku'], ['NovyMaj_VS', 'Nový majitel'], ['Pozn_VS', 'Poznámka']],
+    MANIPULATION: [['Typ_MN', 'Typ manipulace'], ['DatMan_MN', 'Datum manipulace'], ['Kdo_MN', 'Kdo provedl'], ['Stav_MN', 'Stav předmětu'], ['Osetreni_MN', 'Ošetření'], ['Sluz_MN', 'Služba / Akce'], ['PopisSt_MN', 'Popis stavu']],
+    ACTION: [['Nazev_AK', 'Název akce'], ['DatOd_AK', 'Datum od'], ['DatDo_AK', 'Datum do'], ['Misto_AK', 'Místo akce'], ['Pozn_AK', 'Poznámka']],
+    ISO: [['CenaISO_SO', 'Pojistná hodnota ISO'], ['Mena_SO', 'Měna'], ['PoznISO_SO', 'Poznámka ISO']]
 };
 const recordDictionary: Partial<Record<MuseumRecordKind, string>> = {
-    CLASSIFICATION: 'CLASSIFICATION', DOCUMENTATION: 'DOCUMENT_TYPE', DEACCESSION: 'DEACCESSION_REASON',
+    CLASSIFICATION: 'CLASSIFICATION', DETERMINATION: 'DETERMINER', DOCUMENTATION: 'DOCUMENT_TYPE', DEACCESSION: 'DEACCESSION_REASON',
 };
 
 function flatten(nodes: TreeNode[], prefix = ''): { id: number; label: string; code: string | null }[] {
@@ -38,15 +43,38 @@ export function TreeChoice({ type, value, onChange, label }: {
     const [nodes, setNodes] = useState<TreeNode[]>([]);
     const [search, setSearch] = useState('');
     const [error, setError] = useState('');
-    useEffect(() => {
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+    const reloadTree = () => {
         getDictionaryTree(type).then(setNodes).catch((e: Error) => setError(e.message));
+    };
+
+    useEffect(() => {
+        reloadTree();
     }, [type]);
+
     const choices = flatten(nodes).filter(x => x.label.toLocaleLowerCase('cs').includes(search.toLocaleLowerCase('cs')) || x.id === value);
     return <div className="block space-y-1 text-sm font-semibold text-gray-700">
-        <span>{label}</span>
-        <input aria-label={`Hledat: ${label}`} className="w-full rounded border border-gray-300 px-3 py-2 font-normal" value={search}
-            onChange={e => setSearch(e.target.value)} placeholder="Hledat v hierarchii" />
-        <select aria-label={label} className="w-full rounded border border-gray-300 bg-white px-3 py-2 font-normal"
+        <div className="flex justify-between items-center">
+            <span>{label}</span>
+            <button
+                type="button"
+                onClick={() => setIsAddModalOpen(true)}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 underline"
+            >
+                + Nový
+            </button>
+        </div>
+        <input aria-label={`Hledat: ${label}`} className="w-full rounded border border-gray-300 px-3 py-2 font-normal text-xs" value={search}
+            onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }}
+            placeholder="Hledat v hierarchii" />
+        <select aria-label={label} className="w-full rounded border border-gray-300 bg-white px-3 py-2 font-normal text-xs"
             value={value ?? ''} onChange={e => {
                 const id = e.target.value ? Number(e.target.value) : null;
                 onChange(id, choices.find(choice => choice.id === id));
@@ -54,7 +82,18 @@ export function TreeChoice({ type, value, onChange, label }: {
             <option value="">— nevybráno —</option>
             {choices.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
         </select>
-        {error && <span className="text-red-700">{error}</span>}
+        {error && <span className="text-red-700 text-xs block">{error}</span>}
+
+        <AddDictionaryModal
+            isOpen={isAddModalOpen}
+            dictionaryType={type}
+            dictionaryTitle={`Položka ${type}`}
+            onClose={() => setIsAddModalOpen(false)}
+            onSuccess={() => {
+                setIsAddModalOpen(false);
+                reloadTree();
+            }}
+        />
     </div>;
 }
 
@@ -136,6 +175,18 @@ export default function MuseumSection({ itemId, section }: Props) {
     };
     const saveRecord = async () => {
         if (!kind) return;
+        const hasPayloadData = Object.values(payload).some(v => v !== null && v !== undefined && v !== '' && v !== false);
+        if (!hasPayloadData && !dictionaryId && !partyId) {
+            setMessage('Nelze uložit zcela prázdný záznam. Vyplňte alespoň jedno pole.');
+            return;
+        }
+        if (kind === 'CLASSIFICATION') {
+            const poradi = payload['Poradi_ZS'];
+            if (poradi !== null && poradi !== undefined && poradi !== '' && Number(poradi) < 0) {
+                setMessage('Pořadí v klasifikaci nesmí být záporné.');
+                return;
+            }
+        }
         try {
             if (record) await updateMuseumRecord(itemId, kind, record.id, payload, dictionaryId, partyId);
             else await createMuseumRecord(itemId, kind, payload, dictionaryId, partyId);
@@ -199,6 +250,11 @@ export default function MuseumSection({ itemId, section }: Props) {
                             const query = e.target.value;
                             setPartyQuery(query);
                             setPartyMatches(query.length >= 2 ? await searchParties(query) : []);
+                        }} onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }
                         }} placeholder="Hledat osobu nebo instituci"
                             className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 font-normal" />
                     </label>
@@ -213,10 +269,11 @@ export default function MuseumSection({ itemId, section }: Props) {
                 <div className="grid gap-3 md:grid-cols-2">{recordFields[kind].map(([key, label]) => <label key={key} className="block text-sm font-semibold">
                     {label}{key === 'Export_DK' ? <input type="checkbox" className="ml-3"
                         checked={payload[key] === true} onChange={e => setPayload(old => ({ ...old, [key]: e.target.checked }))} />
-                        : <input type={key.startsWith('Poradi_') ? 'number' : 'text'}
+                        : <input type={key.startsWith('Poradi_') ? 'number' : (key.startsWith('Dat') ? 'date' : 'text')}
+                            min={key.startsWith('Poradi_') ? '0' : undefined}
                             className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 font-normal"
                             value={String(payload[key] ?? '')} onChange={e => setPayload(old => ({ ...old,
-                                [key]: key.startsWith('Poradi_') ? (e.target.value ? Number(e.target.value) : null) : e.target.value }))} />}
+                                [key]: key.startsWith('Poradi_') ? (e.target.value !== '' ? Math.max(0, Number(e.target.value)) : null) : e.target.value }))} />}
                 </label>)}</div>
                 <button type="button" className="rounded bg-[#00204a] px-4 py-2 text-sm font-semibold text-white" onClick={saveRecord}>Uložit záznam</button>
                 {record && <button type="button" className="ml-3 text-sm underline" onClick={() => startRecord(null)}>Nový záznam</button>}

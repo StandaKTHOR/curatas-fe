@@ -96,14 +96,14 @@ function AppContent() {
                         <nav className="space-y-6">
                             {/* VEŘEJNÁ SEKCE */}
                             <div>
-                                <span className="text-[10px] uppercase text-gray-400 font-extrabold tracking-wider block mb-3">VEŘEJNÁ ČÁST</span>
+                                <span className="text-[11px] uppercase text-blue-200 font-black tracking-wider block mb-3">VEŘEJNÁ ČÁST</span>
                                 <div className="space-y-1">
                                     <Link
                                         to="/"
                                         className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
                                             pathname === '/'
-                                                ? 'bg-[#ffbc34] text-black shadow'
-                                                : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                                                ? 'bg-[#ffbc34] text-black shadow font-black'
+                                                : 'text-white hover:bg-white/15 hover:text-white'
                                         }`}
                                     >
                                         <span>📂</span>
@@ -114,8 +114,8 @@ function AppContent() {
                                         to="/feedback"
                                         className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
                                             pathname === '/feedback'
-                                                ? 'bg-[#ffbc34] text-black shadow'
-                                                : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                                                ? 'bg-[#ffbc34] text-black shadow font-black'
+                                                : 'text-white hover:bg-white/15 hover:text-white'
                                         }`}
                                     >
                                         <span>💬</span>
@@ -126,7 +126,7 @@ function AppContent() {
 
                             {/* ADMIN SEKCE */}
                             <div>
-                                <span className="text-[10px] uppercase text-gray-400 font-extrabold tracking-wider block mb-3">SPRÁVA (INTRANET)</span>
+                                <span className="text-[11px] uppercase text-blue-200 font-black tracking-wider block mb-3">KURÁTORSKÁ SPRÁVA</span>
                                 <div className="space-y-1">
                                     {token ? (
                                         <>
@@ -134,8 +134,8 @@ function AppContent() {
                                                 to="/admin/items"
                                                 className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
                                                     pathname.startsWith('/admin/items')
-                                                        ? 'bg-[#ffbc34] text-black shadow'
-                                                        : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                                                        ? 'bg-[#ffbc34] text-black shadow font-black'
+                                                        : 'text-white hover:bg-white/15 hover:text-white'
                                                 }`}
                                             >
                                                 <span>🛠️</span>
@@ -148,8 +148,8 @@ function AppContent() {
                                                     aria-current={pathname === '/admin/import' ? 'page' : undefined}
                                                     className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
                                                         pathname === '/admin/import'
-                                                            ? 'bg-[#ffbc34] text-black shadow'
-                                                            : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                                                            ? 'bg-[#ffbc34] text-black shadow font-black'
+                                                            : 'text-white hover:bg-white/15 hover:text-white'
                                                     }`}
                                                 >
                                                     <span>📥</span>
@@ -160,10 +160,10 @@ function AppContent() {
                                     ) : (
                                         <Link
                                             to="/login"
-                                            className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all border border-dashed border-white/20 focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
+                                            className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all border border-dashed border-white/30 focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
                                                 pathname === '/login'
-                                                    ? 'bg-[#ffbc34] text-black border-none shadow'
-                                                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                                                    ? 'bg-[#ffbc34] text-black border-none shadow font-black'
+                                                    : 'text-white hover:bg-white/15 hover:text-white'
                                             }`}
                                         >
                                             <span>🔐</span>

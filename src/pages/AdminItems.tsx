@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import {
     listAdminItems,
     deleteAdminItem,
@@ -21,8 +21,18 @@ import AdvancedFilterBuilder, { FilterGroup, createEmptyGroup } from '@/componen
 
 export default function AdminItems() {
     const [data, setData] = useState<any>(null);
-    const [page, setPage] = useState(0);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const location = useLocation();
+
+    const [page, setPage] = useState<number>(() => {
+        const p = searchParams.get('page');
+        return p !== null ? Math.max(0, parseInt(p, 10)) : 0;
+    });
+    const [searchTerm, setSearchTerm] = useState<string>(() => searchParams.get('q') || '');
+    const [sortField, setSortField] = useState<string>(() => searchParams.get('sortField') || 'createdAt');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(() => (searchParams.get('sortDirection') as 'asc' | 'desc') || 'desc');
+    const [selectedWorkset, setSelectedWorkset] = useState<string>(() => searchParams.get('worksetId') || '');
+
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [showAdvancedBuilder, setShowAdvancedBuilder] = useState(false);
     const [advancedFilterGroup, setAdvancedFilterGroup] = useState<FilterGroup>(createEmptyGroup('AND'));
@@ -44,7 +54,6 @@ export default function AdminItems() {
     // --- STAVY PRO PRACOVNÍ SADY & VÝBĚR ---
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [worksets, setWorksets] = useState<WorksetSummary[]>([]);
-    const [selectedWorkset, setSelectedWorkset] = useState('');
     const [showWorksetModal, setShowWorksetModal] = useState(false);
 
     // --- STAVY PRO MUZEJNÍ MODÁLY ---
@@ -68,22 +77,60 @@ export default function AdminItems() {
     };
 
     // KOMPLETNÍ STAV FILTRŮ
-    const [filters, setFilters] = useState({
-        accessionNumber: '', inventoryNumber: '', subCollection: '',
-        objectType: '', author: '', datingFrom: '', datingTo: '',
-        originPlace: '', material: '', technique: '', location: '', spravce: ''
-    });
+    const [filters, setFilters] = useState(() => ({
+        accessionNumber: searchParams.get('accessionNumber') || '',
+        inventoryNumber: searchParams.get('inventoryNumber') || '',
+        subCollection: searchParams.get('subCollection') || '',
+        objectType: searchParams.get('objectType') || '',
+        author: searchParams.get('author') || '',
+        datingFrom: searchParams.get('datingFrom') || '',
+        datingTo: searchParams.get('datingTo') || '',
+        originPlace: searchParams.get('originPlace') || '',
+        material: searchParams.get('material') || '',
+        technique: searchParams.get('technique') || '',
+        location: searchParams.get('location') || '',
+        spravce: searchParams.get('spravce') || ''
+    }));
 
     const loadData = () => {
-        const queryParams: any = { page, size: 50, q: searchTerm, ...filters };
+        const queryParams: any = {
+            page,
+            size: 50,
+            q: searchTerm,
+            sortField,
+            sortDirection,
+            ...filters
+        };
         if (selectedWorkset) queryParams.worksetId = selectedWorkset;
         if (isAdvancedFilterActive && (advancedFilterGroup.conditions.length > 0 || advancedFilterGroup.groups.length > 0)) {
             queryParams.advancedFilter = JSON.stringify(advancedFilterGroup);
         }
 
+        const newParams = new URLSearchParams();
+        Object.entries(queryParams).forEach(([k, v]) => {
+            if (v !== undefined && v !== null && v !== '') {
+                newParams.set(k, String(v));
+            }
+        });
+        const searchStr = '?' + newParams.toString();
+        if (location.search !== searchStr) {
+            setSearchParams(newParams, { replace: true });
+        }
+        sessionStorage.setItem('adminItemsSearch', searchStr);
+
         listAdminItems(queryParams)
             .then(setData)
             .catch(err => console.error("Chyba při načítání:", err));
+    };
+
+    const handleSort = (field: string) => {
+        setPage(0);
+        if (sortField === field) {
+            setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortField(field);
+            setSortDirection(field === 'createdAt' ? 'desc' : 'asc');
+        }
     };
 
     useEffect(() => {
@@ -95,7 +142,7 @@ export default function AdminItems() {
             loadData();
         }, 400);
         return () => clearTimeout(delayDebounceFn);
-    }, [page, searchTerm, filters, isAdvancedFilterActive, advancedFilterGroup]);
+    }, [page, searchTerm, filters, isAdvancedFilterActive, advancedFilterGroup, sortField, sortDirection, selectedWorkset]);
 
     const handleFilterChange = (key: string, value: string) => {
         setPage(0);
@@ -146,6 +193,11 @@ export default function AdminItems() {
 
     const handleExportExcel = async () => {
         try {
+            const totalCount = data?.totalElements || 0;
+            if (totalCount > 1000) {
+                const proceed = window.confirm(`Chystáte se exportovat ${totalCount.toLocaleString('cs-CZ')} předmětů. Operace může chvíli trvat. Chcete pokračovat?`);
+                if (!proceed) return;
+            }
             const queryParams: any = { q: searchTerm, ...filters };
             if (selectedWorkset) queryParams.worksetId = selectedWorkset;
             if (isAdvancedFilterActive && (advancedFilterGroup.conditions.length > 0 || advancedFilterGroup.groups.length > 0)) {
@@ -195,7 +247,7 @@ export default function AdminItems() {
                         <button onClick={handleExportExcel} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">
                             <FaFileExcel /> Export .xlsx
                         </button>
-                        <button onClick={() => navigate('/admin/items/new')} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
+                        <button onClick={() => navigate('/admin/items/new', { state: { fromSearch: location.search } })} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
                             <FaPlus /> Nový předmět
                         </button>
                     </div>
@@ -305,18 +357,25 @@ export default function AdminItems() {
                                     aria-label="Vybrat vše na stránce"
                                 />
                             </th>
-                            <th className="px-4 py-4" style={{ width: '25%' }}>Identifikace</th>
-                            <th className="px-6 py-4" style={{ width: '40%' }}>Název a Původce</th>
-                            <th className="px-4 py-4 text-center" style={{ width: '12%' }}>Stav / Publikováno</th>
-                            <th className="px-6 py-4 text-right" style={{ width: '23%' }}>Akce</th>
+                            <th className="px-4 py-4 cursor-pointer hover:text-[#00204a]" style={{ width: '22%' }} onClick={() => handleSort('inventoryNumber')}>
+                                Identifikace {sortField === 'inventoryNumber' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
+                            </th>
+                            <th className="px-6 py-4 cursor-pointer hover:text-[#00204a]" style={{ width: '38%' }} onClick={() => handleSort('title')}>
+                                Název a Původce {sortField === 'title' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
+                            </th>
+                            <th className="px-4 py-4 cursor-pointer text-center hover:text-[#00204a]" style={{ width: '13%' }} onClick={() => handleSort('createdAt')}>
+                                Vytvořeno {sortField === 'createdAt' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
+                            </th>
+                            <th className="px-4 py-4 text-center" style={{ width: '10%' }}>Stav</th>
+                            <th className="px-6 py-4 text-right" style={{ width: '13%' }}>Akce</th>
                         </tr>
                         </thead>
                         <tbody className="text-sm">
                         {data.content.map((item: any) => {
                             const isSelected = selectedIds.includes(item.id);
-                            const mainPhoto = (item.images && item.images.length > 0)
-                                ? item.images[0].url
-                                : (item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls[0] : null);
+                            const mainPhoto = item.primaryImageUrl
+                                || (item.images && item.images.length > 0 ? item.images[0].url : null)
+                                || (item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls[0] : null);
 
                             return (
                                 <tr key={item.id} className={`border-b border-gray-50 align-middle transition-colors group ${isSelected ? 'bg-blue-50/60' : ''}`}>
@@ -358,6 +417,9 @@ export default function AdminItems() {
                                             {item.author || item.legacyData?.autor || 'Anonymní autor'}
                                         </div>
                                     </td>
+                                    <td className="px-4 py-4 text-center text-xs text-gray-500 font-mono">
+                                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString('cs-CZ') : '—'}
+                                    </td>
                                     <td className="px-4 py-4 text-center">
                                         <div className="flex flex-col gap-1 items-center">
                                             <span className={`badge ${item.published ? 'bg-success/10 text-success border border-success/20' : 'bg-gray-100 text-gray-400'} text-[9px] uppercase px-2 py-0.5 rounded`}>
@@ -391,7 +453,7 @@ export default function AdminItems() {
                                                 aria-label="Klonovat předmět"
                                             ><FaCopy /></button>
                                             <button
-                                                onClick={() => navigate(`/admin/items/edit/${item.id}`)}
+                                                onClick={() => navigate(`/admin/items/edit/${item.id}`, { state: { fromSearch: location.search } })}
                                                 className="p-2 text-gray-400 hover:text-[#ffbc34] rounded"
                                                 title="Upravit předmět"
                                                 aria-label="Upravit předmět"
@@ -508,7 +570,13 @@ export default function AdminItems() {
                     itemTitle={cloneModal.item.title}
                     inventoryNumber={cloneModal.item.inventoryNumber || ''}
                     onClose={() => setCloneModal({ isOpen: false, item: null })}
-                    onSuccess={() => loadData()}
+                    onSuccess={(cloned: any) => {
+                        setCloneModal({ isOpen: false, item: null });
+                        loadData();
+                        if (cloned?.id) {
+                            navigate(`/admin/items/edit/${cloned.id}`, { state: { fromSearch: location.search } });
+                        }
+                    }}
                 />
             )}
 

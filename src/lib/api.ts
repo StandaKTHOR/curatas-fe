@@ -4,7 +4,7 @@ import {PrintItemRow} from "@/components/ItemListPrint";
 
 export const API_BASE = import.meta.env.VITE_API_BASE;
 
-export type MuseumRecordKind = 'DOCUMENTATION' | 'CLASSIFICATION' | 'DETERMINATION' | 'DEACCESSION';
+export type MuseumRecordKind = 'DOCUMENTATION' | 'CLASSIFICATION' | 'DETERMINATION' | 'DEACCESSION' | 'MANIPULATION' | 'ACTION' | 'ISO';
 export interface MuseumRecord {
     id: number;
     kind: MuseumRecordKind;

@@ -101,3 +101,13 @@ gov-button[type=solid][color=primary] .element:disabled,
     color: var(--disabled-color, var(--text-disabled, #5d5d5d)) !important;
   }
 }
+
+/* Hide spin buttons for input[type=number] while retaining number type & validation */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
+}

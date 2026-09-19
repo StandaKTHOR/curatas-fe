@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
     getAdminItem,
     createItem,
@@ -29,8 +29,10 @@ import {
     FaLayerGroup
 } from 'react-icons/fa';
 import AddDictionaryModal from '../components/AddDictionaryModal';
+import SelectiveCloneModal from '../components/SelectiveCloneModal';
 import MuseumSection from '../components/MuseumSection';
 import AcquisitionSection from '../components/AcquisitionSection';
+import MuseumCardPrint from '../components/MuseumCardPrint';
 
 const MAIN_TABS = [
     { id: 'identity', label: '1. Základní údaje & Identifikace' },
@@ -43,6 +45,11 @@ const MAIN_TABS = [
 export default function AdminItemForm() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
+    const [cloneModalOpen, setCloneModalOpen] = useState(false);
+    const [showPrintCard, setShowPrintCard] = useState(false);
+    const [initialNumbers, setInitialNumbers] = useState({ inventory: '', accession: '' });
+    const [isDraggingAtt, setIsDraggingAtt] = useState(false);
 
     const [activeTab, setActiveTab] = useState('identity');
     const [museumSubTab, setMuseumSubTab] = useState<
@@ -53,9 +60,35 @@ export default function AdminItemForm() {
     const [uploading, setUploading] = useState(false);
     const [conflictError, setConflictError] = useState<string | null>(null);
     const [globalError, setGlobalError] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [unauthorizedError, setUnauthorizedError] = useState(false);
     const [forbiddenError, setForbiddenError] = useState(false);
+    const [auditSaveMessage, setAuditSaveMessage] = useState<string | null>(null);
+    const [auditSaving, setAuditSaving] = useState(false);
+
+    const handleSaveAuditRecord = async () => {
+        if (!id || !form.auditComment?.trim()) {
+            alert('Prosím vyplňte text auditního zdůvodnění.');
+            return;
+        }
+        setAuditSaving(true);
+        setAuditSaveMessage(null);
+        try {
+            await updateItem(Number(id), {
+                ...form,
+                auditComment: form.auditComment.trim()
+            });
+            setAuditSaveMessage('Auditní záznam byl úspěšně uložen.');
+            setForm((prev: any) => ({ ...prev, auditComment: '' }));
+            const fresh = await getAdminItem(id);
+            setForm((prev: any) => ({ ...prev, events: fresh.events || [] }));
+        } catch (err: any) {
+            alert('Chyba při ukládání auditního záznamu: ' + err.message);
+        } finally {
+            setAuditSaving(false);
+        }
+    };
 
     // Přílohy
     const [attachments, setAttachments] = useState<any[]>([]);
@@ -238,7 +271,7 @@ export default function AdminItemForm() {
         latitude: '',
         longitude: '',
         coordinateSystem: 'WGS-84',
-        published: true,
+        published: false,
         auditComment: '',
         imageUrls: [],
         markant: '',
@@ -260,6 +293,11 @@ export default function AdminItemForm() {
                         return s.length >= 4 ? s.substring(0, 4) : s;
                     };
 
+                    setInitialNumbers({
+                        inventory: safeVal(data.inventoryNumber),
+                        accession: safeVal(data.accessionNumber)
+                    });
+
                     setForm({
                         ...data,
                         imageUrls: Array.isArray(data.imageUrls) ? data.imageUrls : [],
@@ -274,9 +312,21 @@ export default function AdminItemForm() {
                         datingFrom: safeYear(data.datingFrom),
                         datingTo: safeYear(data.datingTo),
                         countryOfOrigin: safeVal(data.countryOfOrigin),
-                        objectCondition: safeVal(data.objectCondition),
+                        objectCondition: safeVal(data.objectCondition) || 'Dobrý',
                         spravce: safeVal(data.spravce),
                         oddeleni: safeVal(data.oddeleni),
+                        permanentLocation: safeVal(data.permanentLocation),
+                        locationBuilding: safeVal(data.locationBuilding),
+                        locationRoom: safeVal(data.locationRoom),
+                        acquisitionMethod: safeVal(data.acquisitionMethod) || 'Dar',
+                        acquisitionDate: safeVal(data.acquisitionDate),
+                        acquiredFrom: safeVal(data.acquiredFrom),
+                        insuranceValue: safeVal(data.insuranceValue),
+                        materialNote: safeVal(data.materialNote),
+                        originPlace: safeVal(data.originPlace),
+                        findingLocality: safeVal(data.findingLocality),
+                        quantity: data.quantity ?? 1,
+                        published: data.published ?? false,
                         latitude: safeVal(data.latitude),
                         longitude: safeVal(data.longitude),
                         coordinateSystem: safeVal(data.coordinateSystem) || 'WGS-84',
@@ -362,10 +412,15 @@ export default function AdminItemForm() {
         setUploading(true);
         try {
             const res = await uploadItemImage(Number(id), file);
-            setForm((prev: any) => ({
-                ...prev,
-                imageUrls: [...(prev.imageUrls || []), res.url]
-            }));
+            const fresh = await getAdminItem(id);
+            if (fresh) {
+                setForm((prev: any) => ({
+                    ...prev,
+                    ...fresh,
+                    imageUrls: Array.isArray(fresh.imageUrls) ? fresh.imageUrls : [...(prev.imageUrls || []), res.url]
+                }));
+            }
+            setSuccessMessage('Obrázek byl úspěšně nahrán.');
         } catch (err: any) {
             alert('Nahrání obrázku selhalo: ' + err.message);
         } finally {
@@ -386,11 +441,34 @@ export default function AdminItemForm() {
         e.preventDefault();
         setConflictError(null);
         setGlobalError(null);
+        setSuccessMessage(null);
         setFieldErrors({});
 
         if (!validity.accession || !validity.inventory) {
             setGlobalError('Nelze uložit: Evidenční čísla musí být unikátní!');
             return;
+        }
+
+        const currentInv = (form.inventoryNumber || '').trim();
+        const currentAcc = (form.accessionNumber || '').trim();
+
+        if (!currentInv && !currentAcc) {
+            setGlobalError('Předmět musí mít vyplněno alespoň inventární číslo nebo přírůstkové číslo.');
+            setActiveTab('identity');
+            return;
+        }
+
+        if (id) {
+            if (initialNumbers.inventory && !currentInv) {
+                if (!window.confirm(`Chystáte se odstranit inventární číslo ${initialNumbers.inventory}. Opravdu chcete pokračovat?`)) {
+                    return;
+                }
+            }
+            if (initialNumbers.accession && !currentAcc) {
+                if (!window.confirm(`Chystáte se odstranit přírůstkové číslo ${initialNumbers.accession}. Opravdu chcete pokračovat?`)) {
+                    return;
+                }
+            }
         }
 
         if (form.latitude !== '' && form.latitude !== null && form.latitude !== undefined) {
@@ -407,6 +485,17 @@ export default function AdminItemForm() {
             if (isNaN(lon) || lon < -180 || lon > 180) {
                 setGlobalError('Zeměpisná délka (Longitude) musí být v rozsahu od -180 do 180 stupňů.');
                 setActiveTab('storage');
+                return;
+            }
+        }
+
+        if (form.datingFrom !== '' && form.datingFrom !== null && form.datingFrom !== undefined &&
+            form.datingTo !== '' && form.datingTo !== null && form.datingTo !== undefined) {
+            const fromYear = Number(form.datingFrom);
+            const toYear = Number(form.datingTo);
+            if (!isNaN(fromYear) && !isNaN(toYear) && fromYear > toYear) {
+                setGlobalError('Rok od nesmí být větší než rok do.');
+                setActiveTab('description');
                 return;
             }
         }
@@ -452,7 +541,7 @@ export default function AdminItemForm() {
             oddeleni: form.oddeleni || '',
             insuranceValue: form.insuranceValue ? parseFloat(form.insuranceValue.toString().replace(/\s/g, '')) : 0,
             weight: form.weight || '',
-            published: form.published,
+            published: form.published ?? false,
             auditComment: form.auditComment || '',
             latitude: (form.latitude !== '' && form.latitude !== null && !isNaN(parseFloat(form.latitude))) ? parseFloat(form.latitude) : null,
             longitude: (form.longitude !== '' && form.longitude !== null && !isNaN(parseFloat(form.longitude))) ? parseFloat(form.longitude) : null,
@@ -475,13 +564,65 @@ export default function AdminItemForm() {
         try {
             if (id) {
                 await updateItem(Number(id), payload);
+                const updated = await getAdminItem(id);
+                if (updated) {
+                    const safeVal = (v: any) => (v === null || v === undefined ? '' : v);
+                    const safeYear = (v: any) => {
+                        if (!v) return '';
+                        const s = String(v);
+                        return s.length >= 4 ? s.substring(0, 4) : s;
+                    };
+                    setInitialNumbers({
+                        inventory: safeVal(updated.inventoryNumber),
+                        accession: safeVal(updated.accessionNumber)
+                    });
+                    setForm((prev: any) => ({
+                        ...prev,
+                        ...updated,
+                        imageUrls: Array.isArray(updated.imageUrls) ? updated.imageUrls : prev.imageUrls,
+                        author: (updated.authors && updated.authors.length > 0) ? updated.authors[0] : (updated.author || prev.author),
+                        material: (updated.materials && updated.materials.length > 0) ? updated.materials[0] : (updated.material || prev.material),
+                        weight: safeVal(updated.weight),
+                        title: safeVal(updated.title),
+                        description: safeVal(updated.description),
+                        extendedDescription: safeVal(updated.extendedDescription),
+                        technique: safeVal(updated.technique),
+                        datingText: safeVal(updated.datingText),
+                        datingFrom: safeYear(updated.datingFrom),
+                        datingTo: safeYear(updated.datingTo),
+                        countryOfOrigin: safeVal(updated.countryOfOrigin),
+                        objectCondition: safeVal(updated.objectCondition) || 'Dobrý',
+                        spravce: safeVal(updated.spravce),
+                        oddeleni: safeVal(updated.oddeleni),
+                        permanentLocation: safeVal(updated.permanentLocation),
+                        locationBuilding: safeVal(updated.locationBuilding),
+                        locationRoom: safeVal(updated.locationRoom),
+                        acquisitionMethod: safeVal(updated.acquisitionMethod) || 'Dar',
+                        acquisitionDate: safeVal(updated.acquisitionDate),
+                        acquiredFrom: safeVal(updated.acquiredFrom),
+                        insuranceValue: safeVal(updated.insuranceValue),
+                        materialNote: safeVal(updated.materialNote),
+                        originPlace: safeVal(updated.originPlace),
+                        findingLocality: safeVal(updated.findingLocality),
+                        quantity: updated.quantity ?? 1,
+                        published: updated.published ?? prev.published,
+                        latitude: safeVal(updated.latitude),
+                        longitude: safeVal(updated.longitude),
+                        coordinateSystem: safeVal(updated.coordinateSystem) || 'WGS-84',
+                        markant: safeVal(updated.markant),
+                        signature: safeVal(updated.signature)
+                    }));
+                }
+                setSuccessMessage('Změny byly úspěšně uloženy.');
             } else {
                 const savedItem = await createItem(payload);
                 if (bulkMode && savedItem?.id) {
                     await bulkCopyItem(savedItem.id, bulkParams);
                 }
+                if (savedItem?.id) {
+                    navigate(`/admin/items/edit/${savedItem.id}`, { replace: true });
+                }
             }
-            navigate('/admin/items');
         } catch (err) {
             console.error('Chyba při ukládání záznamu:', err);
             if (err instanceof ApiError) {
@@ -537,15 +678,17 @@ export default function AdminItemForm() {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden animate-in fade-in duration-300">
             {/* HLAVIČKA FORMULÁŘE */}
             <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white">
-                <div>
-                    <h3 className="text-lg font-black text-gray-900 tracking-tight">
-                        {id ? `Kurátorský detail: ${form.inventoryNumber || form.accessionNumber}` : 'Založení nového sbírkového předmětu'}
+                <div className="min-w-0 max-w-xl">
+                    <h3 className="text-lg font-black text-gray-900 tracking-tight truncate">
+                        {id
+                            ? `Kurátorský detail: ${form.inventoryNumber || form.accessionNumber || `#${id}`}${form.title ? ` | ${form.title}` : ''}`
+                            : 'Založení nového sbírkového předmětu'}
                     </h3>
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
-                        MZM Administrační panel • Evidence předmětu
+                        Kurátorská správa sbírek
                     </p>
                 </div>
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 flex-wrap">
                     <div className="flex items-center bg-gray-50 border rounded-full px-3 py-1 gap-2">
                         <span className={`text-[10px] font-black uppercase ${form.published ? 'text-green-600' : 'text-gray-400'}`}>
                             {form.published ? '● Zveřejněno' : '○ Neveřejné'}
@@ -560,8 +703,18 @@ export default function AdminItemForm() {
                     </div>
                     {id && (
                         <>
+                            <GovButton
+                                nativeType="button"
+                                type="outlined"
+                                color="neutral"
+                                size="s"
+                                onClick={() => setShowPrintCard(true)}
+                            >
+                                🖨️ Tisk karty
+                            </GovButton>
                             <input type="file" id="photo-up" hidden onChange={handleFileChange} accept="image/*" />
                             <GovButton
+                                nativeType="button"
                                 type="outlined"
                                 color="neutral"
                                 size="s"
@@ -569,6 +722,15 @@ export default function AdminItemForm() {
                                 onClick={() => document.getElementById('photo-up')?.click()}
                             >
                                 {uploading ? 'Nahrávám...' : '📸 Nahrát foto'}
+                            </GovButton>
+                            <GovButton
+                                nativeType="button"
+                                type="outlined"
+                                color="primary"
+                                size="s"
+                                onClick={() => setCloneModalOpen(true)}
+                            >
+                                📋 Klonovat
                             </GovButton>
                         </>
                     )}
@@ -593,7 +755,13 @@ export default function AdminItemForm() {
                 ))}
             </div>
 
-            {/* CHYBOVÉ HLÁŠKY */}
+            {/* CHYBOVÉ A ÚSPĚŠNÉ HLÁŠKY */}
+            {successMessage && (
+                <div className="mx-6 mt-4 p-3 bg-green-50 border-l-4 border-green-600 text-xs text-green-800 font-bold rounded flex justify-between items-center animate-in fade-in duration-200">
+                    <span>✓ {successMessage}</span>
+                    <button type="button" onClick={() => setSuccessMessage(null)} className="text-green-700 hover:text-green-900 font-bold ml-2">✕</button>
+                </div>
+            )}
             {conflictError && (
                 <div className="mx-6 mt-4 p-3 bg-red-50 border-l-4 border-red-600 text-xs text-red-700 font-bold rounded">
                     ⚠️ {conflictError}
@@ -704,6 +872,9 @@ export default function AdminItemForm() {
                                     onChange={e => setForm({ ...form, objectType: e.target.value })}
                                 >
                                     <option value="">-- Vyberte typ --</option>
+                                    {form.objectType && !dicts.objectTypes?.includes(form.objectType) && (
+                                        <option value={form.objectType}>{form.objectType}</option>
+                                    )}
                                     {dicts.objectTypes?.map((t: string) => (
                                         <option key={t} value={t}>
                                             {t}
@@ -730,6 +901,9 @@ export default function AdminItemForm() {
                                     onChange={e => setForm({ ...form, spravce: e.target.value })}
                                 >
                                     <option value="">-- Vyberte správce --</option>
+                                    {form.spravce && !dicts.spravci?.includes(form.spravce) && (
+                                        <option value={form.spravce}>{form.spravce}</option>
+                                    )}
                                     {dicts.spravci?.map((s: string) => (
                                         <option key={s} value={s}>
                                             {s}
@@ -858,6 +1032,19 @@ export default function AdminItemForm() {
                                         setAuthorSearch(e.target.value);
                                         setShowAuthors(true);
                                     }}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            const matches = Array.from(new Set(dicts.authors || []))
+                                                .filter((a: any) => a.toLowerCase().includes(authorSearch.toLowerCase()))
+                                                .sort();
+                                            if (matches.length > 0 && showAuthors) {
+                                                setForm((prev: any) => ({ ...prev, author: matches[0] }));
+                                            }
+                                            setShowAuthors(false);
+                                        }
+                                    }}
                                     placeholder="Začněte psát jméno autora..."
                                 />
                                 {showAuthors && (
@@ -923,7 +1110,7 @@ export default function AdminItemForm() {
 
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
-                                    <GovFormLabel htmlFor="datingFrom">Rok od (spinner)</GovFormLabel>
+                                    <GovFormLabel htmlFor="datingFrom">Rok od</GovFormLabel>
                                     <input
                                         type="number"
                                         id="datingFrom"
@@ -938,7 +1125,7 @@ export default function AdminItemForm() {
                                 </div>
 
                                 <div className="space-y-1">
-                                    <GovFormLabel htmlFor="datingTo">Rok do (spinner)</GovFormLabel>
+                                    <GovFormLabel htmlFor="datingTo">Rok do</GovFormLabel>
                                     <input
                                         type="number"
                                         id="datingTo"
@@ -984,6 +1171,9 @@ export default function AdminItemForm() {
                                     onChange={e => setForm({ ...form, material: e.target.value })}
                                 >
                                     <option value="">-- Vyberte materiál --</option>
+                                    {form.material && !dicts.materials?.includes(form.material) && (
+                                        <option value={form.material}>{form.material}</option>
+                                    )}
                                     {dicts.materials?.map((m: string) => (
                                         <option key={m} value={m}>
                                             {m}
@@ -1010,6 +1200,9 @@ export default function AdminItemForm() {
                                     onChange={e => setForm({ ...form, technique: e.target.value })}
                                 >
                                     <option value="">-- Vyberte techniku --</option>
+                                    {form.technique && !dicts.techniques?.includes(form.technique) && (
+                                        <option value={form.technique}>{form.technique}</option>
+                                    )}
                                     {dicts.techniques?.map((t: string) => (
                                         <option key={t} value={t}>
                                             {t}
@@ -1217,13 +1410,23 @@ export default function AdminItemForm() {
                             <div className="space-y-1" ref={countryDropdownRef}>
                                 <div className="flex items-center justify-between">
                                     <GovFormLabel htmlFor="countryOfOrigin">Země původu (Číselník)</GovFormLabel>
-                                    <button
-                                        type="button"
-                                        onClick={() => openDictModal('COUNTRY', 'Země původu', 'countryOfOrigin')}
-                                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
-                                    >
-                                        + Nová země
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setForm({ ...form, countryOfOrigin: 'Česká republika' })}
+                                            className="text-[10px] font-bold text-[#00204a] bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 transition-colors"
+                                            title="Rychlý výběr: Česká republika"
+                                        >
+                                            🇨🇿 ČR
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => openDictModal('COUNTRY', 'Země původu', 'countryOfOrigin')}
+                                            className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
+                                        >
+                                            + Nová země
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="relative">
                                     <input
@@ -1236,6 +1439,19 @@ export default function AdminItemForm() {
                                             setForm({ ...form, countryOfOrigin: e.target.value });
                                             setCountrySearch(e.target.value);
                                             setShowCountries(true);
+                                        }}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                const matches = (dicts.countries || [])
+                                                    .filter((c: string) => c.toLowerCase().includes(countrySearch.toLowerCase()))
+                                                    .sort();
+                                                if (matches.length > 0 && showCountries) {
+                                                    setForm((prev: any) => ({ ...prev, countryOfOrigin: matches[0] }));
+                                                }
+                                                setShowCountries(false);
+                                            }
                                         }}
                                         placeholder="Hledat stát v číselníku..."
                                     />
@@ -1474,9 +1690,25 @@ export default function AdminItemForm() {
                                         </div>
                                     ) : (
                                         <>
-                                            <div className="p-4 bg-gray-50 border border-gray-200 rounded space-y-3">
+                                            <div
+                                                onDragOver={e => { e.preventDefault(); e.stopPropagation(); setIsDraggingAtt(true); }}
+                                                onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setIsDraggingAtt(false); }}
+                                                onDrop={e => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setIsDraggingAtt(false);
+                                                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                                                        setAttFile(e.dataTransfer.files[0]);
+                                                    }
+                                                }}
+                                                className={`p-4 rounded space-y-3 transition-colors ${
+                                                    isDraggingAtt
+                                                        ? 'bg-blue-50 border-2 border-dashed border-blue-600'
+                                                        : 'bg-gray-50 border border-gray-200'
+                                                }`}
+                                            >
                                                 <h5 className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <FaUpload className="text-[#00204a]" /> Nahrát novou přílohu
+                                                    <FaUpload className="text-[#00204a]" /> Nahrát novou přílohu (přetáhněte soubor sem)
                                                 </h5>
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                     <div className="space-y-1">
@@ -1487,6 +1719,7 @@ export default function AdminItemForm() {
                                                             onChange={e => setAttFile(e.target.files?.[0] || null)}
                                                             className="w-full text-xs text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-[#00204a] file:text-white hover:file:bg-[#003366] cursor-pointer"
                                                         />
+                                                        {attFile && <p className="text-[11px] font-bold text-blue-700">Vybrán soubor: {attFile.name}</p>}
                                                     </div>
                                                     <div className="space-y-1">
                                                         <GovFormLabel htmlFor="attachmentCaption">Popis souboru</GovFormLabel>
@@ -1499,6 +1732,7 @@ export default function AdminItemForm() {
                                                     </div>
                                                 </div>
                                                 <GovButton
+                                                    nativeType="button"
                                                     type="solid"
                                                     color="primary"
                                                     size="s"
@@ -1559,21 +1793,68 @@ export default function AdminItemForm() {
                                 </div>
                             )}
                             {museumSubTab === 'audit' && (
-                                <div className="p-4 bg-yellow-50/70 border-l-4 border-[#00204a] rounded space-y-2">
-                                    <GovFormLabel htmlFor="auditComment">Zdůvodnění provedených změn (Auditní stopa) *</GovFormLabel>
-                                    <p className="text-[11px] text-gray-500 italic">
-                                        Při editaci sbírkového předmětu zadejte stručné zdůvodnění změny pro zachování auditní stopy.
-                                    </p>
-                                    <textarea
-                                        id="auditComment"
-                                        rows={3}
-                                        className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#00204a]"
-                                        value={form.auditComment || ''}
-                                        onChange={e => setForm({ ...form, auditComment: e.target.value })}
-                                        required={!!id}
-                                        placeholder="např. Oprava datace na základě nového restaurátorského průzkumu..."
-                                    />
-                                    {fieldErrors.auditComment && <p className="text-xs font-bold text-red-600">{fieldErrors.auditComment}</p>}
+                                <div className="space-y-4">
+                                    <div className="p-4 bg-yellow-50/70 border-l-4 border-[#00204a] rounded space-y-3">
+                                        <GovFormLabel htmlFor="auditComment">Zdůvodnění provedených změn (Auditní stopa) *</GovFormLabel>
+                                        <p className="text-[11px] text-gray-500 italic">
+                                            Při editaci sbírkového předmětu zadejte stručné zdůvodnění změny pro zachování auditní stopy.
+                                        </p>
+                                        <textarea
+                                            id="auditComment"
+                                            rows={3}
+                                            className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#00204a]"
+                                            value={form.auditComment || ''}
+                                            onChange={e => setForm({ ...form, auditComment: e.target.value })}
+                                            required={!!id}
+                                            placeholder="např. Oprava datace na základě nového restaurátorského průzkumu..."
+                                        />
+                                        {fieldErrors.auditComment && <p className="text-xs font-bold text-red-600">{fieldErrors.auditComment}</p>}
+
+                                        {auditSaveMessage && (
+                                            <div className="p-2 bg-green-100 border border-green-300 text-green-800 rounded text-xs font-bold">
+                                                ✓ {auditSaveMessage}
+                                            </div>
+                                        )}
+
+                                        {id && (
+                                            <div className="flex justify-end">
+                                                <GovButton
+                                                    nativeType="button"
+                                                    type="solid"
+                                                    color="primary"
+                                                    size="s"
+                                                    disabled={auditSaving || !form.auditComment?.trim()}
+                                                    onClick={handleSaveAuditRecord}
+                                                >
+                                                    {auditSaving ? 'Ukládám audit...' : 'Uložit auditní záznam'}
+                                                </GovButton>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Historie auditních událostí */}
+                                    <div className="bg-white rounded border border-gray-200 overflow-hidden">
+                                        <div className="bg-gray-50 border-b px-4 py-2">
+                                            <h5 className="text-xs font-black uppercase text-gray-600">
+                                                📝 Historie auditních záznamů ({form.events?.length || 0})
+                                            </h5>
+                                        </div>
+                                        {!form.events || form.events.length === 0 ? (
+                                            <p className="p-4 text-xs italic text-gray-400 text-center">Zatím nebyly zaznamenány žádné auditní události.</p>
+                                        ) : (
+                                            <div className="divide-y divide-gray-100">
+                                                {form.events.map((ev: any, idx: number) => (
+                                                    <div key={idx} className="p-3 text-xs space-y-1">
+                                                        <div className="flex justify-between text-gray-500 font-mono text-[11px]">
+                                                            <span>{ev.eventDate || '—'}</span>
+                                                            <span className="font-bold text-gray-700">{ev.type || 'AUDIT'}</span>
+                                                        </div>
+                                                        <p className="text-gray-900 font-semibold">{ev.description}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -1593,10 +1874,14 @@ export default function AdminItemForm() {
                             {loading ? 'Ukládám záznam...' : 'Uložit sbírkový předmět'}
                         </GovButton>
                         <GovButton
+                            nativeType="button"
                             type="outlined"
                             color="neutral"
                             size="s"
-                            onClick={() => navigate('/admin/items')}
+                            onClick={() => {
+                                const search = location.state?.fromSearch || sessionStorage.getItem('adminItemsSearch') || '';
+                                navigate(`/admin/items${search}`);
+                            }}
                         >
                             Zpět na seznam
                         </GovButton>
@@ -1608,6 +1893,29 @@ export default function AdminItemForm() {
                     )}
                 </div>
             </form>
+
+            {showPrintCard && (
+                <MuseumCardPrint
+                    item={form}
+                    onClose={() => setShowPrintCard(false)}
+                />
+            )}
+
+            {id && cloneModalOpen && (
+                <SelectiveCloneModal
+                    isOpen={cloneModalOpen}
+                    itemId={Number(id)}
+                    itemTitle={form.title || ''}
+                    inventoryNumber={form.inventoryNumber || ''}
+                    onClose={() => setCloneModalOpen(false)}
+                    onSuccess={(cloned: any) => {
+                        setCloneModalOpen(false);
+                        if (cloned?.id) {
+                            navigate(`/admin/items/edit/${cloned.id}`, { state: { fromSearch: location.state?.fromSearch } });
+                        }
+                    }}
+                />
+            )}
 
             {/* INLINE MODÁL PRO ČÍSELNÍK (+ Nová země, + Nový materiál...) */}
             <AddDictionaryModal

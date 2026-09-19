@@ -88,6 +88,19 @@ describe('muzeální sekce předmětu', () => {
         expect(createMuseumRecord).toHaveBeenCalledWith(7, 'DOCUMENTATION',
             expect.objectContaining({ TypDok_DK: 'FO' }), 5, null);
     });
+
+    it('prevents default form submit on Enter key in TreeChoice search box', async () => {
+        const onSubmit = vi.fn(e => e.preventDefault());
+        render(
+            <form onSubmit={onSubmit}>
+                <MuseumSection itemId={7} section="materials" />
+            </form>
+        );
+        await waitFor(() => expect(screen.getAllByPlaceholderText('Hledat v hierarchii')[0]).toBeInTheDocument());
+        const searchInput = screen.getAllByPlaceholderText('Hledat v hierarchii')[0];
+        await userEvent.type(searchInput, 'paličkovaná{enter}');
+        expect(onSubmit).not.toHaveBeenCalled();
+    });
 });
 
 describe('akvizice', () => {

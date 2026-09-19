@@ -110,7 +110,7 @@ export default function Login() {
                 {/* PATIČKA FORMULÁŘE */}
                 <div className="text-center pt-2 border-t border-gray-100">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                        Moravské zemské muzeum • Brněnský intranet
+                        Moravské zemské muzeum • Muzejní evidence sbírek
                     </p>
                 </div>
             </div>
