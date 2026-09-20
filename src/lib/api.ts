@@ -655,6 +655,22 @@ export async function deleteAttachment(itemId: number, attachmentId: number) {
     if (!r.ok) throw new Error('Smazání přílohy selhalo');
 }
 
+export async function downloadAttachmentFile(itemId: number, attachmentId: number, filename: string) {
+    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/attachments/${attachmentId}/file`, {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Stažení přílohy selhalo');
+    const blob = await r.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+}
+
 // ==========================================
 // REJSTŘÍK SUBJEKTŮ / AUTORŮ (PARTIES)
 // ==========================================

@@ -405,8 +405,10 @@ export default function AdminItems() {
                                                 <div className="font-mono text-[11px] font-bold text-[#ffbc34]">
                                                     {item.inventoryNumber || item.accessionNumber || '—'}
                                                 </div>
-                                                <div className="text-[9px] text-gray-400 uppercase font-bold tracking-tighter">
-                                                    {item.subCollection || 'Bez zařazení'}
+                                                <div className="text-[9px] text-gray-400 uppercase font-bold tracking-tighter flex items-center gap-1">
+                                                    <span>{item.subCollection || 'Bez zařazení'}</span>
+                                                    {item.spravce && <span className="text-gray-300">•</span>}
+                                                    {item.spravce && <span className="text-blue-600 font-semibold">{item.spravce}</span>}
                                                 </div>
                                             </div>
                                         </div>

@@ -6,6 +6,7 @@ import { useAuth } from '../components/AuthContext';
 import ColumnSelectorModal, { DEFAULT_COLUMNS, ColumnConfig } from '../components/ColumnSelectorModal';
 import WorksetModal from '../components/WorksetModal';
 import SelectiveCloneModal from '../components/SelectiveCloneModal';
+import SafeImage from '../components/SafeImage';
 
 export default function Catalog() {
     const navigate = useNavigate();
@@ -431,6 +432,9 @@ export default function Catalog() {
                                         />
                                     </th>
 
+                                    {isColVisible('primaryImageUrl') && (
+                                        <th scope="col" className="p-3 w-14 text-center">Foto</th>
+                                    )}
                                     {isColVisible('inventoryNumber') && (
                                         <th scope="col" className="p-3 cursor-pointer hover:bg-gray-200" onClick={() => handleSort('inventoryNumber')}>
                                             Inventární č. {renderSortIndicator('inventoryNumber')}
@@ -521,6 +525,14 @@ export default function Catalog() {
                                                     aria-label={`Vybrat položku ${it.inventoryNumber || it.id}`}
                                                 />
                                             </td>
+
+                                            {isColVisible('primaryImageUrl') && (
+                                                <td className={`${rowPad} text-center`}>
+                                                    <div className="w-9 h-9 rounded border bg-gray-50 overflow-hidden mx-auto flex items-center justify-center">
+                                                        <SafeImage src={it.primaryImageUrl} alt={it.title} className="w-full h-full object-cover" />
+                                                    </div>
+                                                </td>
+                                            )}
 
                                             {isColVisible('inventoryNumber') && (
                                                 <td className={`${rowPad} font-mono font-black text-blue-800 break-all`}>{it.inventoryNumber || '—'}</td>

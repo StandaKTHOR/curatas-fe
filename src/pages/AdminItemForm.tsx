@@ -11,6 +11,7 @@ import {
     listAttachments,
     uploadAttachment,
     deleteAttachment,
+    downloadAttachmentFile,
     bulkCopyItem,
     ApiError,
     API_BASE
@@ -126,7 +127,9 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             TECHNIQUE: 'techniques',
             SPRAVCE: 'spravci',
             COUNTRY: 'countries',
-            AUTHOR: 'authors'
+            AUTHOR: 'authors',
+            FUND: 'funds',
+            SUB_COLLECTION: 'funds'
         };
         const dictKey = fieldMap[newItem.type];
         if (dictKey) {
@@ -230,7 +233,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         techniques: [],
         spravci: [],
         countries: [],
-        authors: []
+        authors: [],
+        funds: []
     });
 
     // Hromadné zakládání
@@ -898,12 +902,32 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="subCollection">Fond / Podsbírka</GovFormLabel>
-                                <GovFormInput
+                                <div className="flex items-center justify-between">
+                                    <GovFormLabel htmlFor="subCollection">Fond / Podsbírka</GovFormLabel>
+                                    <button
+                                        type="button"
+                                        onClick={() => openDictModal('FUND', 'Fond / podsbírka', 'subCollection')}
+                                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
+                                    >
+                                        + Nový
+                                    </button>
+                                </div>
+                                <select
                                     id="subCollection"
+                                    className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
                                     value={form.subCollection || ''}
-                                    onChange={(e: any) => setForm({ ...form, subCollection: e.target.value })}
-                                />
+                                    onChange={e => setForm({ ...form, subCollection: e.target.value })}
+                                >
+                                    <option value="">-- Vyberte fond --</option>
+                                    {form.subCollection && !dicts.funds?.includes(form.subCollection) && (
+                                        <option value={form.subCollection}>{form.subCollection}</option>
+                                    )}
+                                    {dicts.funds?.map((f: string) => (
+                                        <option key={f} value={f}>
+                                            {f}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
 
                             <div className="space-y-1">
@@ -1790,22 +1814,27 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                                                 <div className="flex items-center gap-2.5 min-w-0">
                                                                     <FaFileAlt className="text-gray-400 text-base flex-shrink-0" />
                                                                     <div className="min-w-0">
-                                                                        <p className="font-bold text-gray-900 truncate">{att.fileName}</p>
+                                                                        <p className="font-bold text-gray-900 truncate">{att.originalFilename || att.filename || att.fileName || 'Příloha'}</p>
                                                                         <p className="text-[11px] text-gray-500">
                                                                             {att.caption && <span className="font-semibold text-gray-700 mr-2">{att.caption}</span>}
-                                                                            <span>{(att.fileSize / 1024).toFixed(1)} KB</span>
+                                                                            <span>{att.fileSize ? (att.fileSize / 1024).toFixed(1) : 0} KB</span>
                                                                         </p>
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex items-center gap-1.5">
-                                                                    <a
-                                                                        href={`${API_BASE}/api/v1/items/${id}/attachments/${att.id}/file`}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="inline-flex items-center gap-1 text-xs font-bold text-[#00204a] hover:underline px-2.5 py-1 bg-gray-100 rounded"
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={async () => {
+                                                                            try {
+                                                                                await downloadAttachmentFile(Number(id), att.id, att.originalFilename || att.filename || 'priloha');
+                                                                            } catch (e: any) {
+                                                                                alert('Stažení přílohy selhalo: ' + e.message);
+                                                                            }
+                                                                        }}
+                                                                        className="inline-flex items-center gap-1 text-xs font-bold text-[#00204a] hover:underline px-2.5 py-1 bg-gray-100 rounded cursor-pointer"
                                                                     >
                                                                         <FaFileDownload /> Stáhnout
-                                                                    </a>
+                                                                    </button>
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleDeleteAttachment(att.id)}

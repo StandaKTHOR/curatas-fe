@@ -8,6 +8,7 @@ export interface ColumnConfig {
 }
 
 export const DEFAULT_COLUMNS: ColumnConfig[] = [
+    { id: 'primaryImageUrl', label: 'Fotografie', visible: true },
     { id: 'inventoryNumber', label: 'Inventární č.', visible: true },
     { id: 'accessionNumber', label: 'Přírůstkové č.', visible: true },
     { id: 'title', label: 'Název předmětu', visible: true },
