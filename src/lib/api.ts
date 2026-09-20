@@ -200,10 +200,14 @@ export async function createItem(body: any) {
     });
     if (!r.ok) {
         let fieldErrors: Record<string, string> | undefined = undefined;
-        let errMsg = 'Vytvoření selhalo';
+        let errMsg = '';
         try {
             const data = await r.json();
-            if (data.message) errMsg = data.message;
+            if (data.message) {
+                errMsg = data.message;
+            } else if (data.error) {
+                errMsg = data.error;
+            }
             if (data.fieldErrors) {
                 if (Array.isArray(data.fieldErrors)) {
                     fieldErrors = {};
@@ -215,6 +219,16 @@ export async function createItem(body: any) {
                 }
             }
         } catch (e) { /* ignore JSON parse error */ }
+
+        if (!errMsg) {
+            if (r.status === 409) {
+                errMsg = 'Předmět s tímto inventárním nebo přírůstkovým číslem již existuje.';
+            } else if (r.status === 400) {
+                errMsg = 'Zadaná data předmětu nejsou platná. Zkontrolujte povinná pole.';
+            } else {
+                errMsg = `Vytvoření předmětu selhalo (${r.status})`;
+            }
+        }
         throw new ApiError(r.status, errMsg, fieldErrors);
     }
     return r.json();
@@ -228,10 +242,14 @@ export async function updateItem(id: number, body: any) {
     });
     if (!r.ok) {
         let fieldErrors: Record<string, string> | undefined = undefined;
-        let errMsg = 'Aktualizace selhala';
+        let errMsg = '';
         try {
             const data = await r.json();
-            if (data.message) errMsg = data.message;
+            if (data.message) {
+                errMsg = data.message;
+            } else if (data.error) {
+                errMsg = data.error;
+            }
             if (data.fieldErrors) {
                 if (Array.isArray(data.fieldErrors)) {
                     fieldErrors = {};
@@ -243,6 +261,16 @@ export async function updateItem(id: number, body: any) {
                 }
             }
         } catch (e) { /* ignore JSON parse error */ }
+
+        if (!errMsg) {
+            if (r.status === 409) {
+                errMsg = 'Předmět s tímto inventárním nebo přírůstkovým číslem již existuje.';
+            } else if (r.status === 400) {
+                errMsg = 'Zadaná data předmětu nejsou platná. Zkontrolujte povinná pole.';
+            } else {
+                errMsg = `Aktualizace předmětu selhala (${r.status})`;
+            }
+        }
         throw new ApiError(r.status, errMsg, fieldErrors);
     }
     return r.json();
