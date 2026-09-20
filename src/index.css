@@ -111,3 +111,29 @@ input[type=number]::-webkit-inner-spin-button {
 input[type=number] {
   -moz-appearance: textfield;
 }
+
+/* Sidebar High-Contrast Navigation - Prevents dark-blue link overrides */
+aside nav a,
+.sidebar-nav a {
+  color: #ffffff !important;
+  text-decoration: none !important;
+}
+
+aside nav a:hover,
+.sidebar-nav a:hover {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+aside nav a[data-active="true"],
+.sidebar-nav a[data-active="true"] {
+  background-color: #ffbc34 !important;
+  color: #000000 !important;
+  font-weight: 900 !important;
+}
+
+aside nav a[data-active="true"]:hover,
+.sidebar-nav a[data-active="true"]:hover {
+  background-color: #f5b026 !important;
+  color: #000000 !important;
+}

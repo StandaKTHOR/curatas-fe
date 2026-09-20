@@ -33,6 +33,24 @@ export default function AddDictionaryModal({
 
     if (!isOpen) return null;
 
+    const DICT_TYPE_TITLES: Record<string, string> = {
+        GROUP: 'Skupina',
+        LOCALITY: 'Lokalita',
+        SUBJECT: 'Námět',
+        CLASSIFICATION: 'Klasifikace',
+        MATERIAL: 'Materiál',
+        TECHNIQUE: 'Technika',
+        SPRAVCE: 'Správce sbírky',
+        COUNTRY: 'Země původu',
+        OBJECT_TYPE: 'Druh předmětu',
+        FUND: 'Fond',
+        AUTHOR: 'Autor / Původce',
+        ACQUISITION_METHOD: 'Způsob nabytí',
+        DOCUMENT_TYPE: 'Typ dokumentace',
+        DEACCESSION_REASON: 'Důvod vyřazení',
+        DETERMINER: 'Určil'
+    };
+
     const getPlaceholders = (type: string) => {
         switch (type.toUpperCase()) {
             case 'COUNTRY':
@@ -45,6 +63,18 @@ export default function AddDictionaryModal({
                 return { label: 'např. Kresba tuší', code: 'např. KRESBA_TUSI' };
             case 'SPRAVCE':
                 return { label: 'např. Mgr. Jan Novák', code: 'např. NOVAK_J' };
+            case 'GROUP':
+                return { label: 'např. Obrazy', code: 'např. OBRAZY' };
+            case 'LOCALITY':
+                return { label: 'např. Brno-město', code: 'např. BRNO_MESTO' };
+            case 'SUBJECT':
+                return { label: 'např. Krajina', code: 'např. KRAJINA' };
+            case 'CLASSIFICATION':
+                return { label: 'např. Závěsný obraz', code: 'např. ZAVESNY_OBRAZ' };
+            case 'FUND':
+                return { label: 'např. Hlavní sbírkový fond', code: 'např. HLAVNI_FOND' };
+            case 'AUTHOR':
+                return { label: 'např. Jan Novák', code: 'např. NOVAK_JAN' };
             default:
                 return { label: 'např. Nová hodnota', code: 'např. NOVA_HODNOTA' };
         }
@@ -61,8 +91,12 @@ export default function AddDictionaryModal({
     };
 
     const getTitle = () => {
-        if (dictionaryType.toUpperCase() === 'SPRAVCE') {
-            return 'Správce sbírky';
+        const upperType = (dictionaryType || '').toUpperCase();
+        if (DICT_TYPE_TITLES[upperType]) {
+            return DICT_TYPE_TITLES[upperType];
+        }
+        if (dictionaryTitle && !dictionaryTitle.toLowerCase().startsWith('položka') && dictionaryTitle.toUpperCase() !== upperType) {
+            return dictionaryTitle;
         }
         return dictionaryTitle || 'Číselník';
     };

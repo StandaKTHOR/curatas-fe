@@ -73,7 +73,9 @@ export default function Detail() {
     }
 
     // Sjednocení dat pro zobrazení
-    const authors = it.authors?.length > 0 ? it.authors.join(', ') : it.author;
+    const authors = it.parties && it.parties.length > 0
+        ? it.parties.map((p: any) => `${p.name || p.partyName}${p.role ? ` (${p.role})` : ''}`).join(', ')
+        : (it.authors?.length > 0 ? it.authors.join(', ') : it.author);
     const materials = it.materials?.length > 0 ? it.materials.join(', ') : it.material;
     const images = it.imageUrls || it.images || [];
 

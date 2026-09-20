@@ -94,32 +94,34 @@ function AppContent() {
                             </div>
                         </div>
 
-                        <nav className="space-y-6">
+                        <nav className="space-y-6 sidebar-nav">
                             {/* VEŘEJNÁ SEKCE */}
                             <div>
-                                <span className="text-[11px] uppercase text-blue-200 font-black tracking-wider block mb-3">VEŘEJNÁ ČÁST</span>
+                                <span className="text-[11px] uppercase text-white/70 font-black tracking-wider block mb-3">VEŘEJNÁ ČÁST</span>
                                 <div className="space-y-1">
                                     <Link
                                         to="/"
+                                        data-active={(pathname === '/' || pathname.startsWith('/items/')) ? "true" : "false"}
                                         className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
-                                            pathname === '/'
-                                                ? 'bg-[#ffbc34] text-black shadow font-black'
-                                                : 'text-white hover:bg-white/15 hover:text-white'
+                                            (pathname === '/' || pathname.startsWith('/items/'))
+                                                ? 'bg-[#ffbc34] !text-black shadow font-black hover:bg-[#f5b026] hover:!text-black'
+                                                : '!text-white hover:bg-white/20 hover:!text-white'
                                         }`}
                                     >
-                                        <span>📂</span>
+                                        <span className="text-base">📂</span>
                                         <span>Katalog sbírek</span>
                                     </Link>
 
                                     <Link
                                         to="/feedback"
+                                        data-active={pathname === '/feedback' ? "true" : "false"}
                                         className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
                                             pathname === '/feedback'
-                                                ? 'bg-[#ffbc34] text-black shadow font-black'
-                                                : 'text-white hover:bg-white/15 hover:text-white'
+                                                ? 'bg-[#ffbc34] !text-black shadow font-black hover:bg-[#f5b026] hover:!text-black'
+                                                : '!text-white hover:bg-white/20 hover:!text-white'
                                         }`}
                                     >
-                                        <span>💬</span>
+                                        <span className="text-base">💬</span>
                                         <span>Připomínky</span>
                                     </Link>
                                 </div>
@@ -127,33 +129,35 @@ function AppContent() {
 
                             {/* ADMIN SEKCE */}
                             <div>
-                                <span className="text-[11px] uppercase text-blue-200 font-black tracking-wider block mb-3">KURÁTORSKÁ SPRÁVA</span>
+                                <span className="text-[11px] uppercase text-white/70 font-black tracking-wider block mb-3">KURÁTORSKÁ SPRÁVA</span>
                                 <div className="space-y-1">
                                     {token ? (
                                         <>
                                             <Link
                                                 to="/admin/items"
+                                                data-active={pathname.startsWith('/admin/items') ? "true" : "false"}
                                                 className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
                                                     pathname.startsWith('/admin/items')
-                                                        ? 'bg-[#ffbc34] text-black shadow font-black'
-                                                        : 'text-white hover:bg-white/15 hover:text-white'
+                                                        ? 'bg-[#ffbc34] !text-black shadow font-black hover:bg-[#f5b026] hover:!text-black'
+                                                        : '!text-white hover:bg-white/20 hover:!text-white'
                                                 }`}
                                             >
-                                                <span>🛠️</span>
+                                                <span className="text-base">🛠️</span>
                                                 <span>Správa exponátů</span>
                                             </Link>
 
                                              {isAdmin && (
                                                 <Link
                                                     to="/admin/import"
+                                                    data-active={pathname === '/admin/import' ? "true" : "false"}
                                                     aria-current={pathname === '/admin/import' ? 'page' : undefined}
                                                     className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
                                                         pathname === '/admin/import'
-                                                            ? 'bg-[#ffbc34] text-black shadow font-black'
-                                                            : 'text-white hover:bg-white/15 hover:text-white'
+                                                            ? 'bg-[#ffbc34] !text-black shadow font-black hover:bg-[#f5b026] hover:!text-black'
+                                                            : '!text-white hover:bg-white/20 hover:!text-white'
                                                     }`}
                                                 >
-                                                    <span>📥</span>
+                                                    <span className="text-base">📥</span>
                                                     <span>{importTexts.title}</span>
                                                 </Link>
                                              )}
@@ -161,13 +165,14 @@ function AppContent() {
                                     ) : (
                                         <Link
                                             to="/login"
-                                            className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all border border-dashed border-white/30 focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
+                                            data-active={pathname === '/login' ? "true" : "false"}
+                                            className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all border border-dashed border-white/40 focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
                                                 pathname === '/login'
-                                                    ? 'bg-[#ffbc34] text-black border-none shadow font-black'
-                                                    : 'text-white hover:bg-white/15 hover:text-white'
+                                                    ? 'bg-[#ffbc34] !text-black border-none shadow font-black hover:bg-[#f5b026] hover:!text-black'
+                                                    : '!text-white hover:bg-white/20 hover:!text-white'
                                             }`}
                                         >
-                                            <span>🔐</span>
+                                            <span className="text-base">🔐</span>
                                             <span>Vstup pro kurátory</span>
                                         </Link>
                                     )}

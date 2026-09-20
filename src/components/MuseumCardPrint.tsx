@@ -120,7 +120,11 @@ export default function MuseumCardPrint({ item, onClose }: MuseumCardPrintProps)
                         <tbody>
                             <tr className="border-b border-gray-200">
                                 <td className="py-2 pr-4 font-bold uppercase text-gray-500 w-1/4">Autor / Původce:</td>
-                                <td className="py-2 text-gray-900 font-semibold">{item.author || 'Anonymní'}</td>
+                                <td className="py-2 text-gray-900 font-semibold">
+                                    {item.parties && item.parties.length > 0
+                                        ? item.parties.map((p: any) => `${p.name || p.partyName}${p.role ? ` (${p.role})` : ''}`).join(', ')
+                                        : (item.author || 'Anonymní')}
+                                </td>
                                 <td className="py-2 pr-4 font-bold uppercase text-gray-500 w-1/4">Datace vzniku:</td>
                                 <td className="py-2 text-gray-900 font-semibold">{item.datingText || '—'}</td>
                             </tr>

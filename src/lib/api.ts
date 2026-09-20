@@ -320,6 +320,40 @@ export async function uploadItemImage(itemId: number, file: File) {
     }
 }
 
+export interface ItemImageDto {
+    id: number;
+    url: string;
+    thumbUrl?: string;
+    caption?: string;
+    primary: boolean;
+    sortOrder?: number;
+}
+
+export async function listItemImages(itemId: number): Promise<ItemImageDto[]> {
+    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/images`, {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Nepodařilo se načíst fotografie');
+    return r.json();
+}
+
+export async function deleteItemImage(itemId: number, imageId: number): Promise<void> {
+    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/images/${imageId}`, {
+        method: 'DELETE',
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Smazání fotografie selhalo');
+}
+
+export async function setPrimaryItemImage(itemId: number, imageId: number): Promise<ItemImageDto> {
+    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/images/${imageId}/primary`, {
+        method: 'POST',
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Nastavení hlavní fotografie selhalo');
+    return r.json();
+}
+
 export async function exportItemsToExcel(params: any) {
     const u = new URL(`${API_BASE}/api/v1/items/export/excel`);
 

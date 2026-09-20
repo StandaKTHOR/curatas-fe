@@ -101,6 +101,44 @@ describe('muzeální sekce předmětu', () => {
         await userEvent.type(searchInput, 'paličkovaná{enter}');
         expect(onSubmit).not.toHaveBeenCalled();
     });
+
+    it('highlights record being edited and merges legacyData into edit form', async () => {
+        const imported = {
+            id: 42,
+            kind: 'CLASSIFICATION',
+            dictionaryId: null,
+            payload: { SysKat_ZS: 'SK-1' },
+            sourceTable: 'ZarazeniSbirky',
+            legacyData: { Poradi_ZS: '3', extra_legacy: 'preserved' }
+        };
+        vi.mocked(getMuseumItem).mockResolvedValue({ ...detail, records: [imported] } as never);
+        render(<MuseumSection itemId={7} section="classification" />);
+
+        expect(await screen.findByText(/DEMUS ZarazeniSbirky/)).toBeInTheDocument();
+        const editButton = screen.getByRole('button', { name: 'Upravit' });
+        await userEvent.click(editButton);
+
+        expect(screen.getByText('✏️ Právě upravujete')).toBeInTheDocument();
+        expect(screen.getByText('✏️ Úprava záznamu #42')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('3')).toBeInTheDocument();
+    });
+
+    it('determination binds to party and sends partyId on save', async () => {
+        const detRecord = {
+            id: 11,
+            kind: 'DETERMINATION',
+            dictionaryId: null,
+            partyId: 99,
+            payload: { Predmet_UR: 'Fosilie trilobita' },
+            sourceTable: null,
+            legacyData: {}
+        };
+        vi.mocked(getMuseumItem).mockResolvedValue({ ...detail, records: [detRecord] } as never);
+        render(<MuseumSection itemId={7} section="determination" />);
+
+        expect(await screen.findByText('Fosilie trilobita')).toBeInTheDocument();
+        expect(screen.getByText('Vazba na osobu/subjekt #99')).toBeInTheDocument();
+    });
 });
 
 describe('akvizice', () => {

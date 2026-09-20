@@ -66,4 +66,29 @@ describe('Catalog Page UAT State Preservation', () => {
     expect(screen.getByText('Obraz krajiny')).toBeInTheDocument();
     expect(screen.getByText('František Novák')).toBeInTheDocument();
   });
+
+  it('publicCatalog_doesNotRenderCloneAction: does not render Akce column or Klonovat action', async () => {
+    vi.spyOn(api, 'listPublicItems').mockResolvedValue({
+      content: [
+        {
+          id: 'item-1',
+          inventoryNumber: 'INV-100',
+          title: 'Obraz krajiny',
+        }
+      ],
+      totalPages: 1,
+      totalElements: 1,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Catalog />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('INV-100')).toBeInTheDocument();
+    expect(screen.queryByText('Akce')).not.toBeInTheDocument();
+    expect(screen.queryByText('Klonovat')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Selektivně klonovat předmět')).not.toBeInTheDocument();
+  });
 });

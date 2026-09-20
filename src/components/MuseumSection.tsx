@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import AddDictionaryModal from './AddDictionaryModal';
 import {
     createMuseumRecord, deleteMuseumRecord, getDictionaryTree, getMuseumItem,
@@ -10,6 +10,20 @@ import {
 type TreeNode = { id: number; code: string | null; label: string; children: TreeNode[] };
 type Section = 'basic' | 'materials' | 'locality' | 'classification' | 'determination' | 'documentation' | 'deaccession' | 'history' | 'manipulation' | 'action' | 'iso';
 type Props = { itemId?: number; section: Section; onSave?: () => void };
+
+const DICTIONARY_TYPE_LABELS: Record<string, string> = {
+    GROUP: 'Skupina',
+    LOCALITY: 'Lokalita',
+    SUBJECT: 'Námět',
+    CLASSIFICATION: 'Klasifikace',
+    MATERIAL: 'Materiál',
+    TECHNIQUE: 'Technika',
+    FUND: 'Fond',
+    ACQUISITION_METHOD: 'Způsob nabytí',
+    DOCUMENT_TYPE: 'Typ dokumentace',
+    DEACCESSION_REASON: 'Důvod vyřazení',
+    DETERMINER: 'Určil'
+};
 
 const recordKinds: Partial<Record<Section, MuseumRecordKind>> = {
     classification: 'CLASSIFICATION', determination: 'DETERMINATION',
@@ -45,8 +59,20 @@ export function TreeChoice({ type, value, onChange, label }: {
     const [error, setError] = useState('');
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-    const reloadTree = () => {
-        getDictionaryTree(type).then(setNodes).catch((e: Error) => setError(e.message));
+    const reloadTree = async (newCode?: string, newLabel?: string) => {
+        try {
+            const tree = await getDictionaryTree(type);
+            setNodes(tree);
+            if (newCode || newLabel) {
+                const flat = flatten(tree);
+                const match = flat.find(x => (newCode && x.code === newCode) || (newLabel && x.label === newLabel));
+                if (match) {
+                    onChange(match.id, match);
+                }
+            }
+        } catch (e: any) {
+            setError(e.message);
+        }
     };
 
     useEffect(() => {
@@ -54,6 +80,7 @@ export function TreeChoice({ type, value, onChange, label }: {
     }, [type]);
 
     const choices = flatten(nodes).filter(x => x.label.toLocaleLowerCase('cs').includes(search.toLocaleLowerCase('cs')) || x.id === value);
+    const friendlyTitle = DICTIONARY_TYPE_LABELS[type.toUpperCase()] || label || type;
     return <div className="block space-y-1 text-sm font-semibold text-gray-700">
         <div className="flex justify-between items-center">
             <span>{label}</span>
@@ -87,11 +114,11 @@ export function TreeChoice({ type, value, onChange, label }: {
         <AddDictionaryModal
             isOpen={isAddModalOpen}
             dictionaryType={type}
-            dictionaryTitle={`Položka ${type}`}
+            dictionaryTitle={friendlyTitle}
             onClose={() => setIsAddModalOpen(false)}
-            onSuccess={() => {
+            onSuccess={(newItem) => {
                 setIsAddModalOpen(false);
-                reloadTree();
+                reloadTree(newItem.code, newItem.label);
             }}
         />
     </div>;
@@ -108,6 +135,7 @@ export default function MuseumSection({ itemId, section, onSave }: Props) {
     const [partyMatches, setPartyMatches] = useState<{ id: number; firstName: string | null; lastName: string }[]>([]);
     const [message, setMessage] = useState('');
     const [deaccession, setDeaccession] = useState({ reason: '', deaccessionDate: '', documentNumber: '' });
+    const editFormRef = useRef<HTMLDivElement>(null);
     const kind = recordKinds[section];
 
     useEffect(() => {
@@ -169,10 +197,17 @@ export default function MuseumSection({ itemId, section, onSave }: Props) {
 
     const startRecord = (existing: MuseumRecord | null) => {
         setRecord(existing);
-        setPayload(existing ? { ...existing.payload } : {});
+        setPayload(existing ? { ...(existing.legacyData || {}), ...(existing.payload || {}) } : {});
         setDictionaryId(existing?.dictionaryId ?? null);
         setPartyId(existing?.partyId ?? null);
         setPartyQuery('');
+        if (existing) {
+            setTimeout(() => {
+                if (typeof editFormRef.current?.scrollIntoView === 'function') {
+                    editFormRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }, 50);
+        }
     };
     const saveRecord = async () => {
         if (!kind) return;
@@ -209,14 +244,24 @@ export default function MuseumSection({ itemId, section, onSave }: Props) {
             {section !== 'history' && <div className="col-span-full">{saveButton}</div>}</div>}
         {kind && <div className="space-y-4">
             <h3 className="font-bold">{section === 'documentation' ? 'Dokumentace DEMUS (samostatně od příloh)' : 'Záznamy'}</h3>
-            <div className="space-y-2">{detail.records.filter(x => x.kind === kind).map(row => <div key={row.id} className="rounded border border-gray-200 p-3 text-sm">
-                <div className="flex justify-between gap-2"><strong>{row.sourceTable ? `DEMUS ${row.sourceTable}` : 'Nový záznam'} · #{row.id}</strong>
-                    <span><button type="button" className="text-blue-700 underline" onClick={() => startRecord(row)}>Upravit</button>
-                        {!row.sourceTable && <button type="button" className="ml-3 text-red-700 underline" onClick={() => removeRecord(row)}>Odebrat</button>}</span></div>
-                <div className="mt-2 grid gap-1 md:grid-cols-2">{recordFields[kind].map(([key, label]) => <p key={key}><strong>{label}:</strong> {String(row.payload[key] ?? '—')}</p>)}</div>
-                {row.partyId && <p>Vazba na osobu/subjekt #{row.partyId}</p>}
-                {row.sourceTable && <details className="mt-2"><summary className="cursor-pointer">Všechna původní pole</summary><pre className="overflow-x-auto text-xs">{JSON.stringify(row.legacyData, null, 2)}</pre></details>}
-            </div>)}</div>
+            <div className="space-y-2">{detail.records.filter(x => x.kind === kind).map(row => {
+                const isEditing = record?.id === row.id;
+                return <div key={row.id} className={`rounded border p-3 text-sm transition-all ${isEditing ? 'border-blue-500 bg-blue-50/50 ring-2 ring-blue-300 shadow-sm' : 'border-gray-200 bg-white'}`}>
+                    <div className="flex justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <strong>{row.sourceTable ? `DEMUS ${row.sourceTable}` : 'Nový záznam'} · #{row.id}</strong>
+                            {isEditing && <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">✏️ Právě upravujete</span>}
+                        </div>
+                        <span>
+                            <button type="button" className={`underline font-semibold ${isEditing ? 'text-blue-900 font-bold' : 'text-blue-700'}`} onClick={() => startRecord(row)}>Upravit</button>
+                            {!row.sourceTable && <button type="button" className="ml-3 text-red-700 underline" onClick={() => removeRecord(row)}>Odebrat</button>}
+                        </span>
+                    </div>
+                    <div className="mt-2 grid gap-1 md:grid-cols-2">{recordFields[kind].map(([key, label]) => <p key={key}><strong>{label}:</strong> {String(row.payload[key] ?? '—')}</p>)}</div>
+                    {row.partyId && <p>Vazba na osobu/subjekt #{row.partyId}</p>}
+                    {row.sourceTable && <details className="mt-2"><summary className="cursor-pointer">Všechna původní pole</summary><pre className="overflow-x-auto text-xs">{JSON.stringify(row.legacyData, null, 2)}</pre></details>}
+                </div>;
+            })}</div>
             {kind === 'DEACCESSION' && <div className="rounded border border-gray-200 bg-gray-50 p-4 space-y-3">
                 <h4 className="font-semibold">Vyřazení předmětu z evidence</h4>
                 <p className="text-sm">Tato akce používá stávající lifecycle a zapíše auditní událost.</p>
@@ -236,8 +281,15 @@ export default function MuseumSection({ itemId, section, onSave }: Props) {
                         catch (e) { setMessage((e as Error).message); }
                     }}>Vyřadit předmět</button>
             </div>}
-            {(kind !== 'DEACCESSION' || record) && <div className="rounded border border-gray-200 bg-gray-50 p-4 space-y-3">
-                <h4 className="font-semibold">{record ? `Úprava záznamu #${record.id}` : 'Nový záznam'}</h4>
+            {(kind !== 'DEACCESSION' || record) && <div ref={editFormRef} className={`rounded border p-4 space-y-3 ${record ? 'border-blue-300 bg-blue-50/30' : 'border-gray-200 bg-gray-50'}`}>
+                <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-gray-900">
+                        {record ? `✏️ Úprava záznamu #${record.id}` : 'Nový záznam'}
+                    </h4>
+                    {record && <button type="button" className="text-xs text-blue-700 hover:underline font-medium" onClick={() => startRecord(null)}>
+                        Zrušit úpravu
+                    </button>}
+                </div>
                 {recordDictionary[kind] && <TreeChoice type={recordDictionary[kind]!} label="Číselník"
                     value={dictionaryId} onChange={(id, choice) => {
                         setDictionaryId(id);
@@ -276,8 +328,12 @@ export default function MuseumSection({ itemId, section, onSave }: Props) {
                             value={String(payload[key] ?? '')} onChange={e => setPayload(old => ({ ...old,
                                 [key]: key.startsWith('Poradi_') ? (e.target.value !== '' ? Math.max(0, Number(e.target.value)) : null) : e.target.value }))} />}
                 </label>)}</div>
-                <button type="button" className="rounded bg-[#00204a] px-4 py-2 text-sm font-semibold text-white" onClick={saveRecord}>Uložit záznam</button>
-                {record && <button type="button" className="ml-3 text-sm underline" onClick={() => startRecord(null)}>Nový záznam</button>}
+                <div className="flex items-center gap-3 pt-2">
+                    <button type="button" className="rounded bg-[#00204a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#003366]" onClick={saveRecord}>
+                        Uložit záznam
+                    </button>
+                    {record && <button type="button" className="text-sm text-gray-600 underline hover:text-gray-900" onClick={() => startRecord(null)}>Zrušit úpravu</button>}
+                </div>
             </div>}
         </div>}
         {message && <p role="status" className="text-sm text-[#00204a]">{message}</p>}

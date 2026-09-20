@@ -8,6 +8,10 @@ import {
     getNextAvailableNumbers,
     checkUniqueness,
     uploadItemImage,
+    listItemImages,
+    deleteItemImage,
+    setPrimaryItemImage,
+    ItemImageDto,
     listAttachments,
     uploadAttachment,
     deleteAttachment,
@@ -33,6 +37,7 @@ import AddDictionaryModal from '../components/AddDictionaryModal';
 import SelectiveCloneModal from '../components/SelectiveCloneModal';
 import MuseumSection from '../components/MuseumSection';
 import AcquisitionSection from '../components/AcquisitionSection';
+import SafeImage from '../components/SafeImage';
 import MuseumCardPrint from '../components/MuseumCardPrint';
 import DemusLegacyDataView from '../components/DemusLegacyDataView';
 
@@ -43,6 +48,110 @@ const MAIN_TABS = [
     { id: 'storage', label: '4. Umístění & Uložení' },
     { id: 'museum', label: '5. Odborná evidence & DEMUS' }
 ];
+
+const AUTHOR_ROLES = [
+    'Autor',
+    'Škola / dílna',
+    'Okruh',
+    'Následovník',
+    'Kopista',
+    'Falsifikátor',
+    'Připsáno',
+    'Rytec',
+    'Nakladatel / vydavatel',
+    'Jiná role'
+];
+
+const formatDatingDate = (val: any) => {
+    if (!val && val !== 0) return null;
+    const s = String(val).trim();
+    if (/^-?\d{1,4}$/.test(s)) {
+        const isNeg = s.startsWith('-');
+        const numStr = isNeg ? s.substring(1) : s;
+        const padded = numStr.padStart(4, '0');
+        return `${isNeg ? '-' : ''}${padded}-01-01`;
+    }
+    return s.length >= 10 ? s.substring(0, 10) : null;
+};
+
+const buildItemPayload = (currentForm: any, auditCommentOverride?: string) => {
+    const currentAuditComment = auditCommentOverride !== undefined
+        ? auditCommentOverride
+        : (currentForm.auditComment?.trim() || '');
+
+    let partiesPayload: any[] = [];
+    if (Array.isArray(currentForm.parties) && currentForm.parties.length > 0) {
+        partiesPayload = currentForm.parties
+            .filter((p: any) => p.partyId || (p.partyName && p.partyName.trim()))
+            .map((p: any, idx: number) => ({
+                partyId: p.partyId || null,
+                partyName: p.partyName?.trim() || null,
+                role: p.role?.trim() || currentForm.authorRole || 'Autor',
+                type: p.type || 'PERSON',
+                sortOrder: p.sortOrder ?? (idx + 1)
+            }));
+    } else if (currentForm.author?.trim()) {
+        partiesPayload = [{
+            partyId: null,
+            partyName: currentForm.author.trim(),
+            role: currentForm.authorRole?.trim() || 'Autor',
+            type: 'PERSON',
+            sortOrder: 1
+        }];
+    }
+
+    return {
+        title: currentForm.title || '',
+        accessionNumber: currentForm.accessionNumber || '',
+        inventoryNumber: currentForm.inventoryNumber || '',
+        subCollection: currentForm.subCollection || '',
+        objectType: currentForm.objectType || '',
+        catalogingStatus: currentForm.catalogingStatus || 'Zapsán',
+        author: currentForm.author || '',
+        description: currentForm.description || '',
+        extendedDescription: currentForm.extendedDescription || '',
+        material: currentForm.material || '',
+        materialNote: currentForm.materialNote || '',
+        technique: currentForm.technique || '',
+        datingText: currentForm.datingText || '',
+        datingFrom: formatDatingDate(currentForm.datingFrom),
+        datingTo: formatDatingDate(currentForm.datingTo),
+        countryOfOrigin: currentForm.countryOfOrigin || '',
+        originPlace: currentForm.originPlace || '',
+        findingLocality: currentForm.findingLocality || '',
+        acquisitionMethod: currentForm.acquisitionMethod || 'Dar',
+        acquisitionDate: currentForm.acquisitionDate || null,
+        acquiredFrom: currentForm.acquiredFrom || '',
+        locationBuilding: currentForm.locationBuilding || '',
+        locationRoom: currentForm.locationRoom || '',
+        permanentLocation: currentForm.permanentLocation || '',
+        objectCondition: currentForm.objectCondition || 'Dobrý',
+        spravce: currentForm.spravce || '',
+        oddeleni: currentForm.oddeleni || '',
+        insuranceValue: currentForm.insuranceValue ? parseFloat(currentForm.insuranceValue.toString().replace(/\s/g, '')) : 0,
+        weight: currentForm.weight || '',
+        quantity: currentForm.quantity ?? 1,
+        published: currentForm.published ?? false,
+        auditComment: currentAuditComment,
+        latitude: (currentForm.latitude !== '' && currentForm.latitude !== null && !isNaN(parseFloat(currentForm.latitude))) ? parseFloat(currentForm.latitude) : null,
+        longitude: (currentForm.longitude !== '' && currentForm.longitude !== null && !isNaN(parseFloat(currentForm.longitude))) ? parseFloat(currentForm.longitude) : null,
+        coordinateSystem: currentForm.coordinateSystem || 'WGS-84',
+        markant: currentForm.markant || '',
+        signature: currentForm.signature || '',
+        dimensions: (currentForm.dimensions || [])
+            .filter((d: any) => d.id || (d.value !== '' && d.value !== null && !isNaN(Number(d.value))))
+            .map((d: any) => ({
+                id: d.id || null,
+                type: d.dimensionType || 'Rozměr',
+                value: d.value === '' || d.value === null ? null : Number(d.value),
+                unit: d.unit ?? '',
+                note: d.note || null,
+                sortOrder: d.sortOrder ?? null
+            })),
+        parties: partiesPayload,
+        legacyData: currentForm.legacyData || {}
+    };
+};
 
 export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean }) {
     const { id } = useParams<{ id: string }>();
@@ -56,7 +165,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
     const [activeTab, setActiveTab] = useState('identity');
     const [museumSubTab, setMuseumSubTab] = useState<
-        'documentation' | 'classification' | 'determination' | 'deaccession' | 'demus' | 'attachments' | 'audit'
+        'documentation' | 'classification' | 'determination' | 'deaccession' | 'manipulation' | 'action' | 'iso' | 'demus' | 'attachments' | 'audit'
     >('documentation');
 
     const [loading, setLoading] = useState(false);
@@ -70,7 +179,11 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
     const [auditSaveMessage, setAuditSaveMessage] = useState<string | null>(null);
     const [auditSaving, setAuditSaving] = useState(false);
 
-    const handleSaveAuditRecord = async () => {
+    const handleSaveAuditRecord = async (e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (!id || !form.auditComment?.trim()) {
             alert('Prosím vyplňte text auditního zdůvodnění.');
             return;
@@ -78,18 +191,108 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         setAuditSaving(true);
         setAuditSaveMessage(null);
         try {
-            await updateItem(Number(id), {
-                ...form,
-                auditComment: form.auditComment.trim()
-            });
+            const comment = form.auditComment.trim();
+            const payload = buildItemPayload(form, comment);
+            await updateItem(Number(id), payload);
             setAuditSaveMessage('Auditní záznam byl úspěšně uložen.');
             setForm((prev: any) => ({ ...prev, auditComment: '' }));
             const fresh = await getAdminItem(id);
-            setForm((prev: any) => ({ ...prev, events: fresh.events || [] }));
+            setForm((prev: any) => ({
+                ...prev,
+                events: fresh.events || [],
+                parties: Array.isArray(fresh.parties) ? fresh.parties.map((p: any) => ({
+                    partyId: p.partyId || p.id || null,
+                    partyName: p.name || p.partyName || '',
+                    role: p.role || 'Autor',
+                    type: p.type || 'PERSON',
+                    sortOrder: p.sortOrder ?? null
+                })) : prev.parties
+            }));
         } catch (err: any) {
             alert('Chyba při ukládání auditního záznamu: ' + err.message);
         } finally {
             setAuditSaving(false);
+        }
+    };
+
+    // Fotografie
+    const [itemImages, setItemImages] = useState<ItemImageDto[]>([]);
+
+    const loadImages = async (itemId: number | string) => {
+        if (!itemId) return;
+        try {
+            const imgs = await listItemImages(Number(itemId));
+            setItemImages(imgs || []);
+        } catch (e) {
+            console.error('Chyba při načítání fotografií:', e);
+        }
+    };
+
+    const handleDeletePhoto = async (imageId: number) => {
+        if (!id) return;
+        if (window.confirm('Opravdu chcete tuto fotografii odstranit?')) {
+            try {
+                await deleteItemImage(Number(id), imageId);
+                await loadImages(id);
+                const fresh = await getAdminItem(id);
+                if (fresh) {
+                    setForm((prev: any) => ({
+                        ...prev,
+                        imageUrls: Array.isArray(fresh.imageUrls) ? fresh.imageUrls : [],
+                        primaryImageUrl: fresh.primaryImageUrl || null
+                    }));
+                }
+                setSuccessMessage('Fotografie byla úspěšně odstraněna.');
+            } catch (err: any) {
+                alert('Smazání fotografie selhalo: ' + err.message);
+            }
+        }
+    };
+
+    const handleSetPrimaryPhoto = async (imageId: number) => {
+        if (!id) return;
+        try {
+            await setPrimaryItemImage(Number(id), imageId);
+            await loadImages(id);
+            const fresh = await getAdminItem(id);
+            if (fresh) {
+                setForm((prev: any) => ({
+                    ...prev,
+                    primaryImageUrl: fresh.primaryImageUrl || null,
+                    imageUrls: Array.isArray(fresh.imageUrls) ? fresh.imageUrls : prev.imageUrls
+                }));
+            }
+            setSuccessMessage('Hlavní fotografie byla nastavena.');
+        } catch (err: any) {
+            alert('Nastavení hlavní fotografie selhalo: ' + err.message);
+        }
+    };
+
+    const handleDownloadPhoto = async (url: string, caption?: string) => {
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Fetch failed');
+            const blob = await res.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            const filename = (caption && caption.trim())
+                ? `${caption.trim().replace(/[^a-zA-Z0-9_\u00C0-\u024F-]/g, '_')}.jpg`
+                : (url.split('/').pop() || 'fotografie.jpg');
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch {
+            const a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.download = (caption && caption.trim()) ? `${caption.trim()}.jpg` : 'fotografie.jpg';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
         }
     };
 
@@ -166,11 +369,14 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         if (!id || !attFile) return;
         setAttUploading(true);
         try {
-            await uploadAttachment(Number(id), attFile, attCaption);
+            const uploaded = await uploadAttachment(Number(id), attFile, attCaption);
             setAttFile(null);
             setAttCaption('');
             const fileInput = document.getElementById('attachmentFile') as HTMLInputElement;
             if (fileInput) fileInput.value = '';
+            if (uploaded) {
+                setAttachments(prev => [...prev.filter(a => a.id !== uploaded.id), uploaded]);
+            }
             await loadAttachments();
         } catch (e: any) {
             alert('Nahrání přílohy selhalo: ' + e.message);
@@ -184,6 +390,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         if (window.confirm('Opravdu chcete tuto přílohu smazat?')) {
             try {
                 await deleteAttachment(Number(id), attId);
+                setAttachments(prev => prev.filter(a => a.id !== attId));
                 await loadAttachments();
             } catch (e: any) {
                 alert('Smazání přílohy selhalo: ' + e.message);
@@ -250,18 +457,23 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         title: '',
         accessionNumber: '',
         inventoryNumber: '',
-        subCollection: 'Hlavní sbírka',
+        subCollection: '',
         objectType: '',
         catalogingStatus: 'Zapsán',
         author: '',
+        authorRole: 'Autor',
+        parties: [],
         description: '',
         extendedDescription: '',
         material: '',
+        materialNote: '',
         technique: '',
         datingText: '',
         datingFrom: '',
         datingTo: '',
         countryOfOrigin: '',
+        originPlace: '',
+        findingLocality: '',
         acquisitionMethod: 'Dar',
         acquisitionDate: '',
         acquiredFrom: '',
@@ -273,6 +485,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         oddeleni: '',
         insuranceValue: '',
         weight: '',
+        quantity: 1,
         dimensions: [],
         latitude: '',
         longitude: '',
@@ -286,9 +499,12 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
     });
 
     useEffect(() => {
-        getDictionaries().then(data => setDicts(data)).catch(console.error);
+        getDictionaries().then(data => {
+            setDicts(data);
+        }).catch(console.error);
 
         if (id) {
+            loadImages(id);
             setLoading(true);
             getAdminItem(id)
                 .then(data => {
@@ -304,10 +520,28 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         accession: safeVal(data.accessionNumber)
                     });
 
+                    if (data.attachments && Array.isArray(data.attachments)) {
+                        setAttachments(data.attachments);
+                    }
+
+                    const initialParties = Array.isArray(data.parties) && data.parties.length > 0
+                        ? data.parties.map((p: any) => ({
+                            partyId: p.partyId || p.id || null,
+                            partyName: p.name || p.partyName || '',
+                            role: p.role || 'Autor',
+                            type: p.type || 'PERSON',
+                            sortOrder: p.sortOrder ?? null
+                        }))
+                        : (data.author ? [{ partyId: null, partyName: data.author, role: 'Autor', type: 'PERSON', sortOrder: 1 }] : []);
+
                     setForm({
                         ...data,
+                        subCollection: safeVal(data.subCollection),
+                        primaryImageUrl: safeVal(data.primaryImageUrl),
                         imageUrls: Array.isArray(data.imageUrls) ? data.imageUrls : [],
                         author: (data.authors && data.authors.length > 0) ? data.authors[0] : (data.author || ''),
+                        authorRole: initialParties.length > 0 ? initialParties[0].role : 'Autor',
+                        parties: initialParties,
                         material: (data.materials && data.materials.length > 0) ? data.materials[0] : (data.material || ''),
                         weight: safeVal(data.weight),
                         title: safeVal(data.title),
@@ -358,7 +592,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
             loadAttachments();
         } else {
-            getNextAvailableNumbers().then((next: { accession?: string; inventory?: string }) => {
+            Promise.resolve(getNextAvailableNumbers?.()).then((next: any) => {
                 if (next) {
                     setSuggestions({ accession: next.accession || '', inventory: next.inventory || '' });
                     setForm((prev: any) => ({
@@ -451,11 +685,13 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         setUploading(true);
         try {
             const res = await uploadItemImage(Number(id), file);
+            await loadImages(id);
             const fresh = await getAdminItem(id);
             if (fresh) {
                 setForm((prev: any) => ({
                     ...prev,
                     ...fresh,
+                    primaryImageUrl: fresh.primaryImageUrl || null,
                     imageUrls: Array.isArray(fresh.imageUrls) ? fresh.imageUrls : [...(prev.imageUrls || []), res.url]
                 }));
             }
@@ -539,66 +775,9 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             }
         }
 
-        const formatDatingDate = (val: any) => {
-            if (!val && val !== 0) return null;
-            const s = String(val).trim();
-            if (/^-?\d{1,4}$/.test(s)) {
-                const isNeg = s.startsWith('-');
-                const numStr = isNeg ? s.substring(1) : s;
-                const padded = numStr.padStart(4, '0');
-                return `${isNeg ? '-' : ''}${padded}-01-01`;
-            }
-            return s.length >= 10 ? s.substring(0, 10) : null;
-        };
-
         setLoading(true);
 
-        const payload = {
-            title: form.title || '',
-            accessionNumber: form.accessionNumber || '',
-            inventoryNumber: form.inventoryNumber || '',
-            subCollection: form.subCollection || '',
-            objectType: form.objectType || '',
-            catalogingStatus: form.catalogingStatus || 'Zapsán',
-            author: form.author || '',
-            description: form.description || '',
-            extendedDescription: form.extendedDescription || '',
-            material: form.material || '',
-            technique: form.technique || '',
-            datingText: form.datingText || '',
-            datingFrom: formatDatingDate(form.datingFrom),
-            datingTo: formatDatingDate(form.datingTo),
-            countryOfOrigin: form.countryOfOrigin || '',
-            acquisitionMethod: form.acquisitionMethod || 'Dar',
-            acquisitionDate: form.acquisitionDate || null,
-            acquiredFrom: form.acquiredFrom || '',
-            locationBuilding: form.locationBuilding || '',
-            locationRoom: form.locationRoom || '',
-            permanentLocation: form.permanentLocation || '',
-            objectCondition: form.objectCondition || 'Dobrý',
-            spravce: form.spravce || '',
-            oddeleni: form.oddeleni || '',
-            insuranceValue: form.insuranceValue ? parseFloat(form.insuranceValue.toString().replace(/\s/g, '')) : 0,
-            weight: form.weight || '',
-            published: form.published ?? false,
-            auditComment: form.auditComment || '',
-            latitude: (form.latitude !== '' && form.latitude !== null && !isNaN(parseFloat(form.latitude))) ? parseFloat(form.latitude) : null,
-            longitude: (form.longitude !== '' && form.longitude !== null && !isNaN(parseFloat(form.longitude))) ? parseFloat(form.longitude) : null,
-            coordinateSystem: form.coordinateSystem || 'WGS-84',
-            markant: form.markant || '',
-            signature: form.signature || '',
-            dimensions: (form.dimensions || [])
-                .filter((d: any) => d.id || (d.value !== '' && d.value !== null && !isNaN(Number(d.value))))
-                .map((d: any) => ({
-                    id: d.id || null,
-                    type: d.dimensionType || 'Rozměr',
-                    value: d.value === '' || d.value === null ? null : Number(d.value),
-                    unit: d.unit ?? '',
-                    note: d.note || null,
-                    sortOrder: d.sortOrder ?? null
-                })),
-            legacyData: form.legacyData || {}
-        };
+        const payload = buildItemPayload(form);
 
         try {
             if (id) {
@@ -615,11 +794,24 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         inventory: safeVal(updated.inventoryNumber),
                         accession: safeVal(updated.accessionNumber)
                     });
+                    const initialParties = Array.isArray(updated.parties) && updated.parties.length > 0
+                        ? updated.parties.map((p: any) => ({
+                            partyId: p.partyId || p.id || null,
+                            partyName: p.name || p.partyName || '',
+                            role: p.role || 'Autor',
+                            type: p.type || 'PERSON',
+                            sortOrder: p.sortOrder ?? null
+                        }))
+                        : (updated.author ? [{ partyId: null, partyName: updated.author, role: 'Autor', type: 'PERSON', sortOrder: 1 }] : []);
+
                     setForm((prev: any) => ({
                         ...prev,
                         ...updated,
+                        auditComment: '',
                         imageUrls: Array.isArray(updated.imageUrls) ? updated.imageUrls : prev.imageUrls,
                         author: (updated.authors && updated.authors.length > 0) ? updated.authors[0] : (updated.author || prev.author),
+                        authorRole: initialParties.length > 0 ? initialParties[0].role : prev.authorRole,
+                        parties: initialParties,
                         material: (updated.materials && updated.materials.length > 0) ? updated.materials[0] : (updated.material || prev.material),
                         weight: safeVal(updated.weight),
                         title: safeVal(updated.title),
@@ -914,11 +1106,12 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                 </div>
                                 <select
                                     id="subCollection"
+                                    aria-label="Fond / Podsbírka"
                                     className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
                                     value={form.subCollection || ''}
                                     onChange={e => setForm({ ...form, subCollection: e.target.value })}
                                 >
-                                    <option value="">-- Vyberte fond --</option>
+                                    <option value="">-- vyberte Fond / Podsbirku --</option>
                                     {form.subCollection && !dicts.funds?.includes(form.subCollection) && (
                                         <option value={form.subCollection}>{form.subCollection}</option>
                                     )}
@@ -1084,66 +1277,181 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                 {/* 2. POPIS & ROZMĚRY */}
                 {activeTab === 'description' && (
                     <div className="space-y-4 animate-in fade-in duration-150">
-                        {/* Autor / Původce */}
+                        {/* Autor / Původce & Role */}
                         <div className="space-y-1" ref={authorDropdownRef}>
                             <div className="flex items-center justify-between">
-                                <GovFormLabel htmlFor="author">Autor / Tvůrce / Původce</GovFormLabel>
-                                <button
-                                    type="button"
-                                    onClick={() => openDictModal('AUTHOR', 'Autor / Původce', 'author')}
-                                    className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
-                                >
-                                    + Nový autor
-                                </button>
-                            </div>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    id="author"
-                                    className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
-                                    value={form.author || ''}
-                                    onFocus={() => setShowAuthors(true)}
-                                    onChange={e => {
-                                        setForm({ ...form, author: e.target.value });
-                                        setAuthorSearch(e.target.value);
-                                        setShowAuthors(true);
-                                    }}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            const matches = Array.from(new Set(dicts.authors || []))
-                                                .filter((a: any) => a.toLowerCase().includes(authorSearch.toLowerCase()))
-                                                .sort();
-                                            if (matches.length > 0 && showAuthors) {
-                                                setForm((prev: any) => ({ ...prev, author: matches[0] }));
+                                <GovFormLabel htmlFor="author">Autor / Tvůrce / Původce a role</GovFormLabel>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const name = prompt('Jméno dalšího autora / tvůrce:');
+                                            if (name && name.trim()) {
+                                                setForm((prev: any) => ({
+                                                    ...prev,
+                                                    parties: [
+                                                        ...(prev.parties && prev.parties.length > 0
+                                                            ? prev.parties
+                                                            : (prev.author ? [{ partyName: prev.author, role: prev.authorRole || 'Autor', type: 'PERSON' }] : [])),
+                                                        { partyId: null, partyName: name.trim(), role: 'Autor', type: 'PERSON' }
+                                                    ]
+                                                }));
                                             }
-                                            setShowAuthors(false);
-                                        }
-                                    }}
-                                    placeholder="Začněte psát jméno autora..."
-                                />
-                                {showAuthors && (
-                                    <div className="absolute left-0 right-0 mt-1 max-h-[160px] overflow-y-auto bg-white border border-gray-200 rounded shadow-lg z-[999]">
-                                        {Array.from(new Set(dicts.authors || []))
-                                            .filter((a: any) => a.toLowerCase().includes(authorSearch.toLowerCase()))
-                                            .sort()
-                                            .map((a: any) => (
-                                                <div
-                                                    key={a}
-                                                    onClick={() => {
-                                                        setForm({ ...form, author: a });
-                                                        setAuthorSearch('');
-                                                        setShowAuthors(false);
-                                                    }}
-                                                    className="px-3 py-1.5 text-xs hover:bg-gray-100 cursor-pointer transition-colors border-b last:border-0"
-                                                >
-                                                    {a}
-                                                </div>
-                                            ))}
-                                    </div>
-                                )}
+                                        }}
+                                        className="text-[10px] font-bold text-gray-600 hover:text-gray-900 underline"
+                                    >
+                                        + Další role / tvůrce
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => openDictModal('AUTHOR', 'Autor / Původce', 'author')}
+                                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
+                                    >
+                                        + Nový autor
+                                    </button>
+                                </div>
                             </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div className="sm:col-span-2 relative">
+                                    <input
+                                        type="text"
+                                        id="author"
+                                        className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                        value={form.author || ''}
+                                        onFocus={() => setShowAuthors(true)}
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            setForm((prev: any) => {
+                                                const existing = Array.isArray(prev.parties) && prev.parties.length > 0
+                                                    ? prev.parties
+                                                    : [{ role: prev.authorRole || 'Autor' }];
+                                                const updatedParties = existing.map((p: any, idx: number) =>
+                                                    idx === 0 ? { ...p, partyName: val, role: prev.authorRole || 'Autor' } : p
+                                                );
+                                                return {
+                                                    ...prev,
+                                                    author: val,
+                                                    parties: updatedParties
+                                                };
+                                            });
+                                            setAuthorSearch(val);
+                                            setShowAuthors(true);
+                                        }}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                const matches = Array.from(new Set(dicts.authors || []))
+                                                    .filter((a: any) => a.toLowerCase().includes(authorSearch.toLowerCase()))
+                                                    .sort();
+                                                if (matches.length > 0 && showAuthors) {
+                                                    const chosen = matches[0];
+                                                    setForm((prev: any) => {
+                                                        const existing = Array.isArray(prev.parties) && prev.parties.length > 0
+                                                            ? prev.parties
+                                                            : [{ role: prev.authorRole || 'Autor' }];
+                                                        const updatedParties = existing.map((p: any, idx: number) =>
+                                                            idx === 0 ? { ...p, partyName: chosen, role: prev.authorRole || 'Autor' } : p
+                                                        );
+                                                        return { ...prev, author: chosen, parties: updatedParties };
+                                                    });
+                                                }
+                                                setShowAuthors(false);
+                                            }
+                                        }}
+                                        placeholder="Začněte psát jméno autora..."
+                                    />
+                                    {showAuthors && (
+                                        <div className="absolute left-0 right-0 mt-1 max-h-[160px] overflow-y-auto bg-white border border-gray-200 rounded shadow-lg z-[999]">
+                                            {Array.from(new Set(dicts.authors || []))
+                                                .filter((a: any) => a.toLowerCase().includes(authorSearch.toLowerCase()))
+                                                .sort()
+                                                .map((a: any) => (
+                                                    <div
+                                                        key={a}
+                                                        onClick={() => {
+                                                            setForm((prev: any) => {
+                                                                const existing = Array.isArray(prev.parties) && prev.parties.length > 0
+                                                                    ? prev.parties
+                                                                    : [{ role: prev.authorRole || 'Autor' }];
+                                                                const updatedParties = existing.map((p: any, idx: number) =>
+                                                                    idx === 0 ? { ...p, partyName: a, role: prev.authorRole || 'Autor' } : p
+                                                                );
+                                                                return { ...prev, author: a, parties: updatedParties };
+                                                            });
+                                                            setAuthorSearch('');
+                                                            setShowAuthors(false);
+                                                        }}
+                                                        className="px-3 py-1.5 text-xs hover:bg-gray-100 cursor-pointer transition-colors border-b last:border-0"
+                                                    >
+                                                        {a}
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <select
+                                        id="authorRole"
+                                        aria-label="Role autora"
+                                        className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
+                                        value={form.authorRole || 'Autor'}
+                                        onChange={e => {
+                                            const newRole = e.target.value;
+                                            setForm((prev: any) => {
+                                                const existing = Array.isArray(prev.parties) && prev.parties.length > 0
+                                                    ? prev.parties
+                                                    : [{ partyName: prev.author || '', role: newRole }];
+                                                const updatedParties = existing.map((p: any, idx: number) =>
+                                                    idx === 0 ? { ...p, role: newRole } : p
+                                                );
+                                                return {
+                                                    ...prev,
+                                                    authorRole: newRole,
+                                                    parties: updatedParties
+                                                };
+                                            });
+                                        }}
+                                    >
+                                        {AUTHOR_ROLES.map(role => (
+                                            <option key={role} value={role}>{role}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Seznam přiřazených autorů a rolí */}
+                            {(form.parties || []).length > 1 && (
+                                <div className="mt-2 space-y-1 bg-gray-50 p-2.5 rounded border border-gray-200">
+                                    <div className="text-[11px] font-bold text-gray-700">Přiřazení autoři a role ({form.parties.length}):</div>
+                                    {form.parties.map((p: any, idx: number) => (
+                                        <div key={idx} className="flex items-center justify-between text-xs py-1 border-b last:border-none">
+                                            <span className="font-semibold text-gray-800">{p.partyName}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.5 rounded font-bold">{p.role || 'Autor'}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setForm((prev: any) => {
+                                                            const newParties = prev.parties.filter((_: any, i: number) => i !== idx);
+                                                            return {
+                                                                ...prev,
+                                                                parties: newParties,
+                                                                author: newParties.length > 0 ? newParties[0].partyName : '',
+                                                                authorRole: newParties.length > 0 ? newParties[0].role : 'Autor'
+                                                            };
+                                                        });
+                                                    }}
+                                                    className="text-red-500 hover:text-red-700 p-0.5"
+                                                    title="Odebrat původce"
+                                                >
+                                                    <FaTrash size={10} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* DATACE S ČÍSELNÝMI SPINNERY (P2) */}
@@ -1288,6 +1596,19 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             </div>
                         </div>
 
+                        {/* Poznámka k materiálu a technice (DEMUS: PoznMT) */}
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="materialNote">Poznámka k materiálu a technice (PoznMT)</GovFormLabel>
+                            <textarea
+                                id="materialNote"
+                                rows={2}
+                                className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#00204a]"
+                                value={form.materialNote || ''}
+                                onChange={e => setForm({ ...form, materialNote: e.target.value })}
+                                placeholder="Doplňující poznámka k materiálu nebo technice (např. technologie zpracování, povrchové úpravy)..."
+                            />
+                        </div>
+
                         {/* Hierarchické číselníky materiálu a techniky */}
                         <div className="pt-2 border-t border-gray-200">
                             <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider mb-2">
@@ -1405,18 +1726,123 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         </div>
 
                         {/* Fotodokumentace */}
-                        {form.imageUrls && form.imageUrls.length > 0 && (
-                            <div className="space-y-1">
-                                <GovFormLabel>Fotodokumentace</GovFormLabel>
-                                <div className="flex gap-3 overflow-x-auto pb-2 pt-1">
-                                    {form.imageUrls.map((url: string, idx: number) => (
-                                        <div key={idx} className="min-w-[120px] h-[90px] bg-gray-50 border rounded overflow-hidden shadow-xs">
-                                            <img src={url} className="w-full h-full object-cover" alt="" />
+                        <div className="space-y-3 bg-slate-50 border border-slate-200 rounded p-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                    <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider">
+                                        Fotodokumentace ({itemImages.length > 0 ? itemImages.length : (form.imageUrls?.length || 0)})
+                                    </h4>
+                                    <p className="text-[11px] text-gray-500">
+                                        Správa fotografií předmětu, nastavení hlavní fotografie, stahování a náhledy.
+                                    </p>
+                                </div>
+                                {!isViewMode && id && (
+                                    <GovButton
+                                        nativeType="button"
+                                        type="outlined"
+                                        color="neutral"
+                                        size="s"
+                                        disabled={uploading}
+                                        onClick={() => document.getElementById('photo-up')?.click()}
+                                    >
+                                        {uploading ? 'Nahrávám...' : '📸 + Nahrát fotografii'}
+                                    </GovButton>
+                                )}
+                            </div>
+
+                            {itemImages.length > 0 ? (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 pt-2">
+                                    {itemImages.map((img) => (
+                                        <div
+                                            key={img.id}
+                                            className={`relative bg-white border rounded shadow-xs overflow-hidden flex flex-col group ${
+                                                img.primary ? 'ring-2 ring-blue-600 border-blue-600' : 'border-gray-200'
+                                            }`}
+                                        >
+                                            <div className="relative h-32 w-full bg-gray-100 flex items-center justify-center overflow-hidden">
+                                                <SafeImage
+                                                    src={img.thumbUrl || img.url}
+                                                    alt={img.caption || form.title || 'Fotografie'}
+                                                    className="w-full h-full object-contain"
+                                                />
+                                                {img.primary && (
+                                                    <span className="absolute top-1.5 left-1.5 bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow">
+                                                        ★ Hlavní foto
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {img.caption && (
+                                                <div className="px-2 py-1 text-[11px] text-gray-600 truncate border-t border-gray-100" title={img.caption}>
+                                                    {img.caption}
+                                                </div>
+                                            )}
+                                            <div className="p-1.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-1 text-[11px]">
+                                                <a
+                                                    href={img.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-blue-600 hover:text-blue-800 font-bold px-1 py-0.5"
+                                                    title="Otevřít plný náhled v novém okně"
+                                                >
+                                                    Náhled
+                                                </a>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDownloadPhoto(img.url, img.caption)}
+                                                    className="text-gray-700 hover:text-gray-900 font-bold px-1 py-0.5"
+                                                    title="Stáhnout fotografii"
+                                                >
+                                                    Stáhnout
+                                                </button>
+                                                {!isViewMode && !img.primary && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleSetPrimaryPhoto(img.id)}
+                                                        className="text-amber-700 hover:text-amber-900 font-bold px-1 py-0.5 text-[10px]"
+                                                        title="Nastavit jako hlavní fotografii"
+                                                    >
+                                                        Hlavní
+                                                    </button>
+                                                )}
+                                                {!isViewMode && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeletePhoto(img.id)}
+                                                        className="text-red-600 hover:text-red-800 font-bold px-1 py-0.5"
+                                                        title="Smazat fotografii"
+                                                        aria-label={`Smazat fotografii ${img.id}`}
+                                                    >
+                                                        Smazat
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
-                            </div>
-                        )}
+                            ) : (form.imageUrls && form.imageUrls.length > 0) ? (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 pt-2">
+                                    {form.imageUrls.map((url: string, idx: number) => (
+                                        <div key={idx} className="relative bg-white border border-gray-200 rounded shadow-xs overflow-hidden flex flex-col">
+                                            <div className="h-32 w-full bg-gray-100 flex items-center justify-center overflow-hidden">
+                                                <SafeImage src={url} alt={`Fotografie ${idx + 1}`} className="w-full h-full object-contain" />
+                                            </div>
+                                            <div className="p-1.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-1 text-[11px]">
+                                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 font-bold px-1 py-0.5">
+                                                    Náhled
+                                                </a>
+                                                <a href={url} download target="_blank" rel="noopener noreferrer" className="text-gray-700 hover:text-gray-900 font-bold px-1 py-0.5">
+                                                    Stáhnout
+                                                </a>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-xs italic text-gray-500 py-2">
+                                    Zatím nebyly nahrány žádné fotografie sbírkového předmětu.
+                                </p>
+                            )}
+                        </div>
                     </div>
                 )}
 
@@ -1553,6 +1979,17 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                     )}
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Nálezová lokalita (DEMUS: Nalez) */}
+                        <div className="space-y-1">
+                            <GovFormLabel htmlFor="findingLocality">Místo nálezu / nálezová lokalita (Nalez)</GovFormLabel>
+                            <GovFormInput
+                                id="findingLocality"
+                                value={form.findingLocality || ''}
+                                onChange={(e: any) => setForm({ ...form, findingLocality: e.target.value })}
+                                placeholder="např. Brno-střed, Býčí skála..."
+                            />
                         </div>
 
                         {/* Lokalita a fond */}
@@ -1696,6 +2133,9 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                 { id: 'classification', label: '🏷️ Klasifikace' },
                                 { id: 'determination', label: '🔬 Určení' },
                                 { id: 'deaccession', label: '⚠️ Vyřazení' },
+                                { id: 'manipulation', label: '📦 Manipulace' },
+                                { id: 'action', label: '🎯 Akce' },
+                                { id: 'iso', label: '🛡️ ISO' },
                                 { id: 'demus', label: '🏛️ DEMUS trezor' },
                                 { id: 'attachments', label: `📎 Přílohy (${attachments.length})` },
                                 { id: 'audit', label: '📝 Audit' }
@@ -1728,6 +2168,15 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             )}
                             {museumSubTab === 'deaccession' && (
                                 <MuseumSection itemId={id ? Number(id) : undefined} section="deaccession" onSave={handleSectionSave} />
+                            )}
+                            {museumSubTab === 'manipulation' && (
+                                <MuseumSection itemId={id ? Number(id) : undefined} section="manipulation" onSave={handleSectionSave} />
+                            )}
+                            {museumSubTab === 'action' && (
+                                <MuseumSection itemId={id ? Number(id) : undefined} section="action" onSave={handleSectionSave} />
+                            )}
+                            {museumSubTab === 'iso' && (
+                                <MuseumSection itemId={id ? Number(id) : undefined} section="iso" onSave={handleSectionSave} />
                             )}
                             {museumSubTab === 'demus' && (
                                 <div className="space-y-4">

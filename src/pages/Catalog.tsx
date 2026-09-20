@@ -5,7 +5,6 @@ import { listPublicItems, listWorksets, WorksetSummary } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import ColumnSelectorModal, { DEFAULT_COLUMNS, ColumnConfig } from '../components/ColumnSelectorModal';
 import WorksetModal from '../components/WorksetModal';
-import SelectiveCloneModal from '../components/SelectiveCloneModal';
 import SafeImage from '../components/SafeImage';
 
 export default function Catalog() {
@@ -65,12 +64,6 @@ export default function Catalog() {
     const [showWorksetModal, setShowWorksetModal] = useState(false);
     const [worksets, setWorksets] = useState<WorksetSummary[]>([]);
     const [selectedWorkset, setSelectedWorkset] = useState(worksetIdFromUrl);
-
-    // Klonování
-    const [cloneModal, setCloneModal] = useState<{ isOpen: boolean; item: any | null }>({
-        isOpen: false,
-        item: null
-    });
 
     // Načtení pracovních sad uživatele (pokud je přihlášen)
     useEffect(() => {
@@ -493,10 +486,6 @@ export default function Catalog() {
                                     {isColVisible('weight') && (
                                         <th scope="col" className="p-3">Hmotnost</th>
                                     )}
-
-                                    {token && (
-                                        <th scope="col" className="p-3 text-right w-24">Akce</th>
-                                    )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-gray-700">
@@ -580,24 +569,11 @@ export default function Catalog() {
                                             {isColVisible('weight') && (
                                                 <td className={`${rowPad} text-gray-500`}>{it.weight ? `${it.weight} kg` : '—'}</td>
                                             )}
-
-                                            {token && (
-                                                <td className={`${rowPad} text-right`} onClick={e => e.stopPropagation()}>
-                                                    <button
-                                                        onClick={() => setCloneModal({ isOpen: true, item: it })}
-                                                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-[10px] font-bold uppercase transition-colors"
-                                                        title="Selektivně klonovat předmět"
-                                                        aria-label={`Klonovat předmět ${it.inventoryNumber}`}
-                                                    >
-                                                        Klonovat
-                                                    </button>
-                                                </td>
-                                            )}
                                         </tr>
                                     );
                                 }) : (
                                     <tr>
-                                        <td colSpan={columns.filter(c => c.visible).length + (token ? 2 : 1)} className="p-16 text-center text-gray-500">
+                                        <td colSpan={columns.filter(c => c.visible).length + 1} className="p-16 text-center text-gray-500">
                                             <span className="text-4xl block mb-2">🔍</span>
                                             <p className="italic font-semibold text-sm">Žádný sbírkový předmět neodpovídá zadaným filtrům.</p>
                                         </td>
@@ -716,20 +692,6 @@ export default function Catalog() {
                     setAllFilteredSelected(false);
                 }}
             />
-
-            {/* MODÁL SELEKTIVNÍHO KLONOVÁNÍ */}
-            {cloneModal.isOpen && cloneModal.item && (
-                <SelectiveCloneModal
-                    isOpen={cloneModal.isOpen}
-                    itemId={Number(cloneModal.item.id)}
-                    itemTitle={cloneModal.item.title}
-                    inventoryNumber={cloneModal.item.inventoryNumber || ''}
-                    onClose={() => setCloneModal({ isOpen: false, item: null })}
-                    onSuccess={(cloned) => {
-                        navigate(`/items/${cloned.id}`);
-                    }}
-                />
-            )}
 
         </div>
     );
