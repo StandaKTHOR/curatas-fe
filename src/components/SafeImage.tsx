@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { API_BASE } from '../lib/api';
+import { API_BASE, resolveApiUrl } from '../lib/api';
 
 interface SafeImageProps {
     src?: string;
@@ -15,8 +15,7 @@ export default function SafeImage({ src, alt, className }: SafeImageProps) {
     let resolvedSrc = src;
     if (resolvedSrc && !isError) {
         if (resolvedSrc.startsWith('/')) {
-            const baseUrl = API_BASE ? API_BASE.replace(/\/+$/, '') : '';
-            resolvedSrc = `${baseUrl}${resolvedSrc}`;
+            resolvedSrc = resolveApiUrl(resolvedSrc);
         } else if (API_BASE && (resolvedSrc.startsWith('http://localhost:8080') || resolvedSrc.startsWith('http://127.0.0.1:8080'))) {
             const baseUrl = API_BASE.replace(/\/+$/, '');
             resolvedSrc = resolvedSrc.replace(/^http:\/\/(localhost|127\.0\.0\.1):8080/, baseUrl);

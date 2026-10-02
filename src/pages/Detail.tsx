@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { GovButton } from '@gov-design-system-ce/react';
-import { getItem, listAttachments, API_BASE } from '../lib/api';
+import { getItem, listAttachments, API_BASE, resolveApiUrl } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import SafeImage from "@/components/SafeImage";
 import MuseumCardPrint from '@/components/MuseumCardPrint';
@@ -168,7 +168,7 @@ export default function Detail() {
                         <div className="flex gap-2 overflow-x-auto pb-2">
                             {images.map((url: string, idx: number) => (
                                 <div key={idx} className="min-w-[80px] h-[60px] rounded border border-gray-200 overflow-hidden shadow-sm bg-white hover:border-gray-400 transition-colors cursor-pointer">
-                                    <img src={url} className="w-full h-full object-cover" alt={`Náhled ${idx}`} />
+                                    <SafeImage src={url} className="w-full h-full object-cover" alt={`Náhled ${idx}`} />
                                 </div>
                             ))}
                         </div>
@@ -352,7 +352,7 @@ export default function Detail() {
                                             </div>
                                         </div>
                                         <a
-                                            href={`${API_BASE}/api/v1/items/${it.id}/attachments/${att.id}/file`}
+                                            href={resolveApiUrl(`/api/v1/items/${it.id}/attachments/${att.id}/file`)}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="inline-flex items-center gap-1 text-xs font-bold text-[#00204a] hover:underline px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
@@ -397,7 +397,7 @@ export default function Detail() {
                 onSuccess={(cloned: any) => {
                     setShowCloneModal(false);
                     if (cloned?.id) {
-                        navigate(`/detail/${cloned.id}`);
+                        navigate(`/items/${cloned.id}`);
                     }
                 }}
             />

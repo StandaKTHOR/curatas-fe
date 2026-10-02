@@ -47,7 +47,9 @@ vi.mock('../lib/api', () => ({
     deleteMuseumRecord: vi.fn(),
     deaccessionItem: vi.fn(),
     searchParties: vi.fn(),
-    API_BASE: 'http://localhost:8080'
+    API_BASE: 'http://localhost:8080',
+    resolveApiUrl: (url: string) => url,
+    buildApiUrl: (path: string) => new URL(path, 'http://localhost:8080')
 }));
 
 const mockItemData = {

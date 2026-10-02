@@ -72,7 +72,7 @@ function AppContent() {
         if (pathname.includes('/admin/items/new')) return 'Nový sbírkový předmět';
         if (pathname.includes('/admin/items/view')) return 'Prohlížení sbírkového předmětu';
         if (pathname.includes('/admin/items/edit')) return 'Editace sbírkového předmětu';
-        if (pathname.includes('/items/')) return 'Detail předmětu';
+        if (pathname.includes('/items/') || pathname.includes('/detail/')) return 'Detail předmětu';
         return 'Katalog';
     };
 
@@ -101,9 +101,9 @@ function AppContent() {
                                 <div className="space-y-1">
                                     <Link
                                         to="/"
-                                        data-active={(pathname === '/' || pathname.startsWith('/items/')) ? "true" : "false"}
+                                        data-active={(pathname === '/' || pathname.startsWith('/items/') || pathname.startsWith('/detail/')) ? "true" : "false"}
                                         className={`flex items-center gap-3 px-4 py-3 rounded text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-[#ffbc34] ${
-                                            (pathname === '/' || pathname.startsWith('/items/'))
+                                            (pathname === '/' || pathname.startsWith('/items/') || pathname.startsWith('/detail/'))
                                                 ? 'bg-[#ffbc34] !text-black shadow font-black hover:bg-[#f5b026] hover:!text-black'
                                                 : '!text-white hover:bg-white/20 hover:!text-white'
                                         }`}
@@ -234,6 +234,7 @@ function AppContent() {
                     <Routes>
                         <Route path="/" element={<Catalog />} />
                         <Route path="/items/:id" element={<Detail />} />
+                        <Route path="/detail/:id" element={<Detail />} />
                         <Route path="/feedback" element={<Feedback />} />
                         <Route path="/login" element={<Login />} />
 

@@ -2,7 +2,51 @@ import {useEffect, useState} from "react";
 import {LabelDto} from "@/components/LabelPrinter";
 import {PrintItemRow} from "@/components/ItemListPrint";
 
-export const API_BASE = import.meta.env.VITE_API_BASE;
+export const API_BASE = (import.meta.env.VITE_API_BASE || '').trim().replace(/\/+$/, '');
+
+/**
+ * Resolves an API or media path against API_BASE without creating duplicate prefixes (e.g. /uat/uat/).
+ */
+export function resolveApiUrl(path: string): string {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+        return path;
+    }
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    if (!API_BASE) {
+        return cleanPath;
+    }
+    if (API_BASE.startsWith('/')) {
+        if (cleanPath === API_BASE || cleanPath.startsWith(`${API_BASE}/`)) {
+            return cleanPath;
+        }
+    }
+    try {
+        const parsedBase = new URL(API_BASE);
+        const basePath = parsedBase.pathname.replace(/\/+$/, '');
+        if (basePath && (cleanPath === basePath || cleanPath.startsWith(`${basePath}/`))) {
+            return `${parsedBase.origin}${cleanPath}`;
+        }
+    } catch {
+        // Ignored: API_BASE is relative or non-URL
+    }
+    return `${API_BASE}${cleanPath}`;
+}
+
+/**
+ * Creates a WHATWG URL object for API requests with query parameters.
+ * Works with both absolute API_BASE URLs and relative paths (e.g. /uat).
+ */
+export function buildApiUrl(path: string): URL {
+    const resolved = resolveApiUrl(path);
+    if (resolved.startsWith('http://') || resolved.startsWith('https://')) {
+        return new URL(resolved);
+    }
+    const origin = typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
+        ? window.location.origin
+        : 'http://localhost';
+    return new URL(resolved, origin);
+}
 
 export type MuseumRecordKind = 'DOCUMENTATION' | 'CLASSIFICATION' | 'DETERMINATION' | 'DEACCESSION' | 'MANIPULATION' | 'ACTION' | 'ISO';
 export interface MuseumRecord {
@@ -62,7 +106,7 @@ const getAuthHeader = (): HeadersInit => {
 };
 
 async function museumRequest<T>(itemId: number, suffix = '', init: RequestInit = {}): Promise<T> {
-    const response = await fetch(`${API_BASE}/api/v1/items/${itemId}/museum${suffix}`, {
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/museum${suffix}`), {
         ...init,
         headers: { ...getAuthHeader(), 'Content-Type': 'application/json', ...init.headers },
     });
@@ -105,7 +149,7 @@ export async function listPublicItems(params: {
     size?: number,
     sort?: string
 }) {
-    const u = new URL(`${API_BASE}/public/v1/catalog/items`);
+    const u = buildApiUrl('/public/v1/catalog/items');
 
     // Projdeme všechny klíče v objektu params
     Object.entries(params).forEach(([key, value]) => {
@@ -136,7 +180,7 @@ export async function listAdminItems(params: {
     location?: string,
     spravce?: string
 }) {
-    const u = new URL(`${API_BASE}/api/v1/items`);
+    const u = buildApiUrl('/api/v1/items');
 
     Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
@@ -153,13 +197,13 @@ export async function listAdminItems(params: {
 }
 
 export async function getItem(id: string) {
-    const r = await fetch(`${API_BASE}/public/v1/catalog/items/${id}`);
+    const r = await fetch(resolveApiUrl(`/public/v1/catalog/items/${id}`));
     if (!r.ok) throw new Error('Předmět nebyl nalezen');
     return r.json();
 }
 
 export async function sendFeedback(body: any) {
-    const r = await fetch(`${API_BASE}/public/v1/feedback`, {
+    const r = await fetch(resolveApiUrl('/public/v1/feedback'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -170,7 +214,7 @@ export async function sendFeedback(body: any) {
 
 // ADMIN FUNKCE
 export async function login(credentials: { username: string; password: string }) {
-    const response = await fetch(`${API_BASE}/api/auth/login`, {
+    const response = await fetch(resolveApiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
@@ -193,7 +237,7 @@ export class ApiError extends Error {
 }
 
 export async function createItem(body: any) {
-    const r = await fetch(`${API_BASE}/api/v1/items`, {
+    const r = await fetch(resolveApiUrl('/api/v1/items'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(body)
@@ -235,7 +279,7 @@ export async function createItem(body: any) {
 }
 
 export async function updateItem(id: number, body: any) {
-    const r = await fetch(`${API_BASE}/api/v1/items/${id}`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(body)
@@ -277,7 +321,7 @@ export async function updateItem(id: number, body: any) {
 }
 
 export async function getAdminItem(id: string) {
-    const r = await fetch(`${API_BASE}/api/v1/items/${id}`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}`), {
         headers: getAuthHeader()
     });
     if (!r.ok) throw new Error('Nepodařilo se načíst data pro editaci');
@@ -286,7 +330,7 @@ export async function getAdminItem(id: string) {
 
 // Funkce pro smazání (audit se děje na pozadí)
 export async function deleteAdminItem(id: number) {
-    const r = await fetch(`${API_BASE}/api/v1/items/${id}`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}`), {
         method: 'DELETE',
         headers: getAuthHeader()
     });
@@ -297,7 +341,7 @@ export async function uploadItemImage(itemId: number, file: File) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`${API_BASE}/api/v1/items/${itemId}/images`, {
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/images`), {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -330,7 +374,7 @@ export interface ItemImageDto {
 }
 
 export async function listItemImages(itemId: number): Promise<ItemImageDto[]> {
-    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/images`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/images`), {
         headers: getAuthHeader()
     });
     if (!r.ok) throw new Error('Nepodařilo se načíst fotografie');
@@ -338,7 +382,7 @@ export async function listItemImages(itemId: number): Promise<ItemImageDto[]> {
 }
 
 export async function deleteItemImage(itemId: number, imageId: number): Promise<void> {
-    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/images/${imageId}`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/images/${imageId}`), {
         method: 'DELETE',
         headers: getAuthHeader()
     });
@@ -346,7 +390,7 @@ export async function deleteItemImage(itemId: number, imageId: number): Promise<
 }
 
 export async function setPrimaryItemImage(itemId: number, imageId: number): Promise<ItemImageDto> {
-    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/images/${imageId}/primary`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/images/${imageId}/primary`), {
         method: 'POST',
         headers: getAuthHeader()
     });
@@ -355,7 +399,7 @@ export async function setPrimaryItemImage(itemId: number, imageId: number): Prom
 }
 
 export async function exportItemsToExcel(params: any) {
-    const u = new URL(`${API_BASE}/api/v1/items/export/excel`);
+    const u = buildApiUrl('/api/v1/items/export/excel');
 
     // Přidáme filtry do URL
     Object.entries(params).forEach(([key, value]) => {
@@ -396,7 +440,7 @@ export async function bulkCopyItem(id: number, data: {
     titleSuffix: string,
     invNumSuffix: string
 }) {
-    const r = await fetch(`${API_BASE}/api/v1/items/${id}/bulk-copy`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}/bulk-copy`), {
         method: 'POST',
         headers: {
             ...getAuthHeader(),
@@ -413,7 +457,7 @@ export async function bulkCopyItem(id: number, data: {
 }
 
 export async function getDictionaries() {
-    const response = await fetch(`${API_BASE}/api/v1/dictionaries`, {
+    const response = await fetch(resolveApiUrl('/api/v1/dictionaries'), {
         headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,
             'Content-Type': 'application/json'
@@ -424,7 +468,7 @@ export async function getDictionaries() {
 }
 
 export async function getNextAvailableNumbers() {
-    const response = await fetch(`${API_BASE}/api/v1/items/next-numbers`, {
+    const response = await fetch(resolveApiUrl('/api/v1/items/next-numbers'), {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
     });
     return response.json();
@@ -432,7 +476,7 @@ export async function getNextAvailableNumbers() {
 
 export async function checkUniqueness(type: 'accession' | 'inventory', value: string) {
     // Ujisti se, že URL je správná (včetně lomítek)
-    const response = await fetch(`${API_BASE}/api/v1/items/check?type=${type}&value=${encodeURIComponent(value)}`, {
+    const response = await fetch(resolveApiUrl(`/api/v1/items/check?type=${type}&value=${encodeURIComponent(value)}`), {
         headers: getAuthHeader()
     });
     if (!response.ok) {
@@ -447,7 +491,7 @@ export const fetchLabelData = async (id: number): Promise<LabelDto> => {
     // Získání tokenu pro autorizaci (předpokládáme uložení v localStorage)
     const token = localStorage.getItem('token');
 
-    const response = await fetch(`${API_BASE}/api/v1/items/${id}/label`, {
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${id}/label`), {
         method: 'GET',
         headers: {
             'Authorization': `Bearer ${token}`,
@@ -479,7 +523,7 @@ export interface WorksetSummary {
 }
 
 export async function listWorksets(): Promise<WorksetSummary[]> {
-    const r = await fetch(`${API_BASE}/api/v1/worksets`, {
+    const r = await fetch(resolveApiUrl('/api/v1/worksets'), {
         headers: getAuthHeader()
     });
     if (!r.ok) throw new Error('Načítání pracovních sad selhalo');
@@ -487,7 +531,7 @@ export async function listWorksets(): Promise<WorksetSummary[]> {
 }
 
 export async function createWorkset(data: { name: string; description?: string; itemIds?: number[] }): Promise<WorksetSummary> {
-    const r = await fetch(`${API_BASE}/api/v1/worksets`, {
+    const r = await fetch(resolveApiUrl('/api/v1/worksets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(data)
@@ -500,7 +544,7 @@ export async function createWorkset(data: { name: string; description?: string; 
 }
 
 export async function createWorksetFromFilter(data: { name: string; description?: string; filter: any }): Promise<WorksetSummary> {
-    const r = await fetch(`${API_BASE}/api/v1/worksets/from-filter`, {
+    const r = await fetch(resolveApiUrl('/api/v1/worksets/from-filter'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(data)
@@ -513,7 +557,7 @@ export async function createWorksetFromFilter(data: { name: string; description?
 }
 
 export async function getWorksetDetail(id: string, page = 0, size = 50) {
-    const r = await fetch(`${API_BASE}/api/v1/worksets/${id}?page=${page}&size=${size}`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/worksets/${id}?page=${page}&size=${size}`), {
         headers: getAuthHeader()
     });
     if (!r.ok) throw new Error('Načítání detailu pracovní sady selhalo');
@@ -521,7 +565,7 @@ export async function getWorksetDetail(id: string, page = 0, size = 50) {
 }
 
 export async function addItemsToWorkset(id: string, itemIds: number[]) {
-    const r = await fetch(`${API_BASE}/api/v1/worksets/${id}/items`, {
+    const r = await fetch(resolveApiUrl('/api/v1/worksets/${id}/items'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify({ itemIds })
@@ -531,7 +575,7 @@ export async function addItemsToWorkset(id: string, itemIds: number[]) {
 }
 
 export async function removeWorksetItem(worksetId: string, itemId: number) {
-    const r = await fetch(`${API_BASE}/api/v1/worksets/${worksetId}/items/${itemId}`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/worksets/${worksetId}/items/${itemId}`), {
         method: 'DELETE',
         headers: getAuthHeader()
     });
@@ -539,7 +583,7 @@ export async function removeWorksetItem(worksetId: string, itemId: number) {
 }
 
 export async function deleteWorkset(id: string) {
-    const r = await fetch(`${API_BASE}/api/v1/worksets/${id}`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/worksets/${id}`), {
         method: 'DELETE',
         headers: getAuthHeader()
     });
@@ -562,7 +606,7 @@ export interface CloneItemOptions {
 }
 
 export async function cloneItemSelective(id: number, options: CloneItemOptions) {
-    const r = await fetch(`${API_BASE}/api/v1/items/${id}/clone`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}/clone`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(options)
@@ -585,7 +629,7 @@ export interface DeaccessionData {
 }
 
 export async function deaccessionItem(id: number, data: DeaccessionData) {
-    const r = await fetch(`${API_BASE}/api/v1/items/${id}/deaccession`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}/deaccession`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(data)
@@ -602,7 +646,7 @@ export async function deaccessionItem(id: number, data: DeaccessionData) {
 // ==========================================
 
 export async function getPrintBasic(id: number) {
-    const r = await fetch(`${API_BASE}/api/v1/items/${id}/print-basic`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}/print-basic`), {
         headers: getAuthHeader()
     });
     if (!r.ok) throw new Error('Načtení tiskových dat selhalo');
@@ -610,7 +654,7 @@ export async function getPrintBasic(id: number) {
 }
 
 export async function searchPrintItems(params: any): Promise<PrintItemRow[]> {
-    const response = await fetch(`${API_BASE}/api/v1/items/search/print`, {
+    const response = await fetch(resolveApiUrl('/api/v1/items/search/print'), {
         method: 'POST',
         headers: {
             ...getAuthHeader(),
@@ -631,7 +675,7 @@ export async function searchPrintItems(params: any): Promise<PrintItemRow[]> {
 // ==========================================
 
 export async function createDictionaryItem(data: { type: string; code: string; label: string; parentId?: number; sortOrder?: number }) {
-    const r = await fetch(`${API_BASE}/api/v1/dictionaries`, {
+    const r = await fetch(resolveApiUrl('/api/v1/dictionaries'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(data)
@@ -644,7 +688,7 @@ export async function createDictionaryItem(data: { type: string; code: string; l
 }
 
 export async function getDictionaryTree(type: string) {
-    const r = await fetch(`${API_BASE}/api/v1/dictionaries/tree?type=${encodeURIComponent(type)}`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/dictionaries/tree?type=${encodeURIComponent(type)}`), {
         headers: getAuthHeader()
     });
     if (!r.ok) throw new Error('Načtení stromu číselníku selhalo');
@@ -656,7 +700,7 @@ export async function getDictionaryTree(type: string) {
 // ==========================================
 
 export async function listAttachments(itemId: number) {
-    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/attachments`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments`), {
         headers: getAuthHeader()
     });
     if (!r.ok) throw new Error('Načtení příloh selhalo');
@@ -669,7 +713,7 @@ export async function uploadAttachment(itemId: number, file: File, caption?: str
     if (caption) formData.append('caption', caption);
     formData.append('isPrimary', isPrimary.toString());
 
-    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/attachments`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments`), {
         method: 'POST',
         headers: getAuthHeader(),
         body: formData
@@ -682,7 +726,7 @@ export async function uploadAttachment(itemId: number, file: File, caption?: str
 }
 
 export async function deleteAttachment(itemId: number, attachmentId: number) {
-    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/attachments/${attachmentId}`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments/${attachmentId}`), {
         method: 'DELETE',
         headers: getAuthHeader()
     });
@@ -690,7 +734,7 @@ export async function deleteAttachment(itemId: number, attachmentId: number) {
 }
 
 export async function downloadAttachmentFile(itemId: number, attachmentId: number, filename: string) {
-    const r = await fetch(`${API_BASE}/api/v1/items/${itemId}/attachments/${attachmentId}/file`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments/${attachmentId}/file`), {
         headers: getAuthHeader()
     });
     if (!r.ok) throw new Error('Stažení přílohy selhalo');
@@ -710,7 +754,7 @@ export async function downloadAttachmentFile(itemId: number, attachmentId: numbe
 // ==========================================
 
 export async function searchParties(q: string) {
-    const r = await fetch(`${API_BASE}/api/v1/parties?q=${encodeURIComponent(q)}`, {
+    const r = await fetch(resolveApiUrl(`/api/v1/parties?q=${encodeURIComponent(q)}`), {
         headers: getAuthHeader()
     });
     if (!r.ok) throw new Error('Hledání subjektů selhalo');
@@ -718,7 +762,7 @@ export async function searchParties(q: string) {
 }
 
 export async function createParty(data: { type: string; firstName?: string; lastName: string; birthDate?: string; deathDate?: string; note?: string }) {
-    const r = await fetch(`${API_BASE}/api/v1/parties`, {
+    const r = await fetch(resolveApiUrl('/api/v1/parties'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
         body: JSON.stringify(data)

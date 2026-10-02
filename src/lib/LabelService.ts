@@ -6,7 +6,8 @@ export const printItemLabel = (item: any) => {
     const printWindow = window.open('', '_blank', 'width=600,height=400');
     if (!printWindow) return;
 
-    const publicUrl = `${window.location.origin}/detail/${item.id}`;
+    const base = import.meta.env.BASE_URL ? import.meta.env.BASE_URL.replace(/\/+$/, '') : '';
+    const publicUrl = `${window.location.origin}${base}/items/${item.id}`;
 
     // Rozměry z legacyData
     const dims = item.legacyData

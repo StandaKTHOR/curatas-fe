@@ -18,6 +18,7 @@ import WorksetModal from '@/components/WorksetModal';
 import MuseumCardPrint from '@/components/MuseumCardPrint';
 import ItemListPrint from '@/components/ItemListPrint';
 import AdvancedFilterBuilder, { FilterGroup, createEmptyGroup } from '@/components/AdvancedFilterBuilder';
+import SafeImage from '@/components/SafeImage';
 
 export default function AdminItems() {
     const [data, setData] = useState<any>(null);
@@ -396,7 +397,7 @@ export default function AdminItems() {
                                         <div className="flex items-center gap-3">
                                             <div className="w-12 h-12 rounded border bg-gray-50 overflow-hidden flex-shrink-0 shadow-sm">
                                                 {mainPhoto ? (
-                                                    <img src={mainPhoto} className="w-full h-full object-cover" alt="" />
+                                                    <SafeImage src={mainPhoto} className="w-full h-full object-cover" alt="" />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-300 uppercase font-bold text-center p-1">Bez foto</div>
                                                 )}

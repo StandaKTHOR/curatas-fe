@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
+import { getRouterBasename } from './lib/router'
 import '@gov-design-system-ce/fonts/lib/roboto.css'
 import '@gov-design-system-ce/styles/tokens.css'
 import '@gov-design-system-ce/styles/components.css'
@@ -15,7 +16,7 @@ defineCustomElements();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-        <BrowserRouter>
+        <BrowserRouter basename={getRouterBasename()}>
             <App/>
         </BrowserRouter>
     </React.StrictMode>)

@@ -18,7 +18,8 @@ import {
     downloadAttachmentFile,
     bulkCopyItem,
     ApiError,
-    API_BASE
+    API_BASE,
+    resolveApiUrl
 } from '../lib/api';
 import { GovButton, GovFormInput, GovFormLabel, GovMessage } from '@gov-design-system-ce/react';
 import {
@@ -269,8 +270,9 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
     };
 
     const handleDownloadPhoto = async (url: string, caption?: string) => {
+        const resolvedUrl = resolveApiUrl(url);
         try {
-            const res = await fetch(url);
+            const res = await fetch(resolvedUrl);
             if (!res.ok) throw new Error('Fetch failed');
             const blob = await res.blob();
             const blobUrl = window.URL.createObjectURL(blob);
@@ -286,7 +288,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             window.URL.revokeObjectURL(blobUrl);
         } catch {
             const a = document.createElement('a');
-            a.href = url;
+            a.href = resolvedUrl;
             a.target = '_blank';
             a.rel = 'noopener noreferrer';
             a.download = (caption && caption.trim()) ? `${caption.trim()}.jpg` : 'fotografie.jpg';
@@ -1778,7 +1780,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                             )}
                                             <div className="p-1.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-1 text-[11px]">
                                                 <a
-                                                    href={img.url}
+                                                    href={resolveApiUrl(img.url)}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="text-blue-600 hover:text-blue-800 font-bold px-1 py-0.5"
@@ -1827,10 +1829,10 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                                 <SafeImage src={url} alt={`Fotografie ${idx + 1}`} className="w-full h-full object-contain" />
                                             </div>
                                             <div className="p-1.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-1 text-[11px]">
-                                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 font-bold px-1 py-0.5">
+                                                <a href={resolveApiUrl(url)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 font-bold px-1 py-0.5">
                                                     Náhled
                                                 </a>
-                                                <a href={url} download target="_blank" rel="noopener noreferrer" className="text-gray-700 hover:text-gray-900 font-bold px-1 py-0.5">
+                                                <a href={resolveApiUrl(url)} download target="_blank" rel="noopener noreferrer" className="text-gray-700 hover:text-gray-900 font-bold px-1 py-0.5">
                                                     Stáhnout
                                                 </a>
                                             </div>
