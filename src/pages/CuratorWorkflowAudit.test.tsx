@@ -218,6 +218,11 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
     });
 
     it('fundSelector_loadsDictionaryOptionsAndPersists: loads options and updates Fund and SubCollection independently', async () => {
+        vi.mocked(getDictionaryTree).mockResolvedValue([
+            { id: 17, label: 'Archeologie', children: [] },
+            { id: 83, label: 'Numismatika', children: [] },
+            { id: 204, label: 'Výtvarné umění', children: [] }
+        ] as any);
         vi.mocked(getDictionaries).mockResolvedValue({
             funds: ['Archeologie', 'Numismatika', 'Výtvarné umění']
         } as never);
@@ -244,8 +249,8 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         expect(fundSelect).toHaveValue('');
         expect(screen.getByRole('option', { name: /— Bez přiřazeného fondu —/i })).toBeInTheDocument();
 
-        await userEvent.selectOptions(fundSelect, '2'); // Numismatika has id "2"
-        expect(fundSelect).toHaveValue('2');
+        await userEvent.selectOptions(fundSelect, '83'); // Authoritative database ID
+        expect(fundSelect).toHaveValue('83');
 
         // Independent SubCollection input
         const subColInput = screen.getByRole('textbox', { name: 'Podsbírka' });

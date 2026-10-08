@@ -6,6 +6,8 @@ import * as api from '../lib/api';
 
 vi.mock('../lib/api', () => ({
   listPublicItems: vi.fn(),
+  API_BASE: '',
+  resolveApiUrl: (path: string) => path,
 }));
 
 describe('Catalog Page UAT State Preservation', () => {

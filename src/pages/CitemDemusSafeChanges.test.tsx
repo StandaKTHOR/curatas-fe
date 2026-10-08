@@ -119,6 +119,21 @@ describe('CITEM Stage 1: Safe FE Changes Integration', () => {
         expect(header).toHaveTextContent('cca 300 př. n. l.');
     });
 
+    it('never invents Fund IDs when the tree endpoint returns no entries', async () => {
+        vi.mocked(getDictionaryTree).mockResolvedValue([]);
+        render(<MemoryRouter initialEntries={['/admin/items/edit/123']}>
+            <Routes><Route path="/admin/items/edit/:id" element={<AdminItemForm />} /></Routes>
+        </MemoryRouter>);
+        await screen.findByDisplayValue('Keltská spona z bronzu');
+        const select = screen.getByRole('combobox', { name: 'Fond' });
+        expect(select).toBeDisabled();
+        expect(select).toHaveValue('5');
+        expect(screen.queryByRole('option', { name: 'Staré fondy' })).not.toBeInTheDocument();
+        await userEvent.click(screen.getByRole('button', { name: /Uložit sbírkový předmět/i }));
+        await waitFor(() => expect(updateItem).toHaveBeenCalledWith(123,
+            expect.objectContaining({ fundDictionaryId: 5, clearFund: false })));
+    });
+
     it('preserves Fund when updating only SubCollection, and saves both independently', async () => {
         render(
             <MemoryRouter initialEntries={['/admin/items/edit/123']}>

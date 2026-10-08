@@ -358,14 +358,14 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             }));
         }
         if (newItem.type === 'FUND') {
-            if (newItem.id) {
+            if (Number.isSafeInteger(newItem.id) && newItem.id! > 0) {
                 setFundOptions(prev => [...prev, { id: newItem.id!, label: newItem.label, code: newItem.code || null }]);
                 setForm((prev: any) => ({ ...prev, fundDictionaryId: newItem.id }));
             }
         } else if (dictModal.targetField) {
             setForm((prev: any) => ({
                 ...prev,
-                [dictModal.targetField]: newItem.id ? newItem.id : newItem.label
+                [dictModal.targetField]: newItem.label
             }));
         }
         if (dictModal.targetField === 'countryOfOrigin') {
@@ -525,21 +525,14 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
     const fundSelectOptions = useMemo(() => {
         if (fundOptions && fundOptions.length > 0) {
-            return fundOptions.map(f => ({
+            return fundOptions.filter(f => Number.isSafeInteger(f.id) && f.id > 0).map(f => ({
                 id: String(f.id),
                 label: f.code ? `[${f.code}] ${f.label}` : f.label,
                 rawLabel: f.label
             }));
         }
-        if (dicts.funds && Array.isArray(dicts.funds) && dicts.funds.length > 0) {
-            return dicts.funds.map((name: string, idx: number) => ({
-                id: String(idx + 1),
-                label: name,
-                rawLabel: name
-            }));
-        }
         return [];
-    }, [fundOptions, dicts.funds]);
+    }, [fundOptions]);
 
     const getFormSnapshot = (f: any) => {
         if (!f) return '';
@@ -1275,6 +1268,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                 <select
                                     id="fundDictionaryId"
                                     aria-label="Fond"
+                                    disabled={fundSelectOptions.length === 0}
                                     className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
                                     value={form.fundDictionaryId !== null && form.fundDictionaryId !== undefined ? String(form.fundDictionaryId) : ''}
                                     onChange={e => {
