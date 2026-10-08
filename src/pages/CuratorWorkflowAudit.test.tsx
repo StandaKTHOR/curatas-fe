@@ -185,6 +185,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
             ])
         }));
 
+        expect(vi.mocked(updateItem).mock.calls[0][1].inventoryNumber).toBeUndefined();
         expect(await screen.findByText(/Auditní záznam byl úspěšně uložen/i)).toBeInTheDocument();
     });
 

@@ -15,6 +15,13 @@ export interface DemusIdentity {
     materialNote: string | null;
     fundCode: string | null;
     groupCode: string | null;
+    hierarchyOrdinal?: string | null;
+    hierarchyDivision?: string | null;
+    originNote?: string | null;
+    authorRole?: string | null;
+    determinedBy?: string | null;
+    determinedAtRaw?: string | null;
+    sourceLocalId?: string | null;
 }
 
 const textFields = ['inventoryNumber', 'sourceInventoryNumber', 'series', 'ordinal', 'division',
@@ -32,6 +39,8 @@ export async function getDemusIdentity(itemId: number): Promise<DemusIdentity> {
     const data: unknown = await response.json();
     if (!data || typeof data !== 'object') throw new Error('Invalid DEMUS identity response');
     const record = data as Record<string, unknown>;
+    const optionalTextFields = ['hierarchyOrdinal', 'hierarchyDivision', 'originNote', 'authorRole', 'determinedBy', 'determinedAtRaw', 'sourceLocalId'];
+    if (optionalTextFields.some(field => record[field] !== undefined && record[field] !== null && typeof record[field] !== 'string')) throw new Error('Invalid DEMUS identity response');
     if (record.itemId !== itemId || textFields.some(field => record[field] !== null && typeof record[field] !== 'string')) {
         throw new Error('Invalid DEMUS identity response');
     }

@@ -22,6 +22,7 @@ import {
     API_BASE,
     resolveApiUrl
 } from '../lib/api';
+import { InventoryIdentityPanel } from '../components/InventoryIdentityPanel';
 import { GovButton, GovFormInput, GovFormLabel, GovMessage } from '@gov-design-system-ce/react';
 import {
     FaTrash,
@@ -209,6 +210,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         try {
             const comment = form.auditComment.trim();
             const payload = buildItemPayload(form, comment);
+            if (form.inventoryNumber === initialNumbers.inventory) payload.inventoryNumber = undefined as any;
             await updateItem(Number(id), payload);
             setAuditSaveMessage('Auditní záznam byl úspěšně uložen.');
             setForm((prev: any) => ({ ...prev, auditComment: '' }));
@@ -905,6 +907,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         setLoading(true);
 
         const payload = buildItemPayload(form);
+        if (id && form.inventoryNumber === initialNumbers.inventory) payload.inventoryNumber = undefined as any;
 
         try {
             if (id) {
@@ -1054,6 +1057,12 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                 isNew={!id}
             />
 
+            {id && <InventoryIdentityPanel itemId={Number(id)} inventoryNumber={form.inventoryNumber || ''}
+                canEdit={!isViewMode && form.inventoryNumber === initialNumbers.inventory} onSaved={async () => {
+                    const fresh = await getAdminItem(id);
+                    setForm((previous: any) => ({ ...previous, inventoryNumber: fresh.inventoryNumber ?? '' }));
+                    setInitialNumbers(previous => ({ ...previous, inventory: fresh.inventoryNumber ?? '' }));
+                }} />}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 {/* HLAVIČKA FORMULÁŘE */}
                 <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white">
