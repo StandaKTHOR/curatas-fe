@@ -7,7 +7,7 @@ interface AddDictionaryModalProps {
     dictionaryType: string;
     dictionaryTitle: string;
     onClose: () => void;
-    onSuccess: (newItem: { code: string; label: string; type: string }) => void;
+    onSuccess: (newItem: { id?: number; code: string; label: string; type: string }) => void;
 }
 
 export default function AddDictionaryModal({
@@ -113,15 +113,16 @@ export default function AddDictionaryModal({
         setLoading(true);
 
         try {
-            await createDictionaryItem({
+            const created = await createDictionaryItem({
                 type: dictionaryType,
                 code: finalCode,
                 label: label.trim()
             });
 
             onSuccess({
-                code: finalCode,
-                label: label.trim(),
+                id: created?.id,
+                code: created?.code || finalCode,
+                label: created?.label || label.trim(),
                 type: dictionaryType
             });
             onClose();

@@ -83,7 +83,7 @@ describe('React Router Navigation under /uat/ Subpath', () => {
                 <h1>Katalog sbírek</h1>
                 <span data-testid="catalog-path">{location.pathname}</span>
                 <Link to="/items/42" data-testid="detail-link">Přejít na detail</Link>
-                <Link to="/admin/items" data-testid="admin-link">Správa exponátů</Link>
+                <Link to="/admin/items" data-testid="admin-link">Správa sbírkových předmětů</Link>
             </div>
         );
     }
@@ -103,7 +103,7 @@ describe('React Router Navigation under /uat/ Subpath', () => {
         const location = useLocation();
         return (
             <div>
-                <h1>Správa exponátů</h1>
+                <h1>Správa sbírkových předmětů</h1>
                 <span data-testid="admin-path">{location.pathname}</span>
             </div>
         );
@@ -166,7 +166,7 @@ describe('React Router Navigation under /uat/ Subpath', () => {
                 <TestApp />
             </MemoryRouter>
         );
-        expect(screen.getByText('Správa exponátů')).toBeInTheDocument();
+        expect(screen.getByText('Správa sbírkových předmětů')).toBeInTheDocument();
         expect(screen.getByTestId('admin-path').textContent).toBe('/admin/items');
     });
 

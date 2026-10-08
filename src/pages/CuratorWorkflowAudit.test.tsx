@@ -109,7 +109,8 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
             </MemoryRouter>
         );
 
-        expect(await screen.findByText(/Mistr Pavol \(Kopista\)/)).toBeInTheDocument();
+        const authorMatches = await screen.findAllByText(/Mistr Pavol \(Kopista\)/);
+        expect(authorMatches.length).toBeGreaterThanOrEqual(1);
 
         const { container } = render(
             <MuseumCardPrint item={mockItemData} onClose={() => {}} />
@@ -216,7 +217,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         expect(screen.getByText('posudek.pdf')).toBeInTheDocument();
     });
 
-    it('fundSelector_loadsDictionaryOptionsAndPersists: loads options and updates subCollection', async () => {
+    it('fundSelector_loadsDictionaryOptionsAndPersists: loads options and updates Fund and SubCollection independently', async () => {
         vi.mocked(getDictionaries).mockResolvedValue({
             funds: ['Archeologie', 'Numismatika', 'Výtvarné umění']
         } as never);
@@ -229,8 +230,9 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
             </MemoryRouter>
         );
 
-        const subColSelect = await screen.findByRole('combobox', { name: /Fond \/ Podsbírka/i });
-        expect(subColSelect).toBeInTheDocument();
+        // Fond selector
+        const fundSelect = await screen.findByRole('combobox', { name: 'Fond' });
+        expect(fundSelect).toBeInTheDocument();
 
         await waitFor(() => {
             expect(screen.getByRole('option', { name: 'Archeologie' })).toBeInTheDocument();
@@ -238,12 +240,20 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
             expect(screen.getByRole('option', { name: 'Výtvarné umění' })).toBeInTheDocument();
         });
 
-        // New item must NOT auto-select first fund; curator must select consciously
-        expect(subColSelect).toHaveValue('');
-        expect(screen.getByRole('option', { name: /vyberte Fond \/ Podsbirku/i })).toBeInTheDocument();
+        // New item must NOT auto-select first fund; default is empty
+        expect(fundSelect).toHaveValue('');
+        expect(screen.getByRole('option', { name: /— Bez přiřazeného fondu —/i })).toBeInTheDocument();
 
-        await userEvent.selectOptions(subColSelect, 'Numismatika');
-        expect(subColSelect).toHaveValue('Numismatika');
+        await userEvent.selectOptions(fundSelect, '2'); // Numismatika has id "2"
+        expect(fundSelect).toHaveValue('2');
+
+        // Independent SubCollection input
+        const subColInput = screen.getByRole('textbox', { name: 'Podsbírka' });
+        expect(subColInput).toBeInTheDocument();
+        expect(subColInput).toHaveValue('');
+
+        await userEvent.type(subColInput, 'Mince a medaile');
+        expect(subColInput).toHaveValue('Mince a medaile');
     });
 
     it('photoDelete_requiresConfirmationAndRemovesPhoto: confirms and calls delete API', async () => {

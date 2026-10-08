@@ -68,7 +68,7 @@ function AppContent() {
         if (pathname === '/feedback') return 'Připomínky';
         if (pathname === '/login') return 'Vstup pro kurátory';
         if (pathname === '/admin/import') return 'Import databáze';
-        if (pathname === '/admin/items') return 'Správa exponátů';
+        if (pathname === '/admin/items') return 'Správa sbírkových předmětů';
         if (pathname.includes('/admin/items/new')) return 'Nový sbírkový předmět';
         if (pathname.includes('/admin/items/view')) return 'Prohlížení sbírkového předmětu';
         if (pathname.includes('/admin/items/edit')) return 'Editace sbírkového předmětu';
@@ -143,7 +143,7 @@ function AppContent() {
                                                 }`}
                                             >
                                                 <span className="text-base">🛠️</span>
-                                                <span>Správa exponátů</span>
+                                                <span>Správa sbírkových předmětů</span>
                                             </Link>
 
                                              {isAdmin && (

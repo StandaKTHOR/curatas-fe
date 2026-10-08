@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
     getAdminItem,
@@ -17,6 +17,7 @@ import {
     deleteAttachment,
     downloadAttachmentFile,
     bulkCopyItem,
+    getDictionaryTree,
     ApiError,
     API_BASE,
     resolveApiUrl
@@ -41,6 +42,7 @@ import AcquisitionSection from '../components/AcquisitionSection';
 import SafeImage from '../components/SafeImage';
 import MuseumCardPrint from '../components/MuseumCardPrint';
 import DemusLegacyDataView from '../components/DemusLegacyDataView';
+import PermanentIdentificationHeader from '../components/PermanentIdentificationHeader';
 
 const MAIN_TABS = [
     { id: 'identity', label: '1. Základní údaje & Identifikace' },
@@ -101,11 +103,24 @@ const buildItemPayload = (currentForm: any, auditCommentOverride?: string) => {
         }];
     }
 
+    const hasFund = currentForm.fundDictionaryId !== null && currentForm.fundDictionaryId !== undefined && currentForm.fundDictionaryId !== '' && Number(currentForm.fundDictionaryId) > 0;
+
     return {
         title: currentForm.title || '',
         accessionNumber: currentForm.accessionNumber || '',
         inventoryNumber: currentForm.inventoryNumber || '',
         subCollection: currentForm.subCollection || '',
+        fundDictionaryId: hasFund ? Number(currentForm.fundDictionaryId) : null,
+        fundLegacyCode: currentForm.fundLegacyCode || null,
+        clearFund: !hasFund,
+        groupDictionaryId: currentForm.groupDictionaryId ?? null,
+        groupLegacyCode: currentForm.groupLegacyCode ?? null,
+        localityDictionaryId: currentForm.localityDictionaryId ?? null,
+        localityLegacyCode: currentForm.localityLegacyCode ?? null,
+        materialDictionaryId: currentForm.materialDictionaryId ?? null,
+        techniqueDictionaryId: currentForm.techniqueDictionaryId ?? null,
+        subjectDictionaryId: currentForm.subjectDictionaryId ?? null,
+        subjectLegacyCode: currentForm.subjectLegacyCode ?? null,
         objectType: currentForm.objectType || '',
         catalogingStatus: currentForm.catalogingStatus || 'Zapsán',
         author: currentForm.author || '',
@@ -325,7 +340,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         setDictModal({ isOpen: true, type, title, targetField });
     };
 
-    const handleDictCreated = (newItem: { code: string; label: string; type: string }) => {
+    const handleDictCreated = (newItem: { id?: number; code: string; label: string; type: string }) => {
         const fieldMap: Record<string, string> = {
             OBJECT_TYPE: 'objectTypes',
             MATERIAL: 'materials',
@@ -333,8 +348,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             SPRAVCE: 'spravci',
             COUNTRY: 'countries',
             AUTHOR: 'authors',
-            FUND: 'funds',
-            SUB_COLLECTION: 'funds'
+            FUND: 'funds'
         };
         const dictKey = fieldMap[newItem.type];
         if (dictKey) {
@@ -343,10 +357,15 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                 [dictKey]: Array.from(new Set([...(prev[dictKey] || []), newItem.label])).sort()
             }));
         }
-        if (dictModal.targetField) {
+        if (newItem.type === 'FUND') {
+            if (newItem.id) {
+                setFundOptions(prev => [...prev, { id: newItem.id!, label: newItem.label, code: newItem.code || null }]);
+                setForm((prev: any) => ({ ...prev, fundDictionaryId: newItem.id }));
+            }
+        } else if (dictModal.targetField) {
             setForm((prev: any) => ({
                 ...prev,
-                [dictModal.targetField]: newItem.label
+                [dictModal.targetField]: newItem.id ? newItem.id : newItem.label
             }));
         }
         if (dictModal.targetField === 'countryOfOrigin') {
@@ -460,6 +479,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         accessionNumber: '',
         inventoryNumber: '',
         subCollection: '',
+        fundDictionaryId: null,
+        fundLegacyCode: null,
         objectType: '',
         catalogingStatus: 'Zapsán',
         author: '',
@@ -500,9 +521,108 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         legacyData: {}
     });
 
+    const [fundOptions, setFundOptions] = useState<{ id: number; label: string; code: string | null }[]>([]);
+
+    const fundSelectOptions = useMemo(() => {
+        if (fundOptions && fundOptions.length > 0) {
+            return fundOptions.map(f => ({
+                id: String(f.id),
+                label: f.code ? `[${f.code}] ${f.label}` : f.label,
+                rawLabel: f.label
+            }));
+        }
+        if (dicts.funds && Array.isArray(dicts.funds) && dicts.funds.length > 0) {
+            return dicts.funds.map((name: string, idx: number) => ({
+                id: String(idx + 1),
+                label: name,
+                rawLabel: name
+            }));
+        }
+        return [];
+    }, [fundOptions, dicts.funds]);
+
+    const getFormSnapshot = (f: any) => {
+        if (!f) return '';
+        const clone = { ...f, auditComment: '' };
+        return JSON.stringify(clone);
+    };
+
+    const initialFormSnapshotRef = useRef<string>('');
+
+    const isDirty = useMemo(() => {
+        if (isViewMode) return false;
+        if (!initialFormSnapshotRef.current) return false;
+        return getFormSnapshot(form) !== initialFormSnapshotRef.current;
+    }, [form, isViewMode]);
+
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (isDirty && !isViewMode) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [isDirty, isViewMode]);
+
+    const handleBackToList = () => {
+        if (isDirty && !isViewMode) {
+            const confirmed = window.confirm('Máte neuložené změny. Opravdu chcete odejít bez uložení?');
+            if (!confirmed) return;
+        }
+        const returnSearch = (location.state as any)?.fromSearch || sessionStorage.getItem('adminItemsSearch') || '';
+        navigate(`/admin/items${returnSearch}`);
+    };
+
+    const currentFundLabel = useMemo(() => {
+        if (form.fundDictionaryId) {
+            const found = fundOptions.find(f => f.id === form.fundDictionaryId);
+            if (found) return found.code ? `[${found.code}] ${found.label}` : found.label;
+            return form.fundLegacyCode ? `[${form.fundLegacyCode}] Fond #${form.fundDictionaryId}` : `Fond #${form.fundDictionaryId}`;
+        }
+        if (form.fundLegacyCode) return `[${form.fundLegacyCode}]`;
+        if (form.fundName) return form.fundName;
+        if (form.subCollection) return form.subCollection;
+        return null;
+    }, [form.fundDictionaryId, form.fundLegacyCode, form.fundName, form.subCollection, fundOptions]);
+
+    const currentAuthor = useMemo(() => {
+        if (form.author) return form.author;
+        if (form.parties && Array.isArray(form.parties) && form.parties.length > 0) {
+            const names = form.parties.map((p: any) => p.partyName || p.name).filter(Boolean);
+            if (names.length > 0) return names.join(', ');
+        }
+        return '';
+    }, [form.author, form.parties]);
+
+    const currentDating = useMemo(() => {
+        if (form.datingText) return form.datingText;
+        if (form.datingFrom || form.datingTo) {
+            return `${form.datingFrom || '?'}${form.datingTo ? `–${form.datingTo}` : ''}`;
+        }
+        return '';
+    }, [form.datingText, form.datingFrom, form.datingTo]);
+
     useEffect(() => {
         getDictionaries().then(data => {
             setDicts(data);
+        }).catch(console.error);
+
+        getDictionaryTree('FUND').then((tree: any) => {
+            if (Array.isArray(tree)) {
+                const flatten = (nodes: any[]): { id: number; label: string; code: string | null }[] => {
+                    let res: { id: number; label: string; code: string | null }[] = [];
+                    for (const n of nodes) {
+                        res.push({ id: n.id, label: n.label, code: n.code || null });
+                        if (n.children && n.children.length > 0) {
+                            res = res.concat(flatten(n.children));
+                        }
+                    }
+                    return res;
+                };
+                setFundOptions(flatten(tree));
+            }
         }).catch(console.error);
 
         if (id) {
@@ -536,9 +656,11 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         }))
                         : (data.author ? [{ partyId: null, partyName: data.author, role: 'Autor', type: 'PERSON', sortOrder: 1 }] : []);
 
-                    setForm({
+                    const loadedForm = {
                         ...data,
                         subCollection: safeVal(data.subCollection),
+                        fundDictionaryId: data.fundDictionaryId ?? null,
+                        fundLegacyCode: data.fundLegacyCode ?? null,
                         primaryImageUrl: safeVal(data.primaryImageUrl),
                         imageUrls: Array.isArray(data.imageUrls) ? data.imageUrls : [],
                         author: (data.authors && data.authors.length > 0) ? data.authors[0] : (data.author || ''),
@@ -587,7 +709,9 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             : [],
                         auditComment: '',
                         legacyData: data.legacyData || {}
-                    });
+                    };
+                    setForm(loadedForm);
+                    initialFormSnapshotRef.current = getFormSnapshot(loadedForm);
                 })
                 .catch(console.error)
                 .finally(() => setLoading(false));
@@ -597,13 +721,21 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             Promise.resolve(getNextAvailableNumbers?.()).then((next: any) => {
                 if (next) {
                     setSuggestions({ accession: next.accession || '', inventory: next.inventory || '' });
-                    setForm((prev: any) => ({
-                        ...prev,
-                        accessionNumber: prev.accessionNumber || next.accession || '',
-                        inventoryNumber: prev.inventoryNumber || next.inventory || ''
-                    }));
+                    setForm((prev: any) => {
+                        const newF = {
+                            ...prev,
+                            accessionNumber: prev.accessionNumber || next.accession || '',
+                            inventoryNumber: prev.inventoryNumber || next.inventory || ''
+                        };
+                        initialFormSnapshotRef.current = getFormSnapshot(newF);
+                        return newF;
+                    });
+                } else {
+                    initialFormSnapshotRef.current = getFormSnapshot(form);
                 }
-            }).catch(console.error);
+            }).catch(() => {
+                initialFormSnapshotRef.current = getFormSnapshot(form);
+            });
         }
     }, [id]);
 
@@ -806,45 +938,52 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         }))
                         : (updated.author ? [{ partyId: null, partyName: updated.author, role: 'Autor', type: 'PERSON', sortOrder: 1 }] : []);
 
-                    setForm((prev: any) => ({
-                        ...prev,
-                        ...updated,
-                        auditComment: '',
-                        imageUrls: Array.isArray(updated.imageUrls) ? updated.imageUrls : prev.imageUrls,
-                        author: (updated.authors && updated.authors.length > 0) ? updated.authors[0] : (updated.author || prev.author),
-                        authorRole: initialParties.length > 0 ? initialParties[0].role : prev.authorRole,
-                        parties: initialParties,
-                        material: (updated.materials && updated.materials.length > 0) ? updated.materials[0] : (updated.material || prev.material),
-                        weight: safeVal(updated.weight),
-                        title: safeVal(updated.title),
-                        description: safeVal(updated.description),
-                        extendedDescription: safeVal(updated.extendedDescription),
-                        technique: safeVal(updated.technique),
-                        datingText: safeVal(updated.datingText),
-                        datingFrom: safeYear(updated.datingFrom),
-                        datingTo: safeYear(updated.datingTo),
-                        countryOfOrigin: safeVal(updated.countryOfOrigin),
-                        objectCondition: safeVal(updated.objectCondition) || 'Dobrý',
-                        spravce: safeVal(updated.spravce),
-                        oddeleni: safeVal(updated.oddeleni),
-                        permanentLocation: safeVal(updated.permanentLocation),
-                        locationBuilding: safeVal(updated.locationBuilding),
-                        locationRoom: safeVal(updated.locationRoom),
-                        acquisitionMethod: safeVal(updated.acquisitionMethod) || 'Dar',
-                        acquisitionDate: safeVal(updated.acquisitionDate),
-                        acquiredFrom: safeVal(updated.acquiredFrom),
-                        insuranceValue: safeVal(updated.insuranceValue),
-                        materialNote: safeVal(updated.materialNote),
-                        originPlace: safeVal(updated.originPlace),
-                        findingLocality: safeVal(updated.findingLocality),
-                        quantity: updated.quantity ?? 1,
-                        published: updated.published ?? prev.published,
-                        latitude: safeVal(updated.latitude),
-                        longitude: safeVal(updated.longitude),
-                        coordinateSystem: safeVal(updated.coordinateSystem) || 'WGS-84',
-                        markant: safeVal(updated.markant),
-                        signature: safeVal(updated.signature)
-                    }));
+                    setForm((prev: any) => {
+                        const newUpdatedForm = {
+                            ...prev,
+                            ...updated,
+                            subCollection: safeVal(updated.subCollection),
+                            fundDictionaryId: updated.fundDictionaryId ?? prev.fundDictionaryId,
+                            fundLegacyCode: updated.fundLegacyCode ?? prev.fundLegacyCode,
+                            auditComment: '',
+                            imageUrls: Array.isArray(updated.imageUrls) ? updated.imageUrls : prev.imageUrls,
+                            author: (updated.authors && updated.authors.length > 0) ? updated.authors[0] : (updated.author || prev.author),
+                            authorRole: initialParties.length > 0 ? initialParties[0].role : prev.authorRole,
+                            parties: initialParties,
+                            material: (updated.materials && updated.materials.length > 0) ? updated.materials[0] : (updated.material || prev.material),
+                            weight: safeVal(updated.weight),
+                            title: safeVal(updated.title),
+                            description: safeVal(updated.description),
+                            extendedDescription: safeVal(updated.extendedDescription),
+                            technique: safeVal(updated.technique),
+                            datingText: safeVal(updated.datingText),
+                            datingFrom: safeYear(updated.datingFrom),
+                            datingTo: safeYear(updated.datingTo),
+                            countryOfOrigin: safeVal(updated.countryOfOrigin),
+                            objectCondition: safeVal(updated.objectCondition) || 'Dobrý',
+                            spravce: safeVal(updated.spravce),
+                            oddeleni: safeVal(updated.oddeleni),
+                            permanentLocation: safeVal(updated.permanentLocation),
+                            locationBuilding: safeVal(updated.locationBuilding),
+                            locationRoom: safeVal(updated.locationRoom),
+                            acquisitionMethod: safeVal(updated.acquisitionMethod) || 'Dar',
+                            acquisitionDate: safeVal(updated.acquisitionDate),
+                            acquiredFrom: safeVal(updated.acquiredFrom),
+                            insuranceValue: safeVal(updated.insuranceValue),
+                            materialNote: safeVal(updated.materialNote),
+                            originPlace: safeVal(updated.originPlace),
+                            findingLocality: safeVal(updated.findingLocality),
+                            quantity: updated.quantity ?? 1,
+                            published: updated.published ?? prev.published,
+                            latitude: safeVal(updated.latitude),
+                            longitude: safeVal(updated.longitude),
+                            coordinateSystem: safeVal(updated.coordinateSystem) || 'WGS-84',
+                            markant: safeVal(updated.markant),
+                            signature: safeVal(updated.signature)
+                        };
+                        initialFormSnapshotRef.current = getFormSnapshot(newUpdatedForm);
+                        return newUpdatedForm;
+                    });
                 }
                 setSuccessMessage('Změny byly úspěšně uloženy.');
             } else {
@@ -908,19 +1047,45 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
     }
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden animate-in fade-in duration-300">
-            {/* HLAVIČKA FORMULÁŘE */}
-            <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white">
-                <div className="min-w-0 max-w-xl">
-                    <h3 className="text-lg font-black text-gray-900 tracking-tight truncate">
-                        {id
-                            ? `Kurátorský detail: ${form.inventoryNumber || form.accessionNumber || `#${id}`}${form.title ? ` | ${form.title}` : ''}`
-                            : 'Založení nového sbírkového předmětu'}
-                    </h3>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
-                        Kurátorská správa sbírek
-                    </p>
-                </div>
+        <div className="space-y-3 animate-in fade-in duration-300">
+            {/* PERMANENTNÍ IDENTIFIKAČNÍ HLAVIČKA DLE CITEM (STICKY) */}
+            <PermanentIdentificationHeader
+                fond={currentFundLabel}
+                predmet={form.objectType}
+                popis={form.description}
+                titul={form.title}
+                autor={currentAuthor}
+                datace={currentDating}
+                inventoryNumber={form.inventoryNumber || form.accessionNumber}
+                isViewMode={isViewMode}
+                isNew={!id}
+            />
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                {/* HLAVIČKA FORMULÁŘE */}
+                <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white">
+                    <div className="flex items-center gap-3 min-w-0 max-w-xl">
+                        <GovButton
+                            nativeType="button"
+                            type="outlined"
+                            color="neutral"
+                            size="s"
+                            onClick={handleBackToList}
+                            title="Zpět na seznam předmětů se zachováním filtrů a stránkování"
+                        >
+                            ← Zpět na seznam
+                        </GovButton>
+                        <div className="min-w-0">
+                            <h3 className="text-lg font-black text-gray-900 tracking-tight truncate">
+                                {id
+                                    ? `Kurátorský detail: ${form.inventoryNumber || form.accessionNumber || `#${id}`}${form.title ? ` | ${form.title}` : ''}`
+                                    : 'Založení nového sbírkového předmětu'}
+                            </h3>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                                Kurátorská správa sbírek
+                            </p>
+                        </div>
+                    </div>
                 <div className="flex items-center gap-2.5 flex-wrap">
                     {isViewMode && (
                         <span className="px-3 py-1 bg-blue-100 text-blue-900 border border-blue-300 rounded-full text-xs font-bold flex items-center gap-1.5">
@@ -1094,37 +1259,65 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             {fieldErrors.title && <p className="text-xs font-bold text-red-600">{fieldErrors.title}</p>}
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                        {/* FOND A PODSBÍRKA DLE CITEM – NEZÁVISLÁ POLA */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <GovFormLabel htmlFor="subCollection">Fond / Podsbírka</GovFormLabel>
+                                    <GovFormLabel htmlFor="fundDictionaryId">Fond</GovFormLabel>
                                     <button
                                         type="button"
-                                        onClick={() => openDictModal('FUND', 'Fond / podsbírka', 'subCollection')}
+                                        onClick={() => openDictModal('FUND', 'Nový fond', 'fundDictionaryId')}
                                         className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
                                     >
-                                        + Nový
+                                        + Nový fond
                                     </button>
                                 </div>
                                 <select
-                                    id="subCollection"
-                                    aria-label="Fond / Podsbírka"
+                                    id="fundDictionaryId"
+                                    aria-label="Fond"
                                     className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
-                                    value={form.subCollection || ''}
-                                    onChange={e => setForm({ ...form, subCollection: e.target.value })}
+                                    value={form.fundDictionaryId !== null && form.fundDictionaryId !== undefined ? String(form.fundDictionaryId) : ''}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        setForm({
+                                            ...form,
+                                            fundDictionaryId: val ? Number(val) : null
+                                        });
+                                    }}
                                 >
-                                    <option value="">-- vyberte Fond / Podsbirku --</option>
-                                    {form.subCollection && !dicts.funds?.includes(form.subCollection) && (
-                                        <option value={form.subCollection}>{form.subCollection}</option>
+                                    <option value="">— Bez přiřazeného fondu —</option>
+                                    {form.fundDictionaryId && !fundSelectOptions.some((o: any) => o.id === String(form.fundDictionaryId)) && (
+                                        <option value={String(form.fundDictionaryId)}>
+                                            {form.fundLegacyCode ? `[${form.fundLegacyCode}] Fond #${form.fundDictionaryId}` : `Fond #${form.fundDictionaryId}`}
+                                        </option>
                                     )}
-                                    {dicts.funds?.map((f: string) => (
-                                        <option key={f} value={f}>
-                                            {f}
+                                    {fundSelectOptions.map((f: any) => (
+                                        <option key={f.id} value={f.id}>
+                                            {f.label}
                                         </option>
                                     ))}
                                 </select>
+                                {form.fundLegacyCode && (
+                                    <div className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded flex items-center justify-between">
+                                        <span>Původní kód DEMUS:</span>
+                                        <span className="font-mono font-bold">{form.fundLegacyCode}</span>
+                                    </div>
+                                )}
                             </div>
 
+                            <div className="space-y-1">
+                                <GovFormLabel htmlFor="subCollection">Podsbírka</GovFormLabel>
+                                <GovFormInput
+                                    id="subCollection"
+                                    aria-label="Podsbírka"
+                                    placeholder="např. Výtvarné umění"
+                                    value={form.subCollection || ''}
+                                    onChange={(e: any) => setForm({ ...form, subCollection: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                             <div className="space-y-1">
                                 <div className="flex items-center justify-between">
                                     <GovFormLabel htmlFor="objectType">Typ předmětu</GovFormLabel>
@@ -2402,10 +2595,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             type="outlined"
                             color="neutral"
                             size="s"
-                            onClick={() => {
-                                const search = location.state?.fromSearch || sessionStorage.getItem('adminItemsSearch') || '';
-                                navigate(`/admin/items${search}`);
-                            }}
+                            onClick={handleBackToList}
                         >
                             Zpět na seznam
                         </GovButton>
@@ -2449,6 +2639,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                 onClose={() => setDictModal({ isOpen: false, type: '', title: '', targetField: '' })}
                 onSuccess={handleDictCreated}
             />
+            </div>
         </div>
     );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { GovButton, GovFormInput, GovFormLabel } from '@gov-design-system-ce/react';
 import { listPublicItems, listWorksets, WorksetSummary } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
@@ -9,6 +9,7 @@ import SafeImage from '../components/SafeImage';
 
 export default function Catalog() {
     const navigate = useNavigate();
+    const location = useLocation();
     const auth = useAuth();
     const token = auth?.token || null;
     const [searchParams, setSearchParams] = useSearchParams();
@@ -120,6 +121,9 @@ export default function Catalog() {
     // 3. Spuštění samotného dotazu na backend při jakékoli změně v URL (page, q, sort, filtry)
     useEffect(() => {
         setLoading(true);
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem('catalogSearch', location.search);
+        }
         const activeFilters = getFiltersFromUrl();
 
         const queryParams: any = {
@@ -499,9 +503,9 @@ export default function Catalog() {
                                             className={`hover:bg-blue-50/50 cursor-pointer border-b last:border-0 transition-colors ${
                                                 isSelected ? 'bg-blue-50/70 font-semibold' : ''
                                             }`}
-                                            onClick={() => navigate(`/items/${it.id}`)}
+                                            onClick={() => navigate(`/items/${it.id}`, { state: { fromSearch: location.search } })}
                                             tabIndex={0}
-                                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/items/${it.id}`); } }}
+                                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/items/${it.id}`, { state: { fromSearch: location.search } }); } }}
                                             role="link"
                                             aria-label={`Otevřít předmět ${it.title}`}
                                         >

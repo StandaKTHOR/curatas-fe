@@ -163,7 +163,7 @@ export default function AdminItems() {
     };
 
     const handleDelete = async (id: number) => {
-        if (window.confirm('Opravdu chcete tento exponát trvale smazat? Tato akce bude zaznamenána v auditní stopě.')) {
+        if (window.confirm('Opravdu chcete tento sbírkový předmět trvale smazat? Tato akce bude zaznamenána v auditní stopě.')) {
             await deleteAdminItem(id);
             loadData();
         }
@@ -234,7 +234,7 @@ export default function AdminItems() {
             <div className="card-header bg-white py-4 flex flex-col gap-4 border-b">
                 <div className="flex justify-between items-center">
                     <h4 className="card-title m-0 font-bold text-[#1f262d] uppercase tracking-tighter">
-                        Správa exponátů <span className="text-[#ffbc34] ml-2">({data.totalElements})</span>
+                        Správa sbírkových předmětů <span className="text-[#ffbc34] ml-2">({data.totalElements})</span>
                     </h4>
                     <div className="flex flex-wrap gap-2">
                         <button
