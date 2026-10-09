@@ -179,13 +179,13 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
             auditComment: 'Doplnění údajů o autorovi a technice.',
             author: 'Mistr Pavol',
             originPlace: 'Levoča',
-            materialNote: 'Pozlacené stříbro s emailem',
-            parties: expect.arrayContaining([
-                expect.objectContaining({ partyName: 'Mistr Pavol', role: 'Kopista' })
-            ])
+            materialNote: 'Pozlacené stříbro s emailem'
+
         }));
 
         expect(vi.mocked(updateItem).mock.calls[0][1].inventoryNumber).toBeUndefined();
+        expect(vi.mocked(updateItem).mock.calls[0][1]).not.toHaveProperty('parties');
+        expect(vi.mocked(updateItem).mock.calls[0][1]).not.toHaveProperty('dimensions');
         expect(await screen.findByText(/Auditní záznam byl úspěšně uložen/i)).toBeInTheDocument();
     });
 

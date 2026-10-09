@@ -136,13 +136,13 @@ const buildItemPayload = (currentForm: any, auditCommentOverride?: string) => {
         countryOfOrigin: currentForm.countryOfOrigin || '',
         originPlace: currentForm.originPlace || '',
         findingLocality: currentForm.findingLocality || '',
-        acquisitionMethod: currentForm.acquisitionMethod || 'Dar',
+        acquisitionMethod: currentForm.acquisitionMethod || '',
         acquisitionDate: currentForm.acquisitionDate || null,
         acquiredFrom: currentForm.acquiredFrom || '',
         locationBuilding: currentForm.locationBuilding || '',
         locationRoom: currentForm.locationRoom || '',
         permanentLocation: currentForm.permanentLocation || '',
-        objectCondition: currentForm.objectCondition || 'Dobrý',
+        objectCondition: currentForm.objectCondition || '',
         spravce: currentForm.spravce || '',
         oddeleni: currentForm.oddeleni || '',
         insuranceValue: currentForm.insuranceValue ? parseFloat(currentForm.insuranceValue.toString().replace(/\s/g, '')) : 0,
@@ -210,6 +210,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         try {
             const comment = form.auditComment.trim();
             const payload = buildItemPayload(form, comment);
+            preserveUnchangedEvidence(payload);
             if (form.inventoryNumber === initialNumbers.inventory) payload.inventoryNumber = undefined as any;
             await updateItem(Number(id), payload);
             setAuditSaveMessage('Auditní záznam byl úspěšně uložen.');
@@ -499,13 +500,13 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         countryOfOrigin: '',
         originPlace: '',
         findingLocality: '',
-        acquisitionMethod: 'Dar',
+        acquisitionMethod: '',
         acquisitionDate: '',
         acquiredFrom: '',
         locationBuilding: '',
         locationRoom: '',
         permanentLocation: '',
-        objectCondition: 'Dobrý',
+        objectCondition: '',
         spravce: '',
         oddeleni: '',
         insuranceValue: '',
@@ -543,6 +544,18 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
     };
 
     const initialFormSnapshotRef = useRef<string>('');
+    // Omit untouched values: display defaults must never become historical museum evidence.
+    const preserveUnchangedEvidence = (payload: any) => {
+        if (!id || !initialFormSnapshotRef.current) return;
+        const previous = buildItemPayload(JSON.parse(initialFormSnapshotRef.current));
+        for (const field of ['acquisitionMethod', 'objectCondition', 'catalogingStatus',
+            'quantity', 'insuranceValue', 'coordinateSystem', 'latitude', 'longitude',
+            'datingFrom', 'datingTo', 'acquisitionDate', 'parties', 'dimensions']) {
+            if (JSON.stringify(previous[field as keyof typeof previous]) === JSON.stringify(payload[field])) {
+                delete payload[field];
+            }
+        }
+    };
 
     const isDirty = useMemo(() => {
         if (isViewMode) return false;
@@ -671,13 +684,13 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         datingFrom: safeYear(data.datingFrom),
                         datingTo: safeYear(data.datingTo),
                         countryOfOrigin: safeVal(data.countryOfOrigin),
-                        objectCondition: safeVal(data.objectCondition) || 'Dobrý',
+                        objectCondition: safeVal(data.objectCondition),
                         spravce: safeVal(data.spravce),
                         oddeleni: safeVal(data.oddeleni),
                         permanentLocation: safeVal(data.permanentLocation),
                         locationBuilding: safeVal(data.locationBuilding),
                         locationRoom: safeVal(data.locationRoom),
-                        acquisitionMethod: safeVal(data.acquisitionMethod) || 'Dar',
+                        acquisitionMethod: safeVal(data.acquisitionMethod),
                         acquisitionDate: safeVal(data.acquisitionDate),
                         acquiredFrom: safeVal(data.acquiredFrom),
                         insuranceValue: safeVal(data.insuranceValue),
@@ -907,6 +920,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         setLoading(true);
 
         const payload = buildItemPayload(form);
+        preserveUnchangedEvidence(payload);
         if (id && form.inventoryNumber === initialNumbers.inventory) payload.inventoryNumber = undefined as any;
 
         try {
@@ -956,13 +970,13 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             datingFrom: safeYear(updated.datingFrom),
                             datingTo: safeYear(updated.datingTo),
                             countryOfOrigin: safeVal(updated.countryOfOrigin),
-                            objectCondition: safeVal(updated.objectCondition) || 'Dobrý',
+                            objectCondition: safeVal(updated.objectCondition),
                             spravce: safeVal(updated.spravce),
                             oddeleni: safeVal(updated.oddeleni),
                             permanentLocation: safeVal(updated.permanentLocation),
                             locationBuilding: safeVal(updated.locationBuilding),
                             locationRoom: safeVal(updated.locationRoom),
-                            acquisitionMethod: safeVal(updated.acquisitionMethod) || 'Dar',
+                            acquisitionMethod: safeVal(updated.acquisitionMethod),
                             acquisitionDate: safeVal(updated.acquisitionDate),
                             acquiredFrom: safeVal(updated.acquiredFrom),
                             insuranceValue: safeVal(updated.insuranceValue),

@@ -134,6 +134,26 @@ describe('CITEM Stage 1: Safe FE Changes Integration', () => {
             expect.objectContaining({ fundDictionaryId: 5, clearFund: false })));
     });
 
+    it('does not invent professional values or replace unknown and sentinel values on unrelated saves', async () => {
+        vi.mocked(getAdminItem).mockResolvedValue({ ...mockItemWithFundAndSubCollection,
+            acquisitionMethod: null, objectCondition: null, quantity: 0, insuranceValue: null,
+            coordinateSystem: null, datingFrom: '-0300-06-15', dimensions: [], parties: [] } as any);
+        render(<MemoryRouter initialEntries={['/admin/items/edit/123']}>
+            <Routes><Route path="/admin/items/edit/:id" element={<AdminItemForm />} /></Routes>
+        </MemoryRouter>);
+        await screen.findByDisplayValue('Keltská spona z bronzu');
+        const subCollection = screen.getByRole('textbox', { name: 'Podsbírka' });
+        await userEvent.clear(subCollection);
+        await userEvent.type(subCollection, 'Pouze změna podsbírky');
+        await userEvent.click(screen.getByRole('button', { name: /Uložit sbírkový předmět/i }));
+        await waitFor(() => expect(updateItem).toHaveBeenCalled());
+        const payload = vi.mocked(updateItem).mock.calls[0][1];
+        expect(payload.subCollection).toBe('Pouze změna podsbírky');
+        for (const field of ['acquisitionMethod', 'objectCondition', 'quantity', 'insuranceValue',
+            'coordinateSystem', 'datingFrom', 'parties', 'dimensions']) {
+            expect(payload).not.toHaveProperty(field);
+        }
+    });
     it('preserves Fund when updating only SubCollection, and saves both independently', async () => {
         render(
             <MemoryRouter initialEntries={['/admin/items/edit/123']}>
