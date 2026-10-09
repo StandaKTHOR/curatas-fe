@@ -25,10 +25,22 @@ interface AdvancedFilterBuilderProps {
 
 export const FILTER_FIELDS = [
     { value: 'inventoryNumber', label: 'Inventární číslo (inv_cislo)' },
+    { value: 'inventory.series', label: 'Inventární řada (Rada_S)' },
+    { value: 'inventory.ordinal', label: 'Pořadové číslo (PorC_S)' },
+    { value: 'inventory.division', label: 'Lomení (Lomeni_S)' },
+    { value: 'inventory.hierarchyOrdinal', label: 'HPorC_S (původní složka)' },
+    { value: 'inventory.hierarchyDivision', label: 'HLomeni_S (původní složka)' },
+    { value: 'inventory.stateCode', label: 'Kód státu správce' },
+    { value: 'inventory.custodianCode', label: 'Kód instituce' },
+    { value: 'inventory.departmentCode', label: 'Kód oddělení' },
+    { value: 'inventory.collectionCode', label: 'Kód podsbírky' },
+    { value: 'fundLegacyCode', label: 'Fond (původní kód)' },
+    { value: 'legacyCreatedBy', label: 'Zapsal' },
+    { value: 'determinedBy', label: 'Určil (původní zápis)' },
     { value: 'accessionNumber', label: 'Přírůstkové číslo (prir_cislo)' },
     { value: 'title', label: 'Název předmětu' },
     { value: 'author', label: 'Autor / Tvůrce (včetně účastníků)' },
-    { value: 'subCollection', label: 'Podsbírka / Fond' },
+    { value: 'subCollection', label: 'Podsbírka' },
     { value: 'objectType', label: 'Typ předmětu / Obor' },
     { value: 'material', label: 'Materiál' },
     { value: 'technique', label: 'Technika' },
@@ -40,7 +52,7 @@ export const FILTER_FIELDS = [
     { value: 'locationBuilding', label: 'Budova' },
     { value: 'locationRoom', label: 'Místnost' },
     { value: 'permanentLocation', label: 'Uložení / Police' },
-    { value: 'spravce', label: 'Správce / Kurátor' },
+    { value: 'spravce', label: 'Instituce / správce sbírky' },
     { value: 'oddeleni', label: 'Oddělení' },
     { value: 'objectCondition', label: 'Stav předmětu' },
     { value: 'acquisitionMethod', label: 'Způsob nabytí' },
@@ -57,12 +69,19 @@ export const FILTER_OPERATORS = [
     { value: 'NOT_CONTAINS', label: 'neobsahuje' },
     { value: 'STARTS_WITH', label: 'začíná na' },
     { value: 'ENDS_WITH', label: 'končí na' },
-    { value: 'GREATER_THAN', label: 'větší nebo rovno (>=)' },
-    { value: 'LESS_THAN', label: 'menší nebo rovno (<=)' },
+    { value: 'GREATER_THAN', label: 'větší než (>)' },
+    { value: 'LESS_THAN', label: 'menší než (<)' },
     { value: 'BETWEEN', label: 'v rozmezí (od - do)' },
     { value: 'IS_EMPTY', label: 'je prázdné / nevyplněné' },
     { value: 'IS_NOT_EMPTY', label: 'je vyplněné' }
 ];
+
+export function filterOperatorsForField(field: string) {
+    const textComponent = (field.startsWith('inventory.') &&
+        !['inventory.ordinal', 'inventory.hierarchyOrdinal'].includes(field)) || field === 'determinedBy';
+    return textComponent ? FILTER_OPERATORS.filter(op =>
+        !['GREATER_THAN', 'LESS_THAN', 'BETWEEN'].includes(op.value)) : FILTER_OPERATORS;
+}
 
 export function createEmptyCondition(): FilterCondition {
     return {
@@ -183,7 +202,12 @@ export default function AdvancedFilterBuilder({
                             <div key={c.id} className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded border border-gray-200 text-xs">
                                 <select
                                     value={c.field}
-                                    onChange={e => onGroupChange(updateCondition(group, c.id, { field: e.target.value }))}
+                                    onChange={e => {
+                                        const field = e.target.value;
+                                        const operator = filterOperatorsForField(field).some(op => op.value === c.operator)
+                                            ? c.operator : 'EQUALS';
+                                        onGroupChange(updateCondition(group, c.id, { field, operator }));
+                                    }}
                                     className="bg-gray-50 border border-gray-300 rounded px-2 py-1 text-xs font-medium text-gray-800 focus:outline-none focus:border-[#00204a]"
                                 >
                                     {FILTER_FIELDS.map(f => (
@@ -198,7 +222,7 @@ export default function AdvancedFilterBuilder({
                                     onChange={e => onGroupChange(updateCondition(group, c.id, { operator: e.target.value }))}
                                     className="bg-gray-50 border border-gray-300 rounded px-2 py-1 text-xs font-medium text-gray-800 focus:outline-none focus:border-[#00204a]"
                                 >
-                                    {FILTER_OPERATORS.map(op => (
+                                    {filterOperatorsForField(c.field).map(op => (
                                         <option key={op.value} value={op.value}>
                                             {op.label}
                                         </option>
