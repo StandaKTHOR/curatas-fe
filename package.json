@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "dev": "vite",
     "build": "vite build",
+    "build:uat": "node scripts/build-uat.mjs",
     "preview": "vite preview",
     "lint": "eslint src vite.config.ts vitest.config.ts eslint.config.js"
   },
