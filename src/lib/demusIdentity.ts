@@ -2,6 +2,10 @@ import { resolveApiUrl } from './api';
 
 export interface DemusIdentity {
     itemId: number;
+    sourceQuantity?: number | null;
+    quantity?: number | null;
+    sourceDatingFromYear?: number | null;
+    sourceDatingToYear?: number | null;
     inventoryNumber: string | null;
     sourceInventoryNumber: string | null;
     series: string | null;
@@ -44,5 +48,6 @@ export async function getDemusIdentity(itemId: number): Promise<DemusIdentity> {
     if (record.itemId !== itemId || textFields.some(field => record[field] !== null && typeof record[field] !== 'string')) {
         throw new Error('Invalid DEMUS identity response');
     }
+    if (['sourceQuantity','quantity','sourceDatingFromYear','sourceDatingToYear'].some(key => record[key] != null && !Number.isInteger(record[key]))) throw new Error('Invalid numeric DEMUS evidence');
     return record as unknown as DemusIdentity;
 }

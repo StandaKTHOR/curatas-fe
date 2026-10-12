@@ -44,11 +44,11 @@ export function buildApiUrl(path: string): URL {
     }
     const origin = typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
         ? window.location.origin
-        : 'http://localhost';
+        : 'https://example.invalid';
     return new URL(resolved, origin);
 }
 
-export type MuseumRecordKind = 'DOCUMENTATION' | 'CLASSIFICATION' | 'DETERMINATION' | 'DEACCESSION' | 'MANIPULATION' | 'ACTION' | 'ISO' | 'ORIGIN';
+export type MuseumRecordKind = 'DOCUMENTATION' | 'CLASSIFICATION' | 'DETERMINATION' | 'DEACCESSION' | 'MANIPULATION' | 'ACTION' | 'ISO' | 'ORIGIN' | 'MATERIAL_TECHNIQUE' | 'BIBLIOGRAPHY';
 export interface MuseumRecord {
     id: number;
     kind: MuseumRecordKind;
@@ -58,10 +58,35 @@ export interface MuseumRecord {
     sourceTable: string | null;
     sourceKey: string | null;
     legacyData: Record<string, unknown> | null;
+    materialDictionaryId?: number | null;
+    techniqueDictionaryId?: number | null;
+    currentParty?: {id: number; type: string; displayName: string} | null;
 }
+export interface SourceAcquisition {
+    acquisitionMethod: string | null; acquisitionDateRaw: string | null; acquiredFrom: string | null;
+    documentNumber: string | null; circumstances: string | null; accessionFlag: boolean | null;
+}
+export interface ItemVocabulary {
+    dictionaryId: number; type: string; code: string | null; label: string | null; role: string | null;
+    associationOrigin: 'SOURCE_PROJECTED' | 'CURRENT_OR_UNVERIFIED' | string;
+    dictionarySourceRecord: string | null; sourceRecords: string[]; hasMoreSourceRecords: boolean;
+}
+export interface LineagePage {
+    offset: number; limit: number; hasMore: boolean;
+    records: {sourceRecord: string; sourceTable: string; sourceFiles: string[]; rowHash: string;
+        occurrence: number; nativePrimaryKey: unknown; typedValues: unknown; roles: unknown; outcomes: unknown}[];
+}
+export interface ProfessionalWrite {
+    fields?: Record<string,unknown> & {kind: MuseumRecordKind}; payload?: Record<string,unknown>;
+    dictionaryId?: number; partyId?: number; materialDictionaryId?: number; techniqueDictionaryId?: number;
+    clearParty?: boolean; clearDictionary?: boolean;
+}
+
 export interface MuseumItemDetail {
     itemId: number;
     originNote?: string | null;
+    sourceAcquisition?: SourceAcquisition | null;
+    vocabularies?: ItemVocabulary[];
     markant: string | null;
     signature: string | null;
     legacyArchived: boolean | null;
@@ -150,6 +175,25 @@ export const createMuseumRecord = (itemId: number, kind: MuseumRecordKind, paylo
     museumRequest<MuseumRecord>(itemId, `/${kind}`, { method: 'POST', body: JSON.stringify({ payload, dictionaryId, partyId }) }, session);
 export const updateMuseumRecord = (itemId: number, kind: MuseumRecordKind, recordId: number, payload: Record<string, unknown>, dictionaryId: number | null = null, partyId: number | null = null, session?: ItemEditSession) =>
     museumRequest<MuseumRecord>(itemId, `/${kind}/${recordId}`, { method: 'PATCH', body: JSON.stringify({ payload, dictionaryId, partyId }) }, session);
+export const saveProfessionalRecord = (itemId: number, kind: MuseumRecordKind, input: ProfessionalWrite,
+    session?: ItemEditSession, recordId?: number) => museumRequest<MuseumRecord>(itemId,
+        `/${kind}${recordId === undefined ? '' : `/${recordId}`}`, {
+            method: recordId === undefined ? 'POST' : 'PATCH', body: JSON.stringify(input),
+        }, session);
+export async function listProfessionalRecords(itemId: number, kind: MuseumRecordKind, session?: ItemEditSession) {
+    if (session && await getItemVersion(itemId) !== session.etag) throw new ApiError(412,'Verze odborné evidence se změnila. Porovnejte záznam.');
+    const rows = await museumRequest<MuseumRecord[]>(itemId, `/${kind}`);
+    if (session && await getItemVersion(itemId) !== session.etag) throw new ApiError(412,'Evidence se změnila během načítání.');
+    return rows;
+}
+export async function getDemusLineage(category: 'items' | 'dictionaries' | 'parties', id: number, offset=0, limit=20): Promise<LineagePage> {
+    const url = buildApiUrl(`/api/v1/${category}/${id}/demus-lineage`);
+    url.searchParams.set('offset', String(offset)); url.searchParams.set('limit', String(limit));
+    const response = await fetch(url.toString(),{headers:getAuthHeader()});
+    if (!response.ok) await responseError(response);
+    return response.json();
+}
+
 export const deleteMuseumRecord = (itemId: number, kind: MuseumRecordKind, recordId: number, session?: ItemEditSession) =>
     museumRequest<void>(itemId, `/${kind}/${recordId}`, { method: 'DELETE' }, session);
 export async function listMuseumAcquisitions(itemId: number, session?: ItemEditSession) {
@@ -213,7 +257,10 @@ export async function listAdminItems(params: {
     subCollection?: string,
     material?: string,
     location?: string,
-    spravce?: string
+    spravce?: string,
+    technique?: string, objectType?: string, datingFrom?: string, datingTo?: string,
+    sourceDatingFromYear?: string, sourceDatingToYear?: string, advancedFilter?: string,
+    sortField?: string, sortDirection?: string, worksetId?: string
 }) {
     const u = buildApiUrl('/api/v1/items');
 
@@ -227,7 +274,7 @@ export async function listAdminItems(params: {
         headers: getAuthHeader() // Nezapomeň na token, v adminu je povinný!
     });
 
-    if (!r.ok) throw new Error('Načítání administrace selhalo');
+    if (!r.ok) await responseError(r);
     return r.json();
 }
 

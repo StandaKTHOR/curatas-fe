@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, getAdminItem, updateItem, patchMuseumItem, updateMuseumRecord,
     createMuseumRecord, deleteMuseumRecord, updateMuseumAcquisition, uploadAttachment, downloadAttachmentFile,
-    getAttachmentCount, patchAttachment, listAdminItems } from './api';
+    getAttachmentCount, patchAttachment, listAdminItems, saveProfessionalRecord, getDemusLineage, listProfessionalRecords } from './api';
 import type { ItemEditSession } from './editSession';
 
 const fetchMock = vi.fn();
@@ -11,6 +11,39 @@ const reply = (body: unknown, status = 200, tag?: string) => new Response(status
 beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock); localStorage.setItem('token', 'test-token'); });
 afterEach(() => {vi.unstubAllGlobals(); localStorage.clear();});
 const session = (): ItemEditSession => ({itemId: 7, etag: '"3"'});
+
+describe('final typed professional contracts (HTTP fixtures)',()=>{
+    it('sends explicit clear flags and a typed delta without null reference IDs',async()=>{
+        const editor=session();fetchMock.mockResolvedValue(reply({id:12},200,'"4"'));
+        await saveProfessionalRecord(7,'ORIGIN',{fields:{kind:'ORIGIN',Pozn_VZ:'reviewed'},clearParty:true},editor,12);
+        expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({fields:{kind:'ORIGIN',Pozn_VZ:'reviewed'},clearParty:true});
+        expect(fetchMock.mock.calls[0][1].headers['If-Match']).toBe('"3"');
+        expect(editor.etag).toBe('"4"');
+    });
+    it('keeps contradictory bibliography HTTP 400 as a failure',async()=>{
+        fetchMock.mockResolvedValue(reply({message:'Native code mismatch'},400));
+        await expect(saveProfessionalRecord(7,'BIBLIOGRAPHY',{fields:{kind:'BIBLIOGRAPHY',Ref_RF:'label'},dictionaryId:21117},session(),1)).rejects.toMatchObject({status:400});
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    it('rejects professionally loaded rows when aggregate snapshot has changed',async()=>{
+        fetchMock.mockResolvedValueOnce(reply({rowVersion:3},200,'"3"')).mockResolvedValueOnce(reply([])).mockResolvedValueOnce(reply({rowVersion:4},200,'"4"'));
+        await expect(listProfessionalRecords(7,'DETERMINATION',session())).rejects.toMatchObject({status:412});
+    });
+    it('requests bounded authenticated lineage without leaking a bearer to an external origin',async()=>{
+        fetchMock.mockResolvedValue(reply({offset:20,limit:20,hasMore:false,records:[]}));
+        await getDemusLineage('dictionaries',281,20,20);
+        const url=new URL(fetchMock.mock.calls[0][0]);
+        expect(url.pathname).toBe('/api/v1/dictionaries/281/demus-lineage');
+        expect(url.searchParams.get('offset')).toBe('20');
+        expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer test-token');
+    });
+    it('preserves exact historical spacing in a nested server filter',async()=>{
+        fetchMock.mockResolvedValue(reply({content:[],totalElements:0,totalPages:0}));
+        const filter=JSON.stringify({logic:'AND',rules:[{field:'historicalInventoryNumber',operator:'EQUALS',value:'GrJBu     1142'},{logic:'OR',rules:[{field:'acquisitionRecordNumber',operator:'CONTAINS',value:'AQ'}]}]});
+        await listAdminItems({advancedFilter:filter});
+        expect(new URL(fetchMock.mock.calls[0][0]).searchParams.get('advancedFilter')).toBe(filter);
+    });
+});
 
 describe('Update2 snapshot and optimistic writes', () => {
     it('accepts only a consistent version/detail/museum/version snapshot', async () => {

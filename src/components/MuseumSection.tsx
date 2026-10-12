@@ -1,15 +1,16 @@
+import {professionalFields,professionalDraft,professionalValue,professionalDelta} from '../lib/professional';
 import type { ItemEditSession } from '../lib/editSession';
 import { useEffect, useState, useRef, type MutableRefObject } from 'react';
 import AddDictionaryModal from './AddDictionaryModal';
 import {
-    createMuseumRecord, deleteMuseumRecord, getDictionaryTree, getMuseumItem,
-    patchMuseumItem, updateMuseumRecord, deaccessionItem,
-    searchParties,
-    type MuseumItemDetail, type MuseumRecord, type MuseumRecordKind,
+    deleteMuseumRecord, getDictionaryTree, getMuseumItem,
+    patchMuseumItem, deaccessionItem,
+    searchParties, saveProfessionalRecord, listProfessionalRecords, ApiError,
+    type MuseumItemDetail, type MuseumRecord, type MuseumRecordKind, type ProfessionalWrite,
 } from '../lib/api';
 
 type TreeNode = { id: number; code: string | null; label: string; children: TreeNode[] };
-type Section = 'basic' | 'materials' | 'locality' | 'classification' | 'determination' | 'documentation' | 'deaccession' | 'history' | 'manipulation' | 'action' | 'iso' | 'origin';
+type Section = 'basic' | 'materials' | 'locality' | 'classification' | 'determination' | 'documentation' | 'deaccession' | 'history' | 'manipulation' | 'action' | 'iso' | 'origin' | 'materialTuples' | 'bibliography';
 type Props = { itemId?: number; section: Section; onSave?: () => void; editSession?: ItemEditSession; readOnly?: boolean; drafts?: MutableRefObject<Record<string, any>>; snapshotRequired?: boolean };
 
 const DICTIONARY_TYPE_LABELS: Record<string, string> = {
@@ -29,20 +30,11 @@ const DICTIONARY_TYPE_LABELS: Record<string, string> = {
 const recordKinds: Partial<Record<Section, MuseumRecordKind>> = {
     classification: 'CLASSIFICATION', determination: 'DETERMINATION',
     documentation: 'DOCUMENTATION', deaccession: 'DEACCESSION',
-    manipulation: 'MANIPULATION', action: 'ACTION', iso: 'ISO', origin: 'ORIGIN'
+    manipulation: 'MANIPULATION', action: 'ACTION', iso: 'ISO', origin: 'ORIGIN', materialTuples:'MATERIAL_TECHNIQUE', bibliography:'BIBLIOGRAPHY'
 };
-const recordFields: Record<MuseumRecordKind, [string, string][]> = {
-    CLASSIFICATION: [['SysKat_ZS', 'Systematická kategorie'], ['Poradi_ZS', 'Pořadí']],
-    DETERMINATION: [['Predmet_UR', 'Určený předmět'], ['Urcil_UR', 'Určil (DEMUS kód)'], ['DatUrc_UR', 'Datum určení'], ['Pozn_UR', 'Poznámka']],
-    DOCUMENTATION: [['TypDok_DK', 'Typ dokumentace (DEMUS kód)'], ['CDok_DK', 'Číslo dokumentu'], ['Dokument_DK', 'Dokument / název'], ['MediumDok_DK', 'Médium / cesta'], ['Export_DK', 'Export'], ['Pozn_DK', 'Poznámka'], ['Poradi_DK', 'Pořadí']],
-    DEACCESSION: [['DuvVyr_VS', 'Důvod (DEMUS kód)'], ['DatVyr_VS', 'Datum vyřazení'], ['CDoklVyr_VS', 'Číslo dokumentu'], ['CESVyr_VS', 'Číslo CES'], ['SchvalVyr_VS', 'Schválil'], ['ZpUb_VS', 'Způsob úbytku'], ['NovyMaj_VS', 'Nový majitel'], ['Pozn_VS', 'Poznámka']],
-    MANIPULATION: [['Typ_MN', 'Typ manipulace'], ['DatMan_MN', 'Datum manipulace'], ['Kdo_MN', 'Kdo provedl'], ['Stav_MN', 'Stav předmětu'], ['Osetreni_MN', 'Ošetření'], ['InvRev_MN', 'Inventární revize'], ['PopisSt_MN', 'Popis stavu']],
-    ACTION: [['Poradi_AK','Pořadí'],['Prezentace_AK','Prezentace'],['Revers_AK','Revers'],['CKtlg_AK','Číslo katalogu'],['Pozn_AK','Poznámka']],
-    ISO: [['KodISO_SO','Kód ISO'],['CharISO_SO','Charakteristika'],['MatISO_SO','Materiál ISO'],['CenaISO_SO','Cena ISO'],['MenaISO_SO','Měna ISO'],['PovrchISO_SO','Povrch'],['TvarISO_SO','Tvar']],
-    ORIGIN: [['OsobaVz_VZ','Osoba vzniku'],['Role_VZ','Role'],['Datace_VZ','Datace'],['RokOd_VZ','Rok od'],['RokDo_VZ','Rok do'],['MistoVz_VZ','Místo vzniku'],['Pozn_VZ','Poznámka'],['Poradi_VZ','Pořadí']]
-};
+const recordFields = professionalFields;
 const recordDictionary: Partial<Record<MuseumRecordKind, string>> = {
-    CLASSIFICATION: 'CLASSIFICATION', DETERMINATION: 'DETERMINER', DOCUMENTATION: 'DOCUMENT_TYPE', DEACCESSION: 'DEACCESSION_REASON',
+    BIBLIOGRAPHY:'LITERATURE', CLASSIFICATION: 'CLASSIFICATION', DETERMINATION: 'DETERMINER', DOCUMENTATION: 'DOCUMENT_TYPE', DEACCESSION: 'DEACCESSION_REASON',
 };
 
 function flatten(nodes: TreeNode[], prefix = ''): { id: number; label: string; rawLabel: string; code: string | null }[] {
@@ -52,9 +44,10 @@ function flatten(nodes: TreeNode[], prefix = ''): { id: number; label: string; r
     });
 }
 
-export function TreeChoice({ type, value, onChange, label }: {
+export function TreeChoice({ type, value, onChange, label, allowEmpty=true, invalid=false }: {
     type: string; value: number | null;
     onChange: (id: number | null, choice?: { id: number; label: string; rawLabel?: string; code: string | null }) => void; label: string;
+    allowEmpty?:boolean; invalid?:boolean;
 }) {
     const [nodes, setNodes] = useState<TreeNode[]>([]);
     const [search, setSearch] = useState('');
@@ -103,12 +96,12 @@ export function TreeChoice({ type, value, onChange, label }: {
                 }
             }}
             placeholder="Hledat v hierarchii" />
-        <select aria-label={label} className="w-full rounded border border-gray-300 bg-white px-3 py-2 font-normal text-xs"
+        <select aria-label={label} aria-invalid={invalid} className="w-full rounded border border-gray-300 bg-white px-3 py-2 font-normal text-xs"
             value={value ?? ''} onChange={e => {
                 const id = e.target.value ? Number(e.target.value) : null;
                 onChange(id, choices.find(choice => choice.id === id));
             }}>
-            <option value="">— nevybráno —</option>
+            <option value="" disabled={!allowEmpty}>— nevybráno —</option>
             {value && !choices.some(x => x.id === value) && <option value={value} disabled>Stávající vazba #{value} (není v načteném číselníku)</option>}
             {choices.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
         </select>
@@ -136,6 +129,13 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     const [payload, setPayload] = useState<Record<string, unknown>>(drafts?.current[section]?.payload ?? {});
     const [dictionaryId, setDictionaryId] = useState<number | null>(drafts?.current[section]?.dictionaryId ?? null);
     const [partyId, setPartyId] = useState<number | null>(drafts?.current[section]?.partyId ?? null);
+    const [materialId,setMaterialId]=useState<number|null>(drafts?.current[section]?.materialId??null);
+    const [techniqueId,setTechniqueId]=useState<number|null>(drafts?.current[section]?.techniqueId??null);
+    const [clearParty,setClearParty]=useState(drafts?.current[section]?.clearParty??false);
+    const [clearDictionary,setClearDictionary]=useState(drafts?.current[section]?.clearDictionary??false);
+    const [nativeCode,setNativeCode]=useState<string|null>(null);
+    const [saving,setSaving]=useState(false);
+    const [referenceError,setReferenceError]=useState(false);
     const [partyQuery, setPartyQuery] = useState('');
     const [partyMatches, setPartyMatches] = useState<{ id: number; firstName: string | null; lastName: string }[]>([]);
     const [message, setMessage] = useState('');
@@ -144,17 +144,26 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     const kind = recordKinds[section];
     useEffect(() => {
         if (drafts) drafts.current[section] = {changes, record, payload, dictionaryId, partyId,
-            dirty: Object.keys(changes).length > 0 || Object.keys(payload).length > 0};
-    }, [changes, record, payload, dictionaryId, partyId, section, drafts]);
+            materialId,techniqueId,clearParty,clearDictionary,
+            dirty: Object.keys(changes).length > 0 || (kind && Object.keys(professionalDelta(kind,payload,record)).length>0) || clearParty || clearDictionary ||
+                (record ? partyId!==record.partyId||dictionaryId!==record.dictionaryId||materialId!==(record.materialDictionaryId??null)||techniqueId!==(record.techniqueDictionaryId??null) : !!partyId||!!dictionaryId||!!materialId||!!techniqueId)};
+    }, [changes, record, payload, dictionaryId, partyId, section, drafts,kind,materialId,techniqueId,clearParty,clearDictionary]);
 
     useEffect(() => {
         if (!itemId || (snapshotRequired && !editSession)) return;
         let alive = true;
         Promise.resolve(editSession?.museumSnapshot as MuseumItemDetail | undefined)
             .then(snapshot => snapshot || getMuseumItem(itemId, editSession))
-            .then(data => { if (alive) setDetail(data); }).catch((e: Error) => {if (alive) setMessage(e.message);});
+            .then(async data => {
+                if (snapshotRequired && editSession && kind) {
+                    const rows=await listProfessionalRecords(itemId,kind,editSession);
+                    data={...data,records:[...(data.records||[]).filter(row=>row.kind!==kind),...rows]};
+                    editSession.museumSnapshot=data;
+                }
+                if (alive) setDetail(data);
+            }).catch((e: Error) => {if (alive) setMessage(e.message);});
         return () => {alive = false;};
-    }, [itemId, editSession, snapshotRequired]);
+    }, [itemId, editSession, snapshotRequired,kind]);
 
     if (!itemId) return <p className="rounded border bg-gray-50 p-4">Nejprve uložte předmět; pak lze vyplnit tuto sekci.</p>;
     if (snapshotRequired && !editSession) return <p role="status">Čekám na konzistentní verzi předmětu…</p>;
@@ -214,10 +223,11 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
 
     const startRecord = (existing: MuseumRecord | null) => {
         setRecord(existing);
-        setPayload(existing ? { ...Object.fromEntries(recordFields[existing.kind].filter(([key]) => existing.legacyData?.[key] !== undefined).map(([key]) => [key, existing.legacyData![key]])), ...(existing.payload || {}) } : {});
+        setPayload(existing ? professionalDraft(existing) : {});
         setDictionaryId(existing?.dictionaryId ?? null);
         setPartyId(existing?.partyId ?? null);
-        setPartyQuery('');
+        setPartyQuery('');setClearParty(false);setClearDictionary(false);setReferenceError(false);setNativeCode(null);
+        setMaterialId(existing?.materialDictionaryId??null);setTechniqueId(existing?.techniqueDictionaryId??null);
         if (existing) {
             setTimeout(() => {
                 if (typeof editFormRef.current?.scrollIntoView === 'function') {
@@ -229,7 +239,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     const saveRecord = async () => {
         if (!kind) return;
         const hasPayloadData = Object.values(payload).some(v => v !== null && v !== undefined && v !== '');
-        if (!hasPayloadData && !dictionaryId && !partyId) {
+        if (!hasPayloadData && !dictionaryId && !partyId && !materialId && !techniqueId && !clearParty && !clearDictionary) {
             setMessage('Nelze uložit zcela prázdný záznam. Vyplňte alespoň jedno pole.');
             return;
         }
@@ -240,18 +250,31 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                 return;
             }
         }
+        setSaving(true);setReferenceError(false);setMessage('');
         try {
-            const changed = record ? Object.fromEntries(Object.entries(payload).filter(([key, value]) =>
-                JSON.stringify(value) !== JSON.stringify(record.payload[key] ?? record.legacyData?.[key]))) : payload;
-            if (record) await updateMuseumRecord(itemId, kind, record.id, changed, dictionaryId, partyId, editSession);
-            else await createMuseumRecord(itemId, kind, payload, dictionaryId, partyId, editSession);
+            const changed=professionalDelta(kind,payload,record);
+            const input:ProfessionalWrite=kind==='CLASSIFICATION'?{payload:changed}:{fields:{kind,...changed}};
+            if(dictionaryId!=null && (!record||dictionaryId!==record.dictionaryId))input.dictionaryId=dictionaryId;
+            if(partyId!=null && (!record||partyId!==record.partyId))input.partyId=partyId;
+            if(clearParty)input.clearParty=true;
+            if(clearDictionary)input.clearDictionary=true;
+            if(kind==='MATERIAL_TECHNIQUE') {
+                if(materialId!=null&&materialId!==record?.materialDictionaryId)input.materialDictionaryId=materialId;
+                if(techniqueId!=null&&techniqueId!==record?.techniqueDictionaryId)input.techniqueDictionaryId=techniqueId;
+            }
+            const saved=await saveProfessionalRecord(itemId,kind,input,editSession,record?.id);
+            if(saved?.id)setRecord(saved);
             const fresh = await getMuseumItem(itemId, editSession);
             if (editSession) editSession.museumSnapshot = fresh;
             setDetail(fresh);
             startRecord(null);
             if (onSave) onSave();
             setMessage('Záznam uložen.');
-        } catch (e) { setMessage((e as Error).message); }
+        } catch (e) {
+            const reference=e instanceof ApiError&&e.status===400;
+            setReferenceError(reference);
+            setMessage(reference?'Zápis nebyl přijat. Zkontrolujte nativní reference a vybraná ID; zadaná data zůstávají zachována. '+e.message:(e as Error).message);
+        } finally {setSaving(false);}
     };
     const removeRecord = async (row: MuseumRecord) => {
         if (!kind || row.sourceTable || !window.confirm('Odebrat tento záznam?')) return;
@@ -274,10 +297,14 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                     <td><strong>{row.sourceTable ? `DEMUS ${row.sourceTable}` : 'Nový záznam'} · #{row.id}</strong>
                         {record?.id === row.id && <span className="block">✏️ Právě upravujete</span>}
                         {row.partyId && <p>Vazba na osobu/subjekt #{row.partyId}</p>}
+                        {row.currentParty&&<p>Současná osoba: {row.currentParty.displayName} · #{row.currentParty.id} ({row.currentParty.type})</p>}
+                        {row.sourceTable==='Sbirky'&&kind==='DETERMINATION'&&<p>Kořenové určení — Sbirky</p>}
+                        {row.sourceTable==='Urceni'&&<p>Podřízený záznam — Urceni</p>}
+                        {kind==='MATERIAL_TECHNIQUE'&&<p>Materiál ID: {row.materialDictionaryId??'—'} · Technika ID: {row.techniqueDictionaryId??'—'}</p>}
                         {row.sourceTable && <details><summary>Všechna původní pole</summary>
                             <p>Zdroj: {row.sourceTable} · {row.sourceKey || '—'}</p><pre>{JSON.stringify(row.legacyData,null,2)}</pre></details>}
                     </td>
-                    {recordFields[kind].map(([key]) => <td key={key}>{String(row.payload[key] ?? row.legacyData?.[key] ?? '—')}</td>)}
+                    {recordFields[kind].map(([key]) => <td key={key}>{String(professionalValue(row,key) ?? '—')}</td>)}
                     <td>{kind !== 'DEACCESSION' && <button type="button" className="underline" onClick={() => startRecord(row)}>Upravit</button>}
                         {kind !== 'DEACCESSION' && !row.sourceTable && <button type="button" className="ml-3 text-red-700 underline" onClick={() => removeRecord(row)}>Odebrat</button>}
                     </td>
@@ -311,19 +338,23 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                         Zrušit úpravu
                     </button>}
                 </div>
-                {recordDictionary[kind] && <TreeChoice type={recordDictionary[kind]!} label="Číselník"
-                    value={dictionaryId} onChange={(id, choice) => {
-                        setDictionaryId(id);
-                        const codeField = kind === 'CLASSIFICATION' ? 'SysKat_ZS'
-                            : kind === 'DOCUMENTATION' ? 'TypDok_DK' : 'DuvVyr_VS';
-                        setPayload(old => ({ ...old, [codeField]: choice?.code ?? '' }));
-                    }} />}
-                {kind === 'DETERMINATION' && <div className="space-y-2 text-sm">
-                    <label className="block font-semibold">Určil – vazba na existující osoby/subjekty
+                {recordDictionary[kind] && <TreeChoice type={recordDictionary[kind]!} label="Číselník" invalid={referenceError}
+                    value={dictionaryId} onChange={(id,choice)=>{setDictionaryId(id);setClearDictionary(id==null&&!!record?.dictionaryId);setNativeCode(choice?.code??null);}}/>}
+                {recordDictionary[kind]&&<p>Výběr ID nemění původní citaci ani nativní kód. {clearDictionary?'Současná vazba bude výslovně zrušena.':''}</p>}
+                {nativeCode!=null&&['BIBLIOGRAPHY','CLASSIFICATION','DOCUMENTATION'].includes(kind)&&<button type="button" onClick={()=>{
+                    const key=kind==='BIBLIOGRAPHY'?'Ref_RF':kind==='CLASSIFICATION'?'SysKat_ZS':'TypDok_DK';setPayload(old=>({...old,[key]:nativeCode}));
+                }}>Použít nativní kód vybrané položky: {nativeCode}</button>}
+                {kind==='MATERIAL_TECHNIQUE'&&<div className="grid grid-cols-2 gap-2">
+                    <TreeChoice type="MATERIAL" label="Materiál tuple — číselník" value={materialId} allowEmpty={!record?.materialDictionaryId} onChange={id=>setMaterialId(id)}/>
+                    <TreeChoice type="TECHNIQUE" label="Technika tuple — číselník" value={techniqueId} allowEmpty={!record?.techniqueDictionaryId} onChange={id=>setTechniqueId(id)}/>
+                    <p className="col-span-2">Párování materiálu/techniky zůstává samostatným záznamem. Generické zrušení vazby na tento tuple se nepoužívá.</p>
+                </div>}
+                {['DETERMINATION','ORIGIN','MANIPULATION'].includes(kind) && <div className="space-y-2 text-sm">
+                    <label className="block font-semibold">Současná osoba — hledat existující osoby/subjekty
                         <input value={partyQuery} onChange={async e => {
                             const query = e.target.value;
                             setPartyQuery(query);
-                            setPartyMatches(query.length >= 2 ? await searchParties(query) : []);
+                            try {setPartyMatches(query.length >= 2 ? await searchParties(query) : []);} catch(e) {setMessage((e as Error).message);}
                         }} onKeyDown={e => {
                             if (e.key === 'Enter') {
                                 e.preventDefault();
@@ -333,24 +364,25 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                             className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 font-normal" />
                     </label>
                     <select aria-label="Vybraná osoba" value={partyId ?? ''}
-                        onChange={e => setPartyId(e.target.value ? Number(e.target.value) : null)}
+                        onChange={e => {const id=e.target.value?Number(e.target.value):null;setPartyId(id);setClearParty(id==null&&!!record?.partyId);}}
                         className="w-full rounded border border-gray-300 bg-white px-3 py-2">
-                        <option value="">— bez vazby —</option>
-                        {partyId && !partyMatches.some(p => p.id === partyId) && <option value={partyId}>Stávající osoba #{partyId}</option>}
+                        <option value="">— bez současné vazby / výslovně zrušit —</option>
+                        {partyId && !partyMatches.some(p => p.id === partyId) && <option value={partyId}>{record?.currentParty?.displayName||`Stávající osoba #${partyId}`}</option>}
                         {partyMatches.map(p => <option key={p.id} value={p.id}>{[p.firstName, p.lastName].filter(Boolean).join(' ')}</option>)}
                     </select>
                 </div>}
+                {clearParty&&<p>Současná vazba bude výslovně zrušena. Historický text osoby zůstává beze změny.</p>}
                 <div className="grid gap-3 md:grid-cols-2">{recordFields[kind].map(([key, label]) => <label key={key} className="block text-sm font-semibold">
                     {label}{key === 'Export_DK' ? <input type="checkbox" className="ml-3"
                         checked={payload[key] === true} onChange={e => setPayload(old => ({ ...old, [key]: e.target.checked }))} />
                         : <input type={key.startsWith('Poradi_') ? 'number' : (['CKtlg_AK','CenaISO_SO','RokOd_VZ','RokDo_VZ'].includes(key) ? 'number' : 'text')}
                             min={key.startsWith('Poradi_') ? '0' : undefined}
                             className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 font-normal"
-                            value={String(payload[key] ?? '')} onChange={e => setPayload(old => ({ ...old,
+                            aria-invalid={referenceError} value={String(payload[key] ?? '')} onChange={e => setPayload(old => ({ ...old,
                                 [key]: (key.startsWith('Poradi_') || ['CKtlg_AK','CenaISO_SO','RokOd_VZ','RokDo_VZ'].includes(key)) ? (e.target.value !== '' ? Number(e.target.value) : null) : e.target.value }))} />}
                 </label>)}</div>
                 <div className="flex items-center gap-3 pt-2">
-                    <button type="button" className="rounded bg-[#00204a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#003366]" onClick={saveRecord}>
+                    <button type="button" className="rounded bg-[#00204a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#003366]" disabled={saving} onClick={saveRecord}>
                         Uložit záznam
                     </button>
                     {record && <button type="button" className="text-sm text-gray-600 underline hover:text-gray-900" onClick={() => startRecord(null)}>Zrušit úpravu</button>}
