@@ -1,3 +1,37 @@
+# Current acceptance evaluation — final integration, 12 October 2026
+
+This current section and [final handoff](UPDATE2-FE-FINAL-HANDOFF-20261012.md) supersede the historical baseline evaluation below. No original reference screenshot was overwritten.
+
+| Requirement | Current evidence | State |
+|---|---|---|
+| CITEM REQ-01/02/05: compact table terminology/menu | Source-preserved Demus shell, exact 31px staff rows, final screenshots | IMPLEMENTED locally |
+| REQ-03: inventory composition/source | Explicit create components, guarded inventory identity, original aliases read-only | PARTIAL: complete reconciliation/source conflicts unresolved |
+| REQ-04: Fond/Podsbírka | Real FUND IDs; separate contractual text subCollection | PARTIAL: independent Podsbírka dictionary-ID contract unavailable |
+| REQ-06/07: field meanings/required data | Markant/signature text; inventory and title OR type; optional accession | IMPLEMENTED for verified contract |
+| REQ-08: original professional cards | Direct cards; added actual BIBLIOGRAPHY and MATERIAL_TECHNIQUE typed records | PARTIAL: Plus/Sluz/O/I semantics and complete original geometry not proven |
+| REQ-09/10: complex filtering/paging | Exact historical fields/eight text operators, AND/OR JSON, preserved spaces, actual server pagination/return state | IMPLEMENTED locally; arbitrary related-field predicates unavailable |
+| REQ-11: approved printing | Existing actual print endpoints/actions retained | NOT COMPLETE: approved A5/two-per-A4/template inventory MISSING |
+| REQ-12/13: exports/deferred policy | Real export progress/actions; no imports/deployment | PARTIAL: full professional export/institution semantics unresolved |
+| Save/year controls | Compact sticky form action; year spinner for genuine acquisition dates; no invented source dates | IMPLEMENTED locally |
+| Quantity/native years | Validated numeric/null evidence, neutral source/current count, persistent current count; separate source-year filtering | IMPLEMENTED, component/HTTP fixtures |
+| Root determination | Backend-returned _UR, explicit null precedence, no invented Predmet/Pozn, Sbirky/Urceni distinction | IMPLEMENTED, fixtures; safe sample lacks actor/date values |
+| Root acquisition | Exact raw source evidence/boolean, separate child collection | IMPLEMENTED, fixtures |
+| Real vocabulary relationships | IDs, nullable role, accurate origin, bounded sources; paged item/dictionary lineage | IMPLEMENTED, fixtures; universal party-history UI absent |
+| Current party/link clearing | Separate reviewed party, IDs; explicit clear flags; no actor renaming/generic tuple clear | IMPLEMENTED, component/HTTP fixtures |
+| Native bibliography reference | Code versus label, no silent citation replacement; rejected HTTP400 retains input | IMPLEMENTED, component/browser fixtures |
+| ETag/errors/media | Opaque token snapshot/chaining; all required rejection statuses; independent authenticated media contract | IMPLEMENTED locally; live persistence not verified |
+| Public boundary/mobile | No storage filter/columns/source API; visible mobile Save | VERIFIED locally; institution scope requires live testing |
+| Visual equality | Original/reference and first evidenced React baseline reviewed; final nine required screen groups captured | PARTIAL: Access main-card geometry differs |
+| UAT delivery | Root build, target origin, checked bundle/receipt/112 file hashes | LOCAL PACKAGE READY; no target deployment/smoke |
+
+Preparation authority now includes all four final BE handoffs plus exact DTO/service source. FE AGENTS.md and independent museum email/acceptance source are MISSING locally. KATALOG.HLP is identified by the newer audit; its extracted topics are NOT VERIFIED. Prior claims that bibliography/MatTech/lineage contracts were missing are superseded. Plus/Sluz and source conflicts remain unresolved.
+
+155 tests, TypeScript and lint (0 errors/16 existing warnings), production build and 15 browser checks pass. Fixtures distinguish five accepted safe source excerpts from synthetic current overlays/error responses; no live API persistence or actual UAT smoke is implied. See `update2-final-comparison/browser-results.json` and the final handoff.
+
+---
+
+## Historical baseline evaluation (preserved for traceability; not the current release state)
+
 # UPDATE2 — FE acceptance matrix
 
 Date: 2026-10-12. Branch: `feature/citem-demus-ui-24092026`.
