@@ -10,6 +10,7 @@ import '@gov-design-system-ce/styles/styles.css'
 import './index.css'
 import './assets/css/bootstrap.css'
 import './assets/css/main.css'
+import './assets/css/demus.css'
 import { defineCustomElements } from '@gov-design-system-ce/components/loader'
 
 defineCustomElements();

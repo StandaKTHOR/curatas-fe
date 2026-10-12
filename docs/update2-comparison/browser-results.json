@@ -1,0 +1,17 @@
+{
+  "fixture": "Synthetic, all API calls intercepted, no live backend writes",
+  "checks": [
+    "Desktop save visible",
+    "Third-level dictionary selection",
+    "Save remains accessible after scrolling",
+    "Sticky identification does not overlap toolbar",
+    "Origin draft survives tab navigation",
+    "412 keeps draft and snapshot token",
+    "Catalogue row height 31px",
+    "Direct page navigation",
+    "Anonymous catalogue row height 31px; no clone action",
+    "Creation with explicit inventory and optional accession",
+    "Mobile document overflow: false"
+  ],
+  "errors": []
+}

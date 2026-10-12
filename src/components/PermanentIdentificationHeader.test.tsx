@@ -77,17 +77,17 @@ describe('PermanentIdentificationHeader - CITEM DEMUS Parity', () => {
             />
         );
 
-        const toggleBtn = screen.getByRole('button', { name: '▼' });
+        const toggleBtn = screen.getByRole('button', { name: 'Zobrazit celý popis' });
         expect(toggleBtn).toBeInTheDocument();
         expect(screen.queryByText(/Úplný popis předmětu:/i)).not.toBeInTheDocument();
 
         // Rozbalení popisu
         await userEvent.click(toggleBtn);
-        expect(screen.getByText(/Úplný popis předmětu:/i)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: '▲' })).toBeInTheDocument();
+        expect(screen.getByRole('button', {name:'Sbalit popis'})).toHaveAttribute('aria-expanded','true');
+        expect(screen.getByRole('button', { name: 'Sbalit popis' })).toBeInTheDocument();
 
         // Sbalení popisu
-        await userEvent.click(screen.getByRole('button', { name: '▲' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Sbalit popis' }));
         expect(screen.queryByText(/Úplný popis předmětu:/i)).not.toBeInTheDocument();
     });
 

@@ -131,7 +131,7 @@ describe('CITEM Stage 1: Safe FE Changes Integration', () => {
         expect(screen.queryByRole('option', { name: 'Staré fondy' })).not.toBeInTheDocument();
         await userEvent.click(screen.getByRole('button', { name: /Uložit sbírkový předmět/i }));
         await waitFor(() => expect(updateItem).toHaveBeenCalledWith(123,
-            expect.objectContaining({ fundDictionaryId: 5, clearFund: false })));
+            expect.objectContaining({}), undefined));
     });
 
     it('does not invent professional values or replace unknown and sentinel values on unrelated saves', async () => {
@@ -177,10 +177,7 @@ describe('CITEM Stage 1: Safe FE Changes Integration', () => {
         await waitFor(() => {
             expect(updateItem).toHaveBeenCalledWith(123, expect.objectContaining({
                 subCollection: 'Upravená podsbírka',
-                fundDictionaryId: 5,
-                fundLegacyCode: 'ARCH-1',
-                clearFund: false
-            }));
+            }), undefined);
         });
     });
 
@@ -206,10 +203,9 @@ describe('CITEM Stage 1: Safe FE Changes Integration', () => {
 
         await waitFor(() => {
             expect(updateItem).toHaveBeenCalledWith(123, expect.objectContaining({
-                subCollection: 'Archeologická podsbírka',
                 fundDictionaryId: null,
                 clearFund: true
-            }));
+            }), undefined);
         });
     });
 

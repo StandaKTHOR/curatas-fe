@@ -129,9 +129,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
 
         await waitFor(() => expect(screen.getByDisplayValue('Gotická monstrance')).toBeInTheDocument());
 
-        // Switch to tab 2: Popis & Rozměry
-        const tab2Button = screen.getByRole('button', { name: /Popis & Rozměry/i });
-        await userEvent.click(tab2Button);
+        // Author and role belong to the primary identification card.
 
         // Verify role dropdown is present and contains expected roles
         const roleSelect = screen.getByLabelText('Role autora') as HTMLSelectElement;
@@ -143,6 +141,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         expect(roleSelect.value).toBe('Falsifikátor');
 
         // Verify materialNote (PoznMT) textarea is available
+        await userEvent.click(screen.getByRole('button', {name: 'MatTech'}));
         const matNote = screen.getByPlaceholderText(/Doplňující poznámka k materiálu/i);
         expect(matNote).toBeInTheDocument();
         expect(matNote).toHaveValue('Pozlacené stříbro s emailem');
@@ -160,7 +159,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         await waitFor(() => expect(screen.getByDisplayValue('Gotická monstrance')).toBeInTheDocument());
 
         // Switch to tab 5: Odborná evidence & DEMUS
-        const tab5Button = screen.getByRole('button', { name: /Odborná evidence & DEMUS/i });
+        const tab5Button = screen.getByRole('button', { name: 'Dokumentace' });
         await userEvent.click(tab5Button);
 
         // Switch to audit subtab
@@ -175,13 +174,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         const saveAuditButton = screen.getByRole('button', { name: /Uložit auditní záznam/i });
         await userEvent.click(saveAuditButton);
 
-        expect(updateItem).toHaveBeenCalledWith(123, expect.objectContaining({
-            auditComment: 'Doplnění údajů o autorovi a technice.',
-            author: 'Mistr Pavol',
-            originPlace: 'Levoča',
-            materialNote: 'Pozlacené stříbro s emailem'
-
-        }));
+        expect(updateItem).toHaveBeenCalledWith(123, {auditComment: 'Doplnění údajů o autorovi a technice.'}, undefined);
 
         expect(vi.mocked(updateItem).mock.calls[0][1].inventoryNumber).toBeUndefined();
         expect(vi.mocked(updateItem).mock.calls[0][1]).not.toHaveProperty('parties');
@@ -208,7 +201,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         await waitFor(() => expect(screen.getByDisplayValue('Gotická monstrance')).toBeInTheDocument());
 
         // Switch to Tab 5 and subtab attachments
-        await userEvent.click(screen.getByRole('button', { name: /Odborná evidence & DEMUS/i }));
+        await userEvent.click(screen.getByRole('button', { name: 'Dokumentace' }));
 
         // Initial attachment counter should be 1
         const attSubtab = await screen.findByRole('button', { name: /Přílohy \(1\)/i });
@@ -279,7 +272,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         await waitFor(() => expect(screen.getByDisplayValue('Gotická monstrance')).toBeInTheDocument());
 
         // Switch to Tab 2 (Popis & Rozměry)
-        const tab2 = screen.getByRole('button', { name: /2\. Popis & Rozměry/i });
+        const tab2 = screen.getByRole('button', { name: 'Foto' });
         await userEvent.click(tab2);
 
         // Verify photo rendered with Czech actions

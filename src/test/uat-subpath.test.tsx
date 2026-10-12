@@ -199,7 +199,7 @@ describe('SafeImage under UAT configuration', () => {
     it('renders placeholder when src is missing or empty', () => {
         render(<SafeImage alt="Prázdný obrázek" />);
         const img = screen.getByRole('img');
-        expect(img).toHaveAttribute('src', expect.stringContaining('placehold.co'));
+        expect(img).toHaveAttribute('src', expect.stringContaining('no-image.png'));
     });
 
     it('resolves relative src without creating /uat/uat/ duplicate', () => {

@@ -47,6 +47,7 @@ export default function Catalog() {
     const [totalElements, setTotalElements] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
     const [loading, setLoading] = useState(false);
+    const [loadError, setLoadError] = useState('');
 
     // Konfigurace sloupců (uložena v localStorage)
     const [columns, setColumns] = useState<ColumnConfig[]>(() => {
@@ -121,6 +122,7 @@ export default function Catalog() {
     // 3. Spuštění samotného dotazu na backend při jakékoli změně v URL (page, q, sort, filtry)
     useEffect(() => {
         setLoading(true);
+        setLoadError('');
         if (typeof window !== 'undefined') {
             sessionStorage.setItem('catalogSearch', location.search);
         }
@@ -145,7 +147,7 @@ export default function Catalog() {
                 setTotalElements(data.totalElements || 0);
                 setTotalPages(data.totalPages || 1);
             })
-            .catch(console.error)
+            .catch((err: Error) => setLoadError(err.message))
             .finally(() => setLoading(false));
     }, [searchParams, page, q, sort]);
 
@@ -205,7 +207,7 @@ export default function Catalog() {
         setColumns(newCols);
         try {
             localStorage.setItem('curatas_catalog_columns', JSON.stringify(newCols));
-        } catch (e) {}
+        } catch { /* Storage can be unavailable; retain current column configuration. */ }
     };
 
     // Výběr řádků
@@ -409,6 +411,7 @@ export default function Catalog() {
 
             {/* DATATABLE - VYSOKÁ HUSTOTA ZÁZNAMŮ (High-Density Desktop Layout) */}
             <div className="bg-white rounded border border-gray-200 shadow-sm overflow-hidden">
+                {loadError && <p role="alert">{loadError}</p>}
                 {loading ? (
                     <div className="p-20 text-center flex flex-col items-center justify-center space-y-4">
                         <span className="text-3xl animate-spin">⏳</span>
@@ -416,7 +419,7 @@ export default function Catalog() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse text-xs">
+                        <table data-compact={compactView} className="w-full text-left border-collapse text-xs">
                             <thead>
                                 <tr className="bg-gray-100 border-b border-gray-200 text-[#00204a] font-extrabold uppercase select-none">
                                     <th scope="col" className="p-3 w-10 text-center">
@@ -537,7 +540,7 @@ export default function Catalog() {
                                                 <td className={`${rowPad} font-bold text-gray-900 break-words`}>{it.title}</td>
                                             )}
                                             {isColVisible('author') && (
-                                                <td className={`${rowPad} italic text-gray-600 break-words`}>{it.author || 'Anonymní'}</td>
+                                                <td className={`${rowPad} italic text-gray-600 break-words`}>{it.author || '—'}</td>
                                             )}
                                             {isColVisible('datingText') && (
                                                 <td className={`${rowPad} text-gray-600`}>{it.datingText || '—'}</td>

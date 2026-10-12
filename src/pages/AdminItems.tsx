@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import {
     listAdminItems,
-    deleteAdminItem,
     exportItemsToExcel,
     bulkCopyItem,
     fetchLabelData,
@@ -10,7 +9,7 @@ import {
     searchPrintItems,
     WorksetSummary
 } from '../lib/api'
-import { FaEdit, FaTrash, FaPrint, FaCopy, FaFileExcel, FaPlus, FaSearch, FaChevronLeft, FaChevronRight, FaFilter, FaIdCard, FaLayerGroup, FaEye } from 'react-icons/fa'
+import { FaEdit, FaTrash, FaPrint, FaCopy, FaFileExcel, FaPlus, FaSearch, FaFilter, FaIdCard, FaLayerGroup } from 'react-icons/fa'
 import { printLabels } from "@/components/LabelPrinter";
 import DeaccessionModal from '@/components/DeaccessionModal';
 import SelectiveCloneModal from '@/components/SelectiveCloneModal';
@@ -18,10 +17,11 @@ import WorksetModal from '@/components/WorksetModal';
 import MuseumCardPrint from '@/components/MuseumCardPrint';
 import ItemListPrint from '@/components/ItemListPrint';
 import AdvancedFilterBuilder, { FilterGroup, createEmptyGroup } from '@/components/AdvancedFilterBuilder';
-import SafeImage from '@/components/SafeImage';
 
 export default function AdminItems() {
     const [data, setData] = useState<any>(null);
+    const [loadError, setLoadError] = useState('');
+    const [exporting, setExporting] = useState(false);
     const [searchParams, setSearchParams] = useSearchParams();
     const location = useLocation();
 
@@ -36,8 +36,8 @@ export default function AdminItems() {
 
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [showAdvancedBuilder, setShowAdvancedBuilder] = useState(false);
-    const [advancedFilterGroup, setAdvancedFilterGroup] = useState<FilterGroup>(createEmptyGroup('AND'));
-    const [isAdvancedFilterActive, setIsAdvancedFilterActive] = useState(false);
+    const [advancedFilterGroup, setAdvancedFilterGroup] = useState<FilterGroup>(() => { try { return JSON.parse(searchParams.get('advancedFilter') || 'null') || createEmptyGroup('AND'); } catch { return createEmptyGroup('AND'); } });
+    const [isAdvancedFilterActive, setIsAdvancedFilterActive] = useState(!!searchParams.get('advancedFilter'));
     const [listPrintModal, setListPrintModal] = useState<{
         isOpen: boolean;
         mode: 'list' | 'cards';
@@ -119,9 +119,10 @@ export default function AdminItems() {
         }
         sessionStorage.setItem('adminItemsSearch', searchStr);
 
+        setLoadError('');
         listAdminItems(queryParams)
             .then(setData)
-            .catch(err => console.error("Chyba při načítání:", err));
+            .catch(err => setLoadError(err.message));
     };
 
     const handleSort = (field: string) => {
@@ -162,13 +163,6 @@ export default function AdminItems() {
         setPage(0);
     };
 
-    const handleDelete = async (id: number) => {
-        if (window.confirm('Opravdu chcete tento sbírkový předmět trvale smazat? Tato akce bude zaznamenána v auditní stopě.')) {
-            await deleteAdminItem(id);
-            loadData();
-        }
-    };
-
     const handlePrintList = async () => {
         setIsPrintLoading(true);
         try {
@@ -193,6 +187,8 @@ export default function AdminItems() {
     };
 
     const handleExportExcel = async () => {
+        if (exporting) return;
+        setExporting(true);
         try {
             const totalCount = data?.totalElements || 0;
             if (totalCount > 1000) {
@@ -207,7 +203,7 @@ export default function AdminItems() {
             await exportItemsToExcel(queryParams);
         } catch (error) {
             alert("Export se nezdařil.");
-        }
+        } finally {setExporting(false);}
     };
 
     const handleExecuteCopy = async () => {
@@ -224,6 +220,15 @@ export default function AdminItems() {
         }
     };
 
+    const pagination = <div className="flex flex-wrap items-center gap-2 p-2" aria-label="Stránkování evidence">
+        <button type="button" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Předchozí</button>
+        <label>Strana <input type="number" aria-label="Číslo stránky evidence" min="1" max={Math.max(1, data?.totalPages || 1)}
+            value={page + 1} onChange={e => { const n = Number(e.target.value); if (Number.isInteger(n)) setPage(Math.max(0, Math.min((data?.totalPages || 1) - 1, n - 1))); }} /></label>
+        <span>z {data?.totalPages || 1} · {data?.totalElements || 0} předmětů</span>
+        <button type="button" disabled={page + 1 >= (data?.totalPages || 1)} onClick={() => setPage(p => p + 1)}>Další</button>
+    </div>;
+
+    if (!data && loadError) return <div role="alert">{loadError}<button type="button" onClick={loadData}>Načíst znovu</button></div>;
     if (!data) return <div className="p-10 text-center italic text-gray-400">Načítám správu sbírek...</div>
 
     const inputClass = "form-control text-sm border-gray-200 focus:border-[#ffbc34] focus:ring-0 rounded bg-white";
@@ -245,8 +250,8 @@ export default function AdminItems() {
                         >
                             <FaPrint /> {isPrintLoading ? 'Načítám tisk...' : 'Tisk soupisu (A4)'}
                         </button>
-                        <button onClick={handleExportExcel} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">
-                            <FaFileExcel /> Export .xlsx
+                        <button disabled={exporting} aria-busy={exporting} onClick={handleExportExcel} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">
+                            <FaFileExcel /> {exporting ? 'Exportuji…' : 'Export .xlsx'}
                         </button>
                         <button onClick={() => navigate('/admin/items/new', { state: { fromSearch: location.search } })} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
                             <FaPlus /> Nový předmět
@@ -337,162 +342,40 @@ export default function AdminItems() {
             </div>
 
             <div className="card-body p-0">
+                {loadError && <p role="alert">{loadError}</p>}
+                {pagination}
                 <div className="table-responsive">
-                    <table className="table table-hover mb-0">
-                        <thead className="bg-[#f8f9fa] text-[10px] uppercase tracking-wider text-gray-400 font-black">
-                        <tr>
-                            <th className="px-4 py-4 w-10 text-center">
-                                <input
-                                    type="checkbox"
-                                    checked={data.content.length > 0 && data.content.every((it: any) => selectedIds.includes(it.id))}
-                                    onChange={() => {
-                                        const pageIds = data.content.map((it: any) => it.id);
-                                        const allSel = pageIds.every((id: number) => selectedIds.includes(id));
-                                        if (allSel) {
-                                            setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)));
-                                        } else {
-                                            setSelectedIds(prev => Array.from(new Set([...prev, ...pageIds])));
-                                        }
-                                    }}
-                                    className="rounded border-gray-300 text-[#00204a] cursor-pointer"
-                                    aria-label="Vybrat vše na stránce"
-                                />
-                            </th>
-                            <th className="px-4 py-4 cursor-pointer hover:text-[#00204a]" style={{ width: '22%' }} onClick={() => handleSort('inventoryNumber')}>
-                                Identifikace {sortField === 'inventoryNumber' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
-                            </th>
-                            <th className="px-6 py-4 cursor-pointer hover:text-[#00204a]" style={{ width: '38%' }} onClick={() => handleSort('title')}>
-                                Název a Původce {sortField === 'title' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
-                            </th>
-                            <th className="px-4 py-4 cursor-pointer text-center hover:text-[#00204a]" style={{ width: '13%' }} onClick={() => handleSort('createdAt')}>
-                                Vytvořeno {sortField === 'createdAt' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
-                            </th>
-                            <th className="px-4 py-4 text-center" style={{ width: '10%' }}>Stav</th>
-                            <th className="px-6 py-4 text-right" style={{ width: '13%' }}>Akce</th>
-                        </tr>
-                        </thead>
-                        <tbody className="text-sm">
-                        {data.content.map((item: any) => {
-                            const isSelected = selectedIds.includes(item.id);
-                            const mainPhoto = item.primaryImageUrl
-                                || (item.images && item.images.length > 0 ? item.images[0].url : null)
-                                || (item.imageUrls && item.imageUrls.length > 0 ? item.imageUrls[0] : null);
-
-                            return (
-                                <tr key={item.id} className={`border-b border-gray-50 align-middle transition-colors group ${isSelected ? 'bg-blue-50/60' : ''}`}>
-                                    <td className="px-4 py-4 text-center" onClick={e => e.stopPropagation()}>
-                                        <input
-                                            type="checkbox"
-                                            checked={isSelected}
-                                            onChange={() => {
-                                                setSelectedIds(prev =>
-                                                    prev.includes(item.id) ? prev.filter(x => x !== item.id) : [...prev, item.id]
-                                                );
-                                            }}
-                                            className="rounded border-gray-300 text-[#00204a] cursor-pointer"
-                                            aria-label={`Vybrat položku ${item.inventoryNumber || item.id}`}
-                                        />
-                                    </td>
-                                    <td className="px-4 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-12 h-12 rounded border bg-gray-50 overflow-hidden flex-shrink-0 shadow-sm">
-                                                {mainPhoto ? (
-                                                    <SafeImage src={mainPhoto} className="w-full h-full object-cover" alt="" />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-300 uppercase font-bold text-center p-1">Bez foto</div>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <div className="font-mono text-[11px] font-bold text-[#ffbc34]">
-                                                    {item.inventoryNumber || item.accessionNumber || '—'}
-                                                </div>
-                                                <div className="text-[9px] text-gray-400 uppercase font-bold tracking-tighter flex items-center gap-1">
-                                                    <span>{item.subCollection || 'Bez zařazení'}</span>
-                                                    {item.spravce && <span className="text-gray-300">•</span>}
-                                                    {item.spravce && <span className="text-blue-600 font-semibold">{item.spravce}</span>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="font-bold text-[#3e5569] text-base">{item.title}</div>
-                                        <div className="text-[11px] text-gray-400 italic">
-                                            {item.author || item.legacyData?.autor || 'Anonymní autor'}
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-4 text-center text-xs text-gray-500 font-mono">
-                                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString('cs-CZ') : '—'}
-                                    </td>
-                                    <td className="px-4 py-4 text-center">
-                                        <div className="flex flex-col gap-1 items-center">
-                                            <span className={`badge ${item.published ? 'bg-success/10 text-success border border-success/20' : 'bg-gray-100 text-gray-400'} text-[9px] uppercase px-2 py-0.5 rounded`}>
-                                                {item.published ? 'Veřejné' : 'Soukromé'}
-                                            </span>
-                                            {item.objectCondition && (
-                                                <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                                                    {item.objectCondition}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <div className="flex justify-end gap-1 transition-opacity">
-                                            <button
-                                                onClick={() => navigate(`/admin/items/view/${item.id}`, { state: { fromSearch: location.search } })}
-                                                className="p-2 text-gray-400 hover:text-green-600 rounded"
-                                                title="Prohlédnout předmět (pouze pro čtení)"
-                                                aria-label="Prohlédnout předmět"
-                                            ><FaEye /></button>
-                                            <button
-                                                onClick={() => handlePrint(item.id)}
-                                                className="p-2 text-gray-400 hover:text-blue-600 rounded"
-                                                title="Tisk štítku"
-                                                aria-label="Tisk štítku"
-                                            ><FaPrint /></button>
-                                            <button
-                                                onClick={() => setCardPrintModal({ isOpen: true, item })}
-                                                className="p-2 text-gray-400 hover:text-indigo-600 rounded"
-                                                title="Tisk muzejní karty předmětu (A4)"
-                                                aria-label="Tisk muzejní karty"
-                                            ><FaIdCard /></button>
-                                            <button
-                                                onClick={() => setCloneModal({ isOpen: true, item })}
-                                                className="p-2 text-gray-400 hover:text-orange-500 rounded"
-                                                title="Selektivní klonování"
-                                                aria-label="Klonovat předmět"
-                                            ><FaCopy /></button>
-                                            <button
-                                                onClick={() => navigate(`/admin/items/edit/${item.id}`, { state: { fromSearch: location.search } })}
-                                                className="p-2 text-gray-400 hover:text-[#ffbc34] rounded"
-                                                title="Upravit předmět"
-                                                aria-label="Upravit předmět"
-                                            ><FaEdit /></button>
-                                            <button
-                                                onClick={() => setDeaccessionModal({ isOpen: true, item })}
-                                                className="p-2 text-gray-400 hover:text-red-600 rounded"
-                                                title="Vyřadit z evidence (skartace / převod)"
-                                                aria-label="Vyřadit z evidence"
-                                            ><FaTrash /></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                        </tbody>
+                    <table className="demus-datasheet" aria-label="Sbírky — tabulkové zobrazení">
+                        <thead><tr>
+                            <th><input type="checkbox" aria-label="Vybrat stránku" checked={data.content.length > 0 && data.content.every((it: any) => selectedIds.includes(it.id))}
+                                onChange={() => {const ids = data.content.map((it: any) => it.id); setSelectedIds(prev => ids.every((id: number) => prev.includes(id)) ? prev.filter(id => !ids.includes(id)) : [...new Set([...prev,...ids])]);}} /></th>
+                            <th><button type="button" onClick={() => handleSort('inventoryNumber')}>InvČ</button></th>
+                            <th><button type="button" onClick={() => handleSort('accessionNumber')}>PřírČ</button></th>
+                            <th>Fond</th><th>Podsbírka</th><th>Předmět</th>
+                            <th><button type="button" onClick={() => handleSort('title')}>Titul</button></th>
+                            <th><button type="button" onClick={() => handleSort('author')}>Autor</button></th>
+                            <th>Datace</th><th>Materiál</th><th>Technika</th><th>Stav</th><th>Akce</th>
+                        </tr></thead>
+                        <tbody>{data.content.map((item: any) => <tr key={item.id}>
+                            <td><input type="checkbox" aria-label={`Vybrat ${item.inventoryNumber || item.id}`} checked={selectedIds.includes(item.id)}
+                                onChange={() => setSelectedIds(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev,item.id])}/></td>
+                            <td><button type="button" className="underline" onClick={() => navigate(`/admin/items/view/${item.id}`,{state:{fromSearch:location.search}})}>{item.inventoryNumber || '—'}</button></td>
+                            <td>{item.accessionNumber || '—'}</td><td>{item.fundLegacyCode || item.fundName || '—'}</td>
+                            <td>{item.subCollection || '—'}</td><td>{item.objectType || '—'}</td><td>{item.title || '—'}</td>
+                            <td>{item.author || item.authors?.join(', ') || '—'}</td><td>{item.datingText || '—'}</td>
+                            <td>{item.material || item.materials?.join(', ') || '—'}</td><td>{item.technique || '—'}</td>
+                            <td>{item.published ? 'Zveřejněno' : 'Neveřejné'}</td>
+                            <td className="demus-row-actions">
+                                <button type="button" aria-label="Upravit předmět" title="Upravit předmět" onClick={() => navigate(`/admin/items/edit/${item.id}`,{state:{fromSearch:location.search}})}><FaEdit/></button>
+                                <button type="button" aria-label="Tisk štítku" title="Tisk štítku" onClick={() => handlePrint(item.id)}><FaPrint/></button>
+                                <button type="button" aria-label="Tisk muzejní karty" title="Tisk muzejní karty" onClick={() => setCardPrintModal({isOpen:true,item})}><FaIdCard/></button>
+                                <button type="button" aria-label="Klonovat předmět" title="Klonovat předmět" onClick={() => setCloneModal({isOpen:true,item})}><FaCopy/></button>
+                                <button type="button" aria-label="Vyřadit z evidence" title="Vyřadit z evidence" onClick={() => setDeaccessionModal({isOpen:true,item})}><FaTrash/></button>
+                            </td>
+                        </tr>)}</tbody>
                     </table>
                 </div>
-            </div>
-
-            {/* PATIČKA S PAGINACÍ */}
-            <div className="p-4 border-t flex justify-between items-center bg-[#f8f9fa]">
-                <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                    Zobrazeno {data.content.length} z {data.totalElements} záznamů
-                </div>
-                <div className="flex gap-2">
-                    <button disabled={page === 0} onClick={() => setPage(page - 1)} className="genric-btn gray-border radius px-3 py-1 flex items-center gap-1 text-[10px]"><FaChevronLeft /> Zpět</button>
-                    <div className="flex items-center px-4"><span className="text-xs font-black text-[#1f262d]">{page + 1} / {data.totalPages}</span></div>
-                    <button disabled={data.last} onClick={() => setPage(page + 1)} className="genric-btn gray-border radius px-3 py-1 flex items-center gap-1 text-[10px]">Dále <FaChevronRight /></button>
-                </div>
+                {pagination}
             </div>
 
             {/* PLOVOUCÍ LIŠTA PRACOVNÍHO VÝBĚRU */}

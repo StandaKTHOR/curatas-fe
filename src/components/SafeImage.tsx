@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { API_BASE, resolveApiUrl } from '../lib/api';
+import noImage from '../assets/no-image.png';
 
 interface SafeImageProps {
     src?: string;
@@ -19,7 +20,7 @@ export function isBackendImage(url: string): boolean {
 }
 
 export default function SafeImage({ src, alt, className }: SafeImageProps) {
-    const placeholder = 'https://placehold.co/600x400/f8f9fa/3e5569?text=Bez+fotografie';
+    const placeholder = noImage;
     const [isError, setIsError] = useState(false);
     const [authenticatedImage, setAuthenticatedImage] = useState<{ source: string; url: string } | null>(null);
 

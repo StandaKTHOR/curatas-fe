@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import AttachmentCaptionEditor from '../components/AttachmentCaptionEditor';
+import NewInventoryNumber from '../components/NewInventoryNumber';
+import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
     getAdminItem,
@@ -13,6 +15,7 @@ import {
     setPrimaryItemImage,
     ItemImageDto,
     listAttachments,
+    listMuseumAcquisitions,
     uploadAttachment,
     deleteAttachment,
     downloadAttachmentFile,
@@ -23,7 +26,7 @@ import {
     resolveApiUrl
 } from '../lib/api';
 import { InventoryIdentityPanel } from '../components/InventoryIdentityPanel';
-import { GovButton, GovFormInput, GovFormLabel, GovMessage } from '@gov-design-system-ce/react';
+import { GovButton } from '@gov-design-system-ce/react';
 import {
     FaTrash,
     FaPlus,
@@ -38,20 +41,16 @@ import {
 } from 'react-icons/fa';
 import AddDictionaryModal from '../components/AddDictionaryModal';
 import SelectiveCloneModal from '../components/SelectiveCloneModal';
-import MuseumSection from '../components/MuseumSection';
+import MuseumSection, { TreeChoice } from '../components/MuseumSection';
+import type { ItemEditSession } from '../lib/editSession';
+import YearDateInput from '../components/YearDateInput';
 import AcquisitionSection from '../components/AcquisitionSection';
-import SafeImage from '../components/SafeImage';
+import SafeImage, { isBackendImage } from '../components/SafeImage';
 import MuseumCardPrint from '../components/MuseumCardPrint';
 import DemusLegacyDataView from '../components/DemusLegacyDataView';
 import PermanentIdentificationHeader from '../components/PermanentIdentificationHeader';
 
-const MAIN_TABS = [
-    { id: 'identity', label: '1. Základní údaje & Identifikace' },
-    { id: 'description', label: '2. Popis & Rozměry' },
-    { id: 'provenance', label: '3. Původ & Nabytí' },
-    { id: 'storage', label: '4. Umístění & Uložení' },
-    { id: 'museum', label: '5. Odborná evidence & DEMUS' }
-];
+
 
 const AUTHOR_ROLES = [
     'Autor',
@@ -145,9 +144,9 @@ const buildItemPayload = (currentForm: any, auditCommentOverride?: string) => {
         objectCondition: currentForm.objectCondition || '',
         spravce: currentForm.spravce || '',
         oddeleni: currentForm.oddeleni || '',
-        insuranceValue: currentForm.insuranceValue ? parseFloat(currentForm.insuranceValue.toString().replace(/\s/g, '')) : 0,
+        insuranceValue: currentForm.insuranceValue !== '' && currentForm.insuranceValue != null ? parseFloat(currentForm.insuranceValue.toString().replace(/\s/g, '')) : null,
         weight: currentForm.weight || '',
-        quantity: currentForm.quantity ?? 1,
+        quantity: currentForm.quantity ?? null,
         published: currentForm.published ?? false,
         auditComment: currentAuditComment,
         latitude: (currentForm.latitude !== '' && currentForm.latitude !== null && !isNaN(parseFloat(currentForm.latitude))) ? parseFloat(currentForm.latitude) : null,
@@ -166,7 +165,7 @@ const buildItemPayload = (currentForm: any, auditCommentOverride?: string) => {
                 sortOrder: d.sortOrder ?? null
             })),
         parties: partiesPayload,
-        legacyData: currentForm.legacyData || {}
+        // Source lineage is read-only and must never enter a write payload.
     };
 };
 
@@ -175,6 +174,18 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
     const navigate = useNavigate();
     const location = useLocation();
     const isViewMode = readOnly || location.pathname.includes('/admin/items/view/');
+    const persistedSnapshotRef = useRef<any>(null);
+    const editSessionRef = useRef<ItemEditSession>();
+    const toolbarRef = useRef<HTMLDivElement>(null);
+    const sectionDrafts = useRef<Record<string, any>>({});
+    const [comparison, setComparison] = useState<any>(null);
+    useLayoutEffect(() => {
+        if (!toolbarRef.current || typeof ResizeObserver === 'undefined') return;
+        const toolbar = toolbarRef.current;
+        const update = () => toolbar.closest<HTMLElement>('.demus-app')?.style.setProperty('--demus-toolbar-height', `${toolbar.getBoundingClientRect().height}px`);
+        const observer = new ResizeObserver(update); observer.observe(toolbar); update();
+        return () => observer.disconnect();
+    }, []);
     const [cloneModalOpen, setCloneModalOpen] = useState(false);
     const [showPrintCard, setShowPrintCard] = useState(false);
     const [initialNumbers, setInitialNumbers] = useState({ inventory: '', accession: '' });
@@ -182,7 +193,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
     const [activeTab, setActiveTab] = useState('identity');
     const [museumSubTab, setMuseumSubTab] = useState<
-        'documentation' | 'classification' | 'determination' | 'deaccession' | 'manipulation' | 'action' | 'iso' | 'demus' | 'attachments' | 'audit'
+        'documentation' | 'classification' | 'determination' | 'deaccession' | 'manipulation' | 'action' | 'iso' | 'demus' | 'attachments' | 'audit' | 'origin' | 'reference' | 'plus'
     >('documentation');
 
     const [loading, setLoading] = useState(false);
@@ -209,24 +220,12 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         setAuditSaveMessage(null);
         try {
             const comment = form.auditComment.trim();
-            const payload = buildItemPayload(form, comment);
-            preserveUnchangedEvidence(payload);
-            if (form.inventoryNumber === initialNumbers.inventory) payload.inventoryNumber = undefined as any;
-            await updateItem(Number(id), payload);
+            const payload = {auditComment: comment};
+            await updateItem(Number(id), payload, editSessionRef.current);
             setAuditSaveMessage('Auditní záznam byl úspěšně uložen.');
             setForm((prev: any) => ({ ...prev, auditComment: '' }));
             const fresh = await getAdminItem(id);
-            setForm((prev: any) => ({
-                ...prev,
-                events: fresh.events || [],
-                parties: Array.isArray(fresh.parties) ? fresh.parties.map((p: any) => ({
-                    partyId: p.partyId || p.id || null,
-                    partyName: p.name || p.partyName || '',
-                    role: p.role || 'Autor',
-                    type: p.type || 'PERSON',
-                    sortOrder: p.sortOrder ?? null
-                })) : prev.parties
-            }));
+            setForm((prev: any) => ({...prev, events: fresh.events || []}));
         } catch (err: any) {
             alert('Chyba při ukládání auditního záznamu: ' + err.message);
         } finally {
@@ -236,6 +235,25 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
     // Fotografie
     const [itemImages, setItemImages] = useState<ItemImageDto[]>([]);
+
+    const synchronizeMediaVersion = async (fresh: any) => {
+        const baseline = persistedSnapshotRef.current;
+        if (!baseline || !fresh._editSession) return;
+        const before = buildItemPayload(baseline), after = buildItemPayload(fresh);
+        const museumUnchanged = JSON.stringify(baseline._editSession?.museumSnapshot) === JSON.stringify(fresh._editSession.museumSnapshot);
+        const acquisitionBaseline = editSessionRef.current?.acquisitionSnapshot;
+        const acquisitionsUnchanged = acquisitionBaseline === undefined || JSON.stringify(acquisitionBaseline) ===
+            JSON.stringify(await listMuseumAcquisitions(Number(id), fresh._editSession));
+        if (museumUnchanged && acquisitionsUnchanged && Object.keys(before).every(key => JSON.stringify((before as any)[key]) === JSON.stringify((after as any)[key]))) {
+            if (editSessionRef.current) {
+                editSessionRef.current.etag = fresh._editSession.etag;
+                editSessionRef.current.museumSnapshot = fresh._editSession.museumSnapshot;
+            }
+            persistedSnapshotRef.current = fresh;
+        } else {
+            setConflictError('Během práce s médii se změnily také údaje předmětu. Porovnejte je před uložením; rozpracované zadání zůstává zachováno.');
+        }
+    };
 
     const loadImages = async (itemId: number | string) => {
         if (!itemId) return;
@@ -254,7 +272,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                 await deleteItemImage(Number(id), imageId);
                 await loadImages(id);
                 const fresh = await getAdminItem(id);
-                if (fresh) {
+                await synchronizeMediaVersion(fresh);
+            if (fresh) {
                     setForm((prev: any) => ({
                         ...prev,
                         imageUrls: Array.isArray(fresh.imageUrls) ? fresh.imageUrls : [],
@@ -274,6 +293,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             await setPrimaryItemImage(Number(id), imageId);
             await loadImages(id);
             const fresh = await getAdminItem(id);
+            await synchronizeMediaVersion(fresh);
             if (fresh) {
                 setForm((prev: any) => ({
                     ...prev,
@@ -290,7 +310,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
     const handleDownloadPhoto = async (url: string, caption?: string) => {
         const resolvedUrl = resolveApiUrl(url);
         try {
-            const res = await fetch(resolvedUrl);
+            const token = localStorage.getItem('token');
+            const res = await fetch(resolvedUrl, {headers: token && isBackendImage(resolvedUrl) ? {Authorization: `Bearer ${token}`} : {}, redirect: 'error'});
             if (!res.ok) throw new Error('Fetch failed');
             const blob = await res.blob();
             const blobUrl = window.URL.createObjectURL(blob);
@@ -304,16 +325,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             a.click();
             a.remove();
             window.URL.revokeObjectURL(blobUrl);
-        } catch {
-            const a = document.createElement('a');
-            a.href = resolvedUrl;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            a.download = (caption && caption.trim()) ? `${caption.trim()}.jpg` : 'fotografie.jpg';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-        }
+        } catch (e) { setGlobalError('Stažení fotografie selhalo: ' + (e as Error).message); }
     };
 
     // Přílohy
@@ -384,7 +396,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                 const list = await listAttachments(Number(id));
                 setAttachments(list);
             } catch (e) {
-                console.error('Chyba při načítání příloh:', e);
+                setGlobalError('Nelze načíst přílohy: ' + (e as Error).message);
             }
         }
     };
@@ -393,15 +405,13 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         if (!id || !attFile) return;
         setAttUploading(true);
         try {
-            const uploaded = await uploadAttachment(Number(id), attFile, attCaption);
+            await uploadAttachment(Number(id), attFile, attCaption);
             setAttFile(null);
             setAttCaption('');
             const fileInput = document.getElementById('attachmentFile') as HTMLInputElement;
             if (fileInput) fileInput.value = '';
-            if (uploaded) {
-                setAttachments(prev => [...prev.filter(a => a.id !== uploaded.id), uploaded]);
-            }
             await loadAttachments();
+            await synchronizeMediaVersion(await getAdminItem(id));
         } catch (e: any) {
             alert('Nahrání přílohy selhalo: ' + e.message);
         } finally {
@@ -414,8 +424,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         if (window.confirm('Opravdu chcete tuto přílohu smazat?')) {
             try {
                 await deleteAttachment(Number(id), attId);
-                setAttachments(prev => prev.filter(a => a.id !== attId));
                 await loadAttachments();
+                await synchronizeMediaVersion(await getAdminItem(id));
             } catch (e: any) {
                 alert('Smazání přílohy selhalo: ' + e.message);
             }
@@ -511,7 +521,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         oddeleni: '',
         insuranceValue: '',
         weight: '',
-        quantity: 1,
+        quantity: null,
         dimensions: [],
         latitude: '',
         longitude: '',
@@ -548,9 +558,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
     const preserveUnchangedEvidence = (payload: any) => {
         if (!id || !initialFormSnapshotRef.current) return;
         const previous = buildItemPayload(JSON.parse(initialFormSnapshotRef.current));
-        for (const field of ['acquisitionMethod', 'objectCondition', 'catalogingStatus',
-            'quantity', 'insuranceValue', 'coordinateSystem', 'latitude', 'longitude',
-            'datingFrom', 'datingTo', 'acquisitionDate', 'parties', 'dimensions']) {
+        for (const field of Object.keys(previous)) {
             if (JSON.stringify(previous[field as keyof typeof previous]) === JSON.stringify(payload[field])) {
                 delete payload[field];
             }
@@ -565,7 +573,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (isDirty && !isViewMode) {
+            if ((isDirty || Object.values(sectionDrafts.current).some((draft: any) => draft.dirty)) && !isViewMode) {
                 e.preventDefault();
                 e.returnValue = '';
             }
@@ -575,7 +583,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
     }, [isDirty, isViewMode]);
 
     const handleBackToList = () => {
-        if (isDirty && !isViewMode) {
+        if ((isDirty || Object.values(sectionDrafts.current).some((draft: any) => draft.dirty)) && !isViewMode) {
             const confirmed = window.confirm('Máte neuložené změny. Opravdu chcete odejít bez uložení?');
             if (!confirmed) return;
         }
@@ -591,7 +599,6 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         }
         if (form.fundLegacyCode) return `[${form.fundLegacyCode}]`;
         if (form.fundName) return form.fundName;
-        if (form.subCollection) return form.subCollection;
         return null;
     }, [form.fundDictionaryId, form.fundLegacyCode, form.fundName, form.subCollection, fundOptions]);
 
@@ -638,6 +645,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             setLoading(true);
             getAdminItem(id)
                 .then(data => {
+                    editSessionRef.current = data._editSession;
+                    persistedSnapshotRef.current = data;
                     const safeVal = (v: any) => (v === null || v === undefined ? '' : v);
                     const safeYear = (v: any) => {
                         if (!v) return '';
@@ -697,7 +706,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         materialNote: safeVal(data.materialNote),
                         originPlace: safeVal(data.originPlace),
                         findingLocality: safeVal(data.findingLocality),
-                        quantity: data.quantity ?? 1,
+                        quantity: data.quantity ?? null,
                         published: data.published ?? false,
                         latitude: safeVal(data.latitude),
                         longitude: safeVal(data.longitude),
@@ -721,7 +730,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                     setForm(loadedForm);
                     initialFormSnapshotRef.current = getFormSnapshot(loadedForm);
                 })
-                .catch(console.error)
+                .catch((err: Error) => setGlobalError(err.message))
                 .finally(() => setLoading(false));
 
             loadAttachments();
@@ -732,8 +741,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                     setForm((prev: any) => {
                         const newF = {
                             ...prev,
-                            accessionNumber: prev.accessionNumber || next.accession || '',
-                            inventoryNumber: prev.inventoryNumber || next.inventory || ''
+                            accessionNumber: prev.accessionNumber || '',
+                            inventoryNumber: prev.inventoryNumber || ''
                         };
                         initialFormSnapshotRef.current = getFormSnapshot(newF);
                         return newF;
@@ -777,47 +786,27 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         }
     };
 
-    const handleLegacyChange = (key: string, val: string) => {
-        setForm((prev: any) => ({
-            ...prev,
-            legacyData: {
-                ...(prev.legacyData || {}),
-                [key]: val
-            }
-        }));
-    };
-
     const handleSectionSave = async () => {
         if (!id) return;
         try {
             const fresh = await getAdminItem(id);
-            if (fresh) {
-                setForm((prev: any) => ({
-                    ...prev,
-                    ...fresh,
-                    imageUrls: Array.isArray(fresh.imageUrls) ? fresh.imageUrls : (prev.imageUrls || []),
-                    markant: fresh.markant ?? prev.markant,
-                    signature: fresh.signature ?? prev.signature,
-                    subjectDictionaryId: fresh.subjectDictionaryId ?? prev.subjectDictionaryId,
-                    subjectLegacyCode: fresh.subjectLegacyCode ?? prev.subjectLegacyCode,
-                    fundDictionaryId: fresh.fundDictionaryId ?? prev.fundDictionaryId,
-                    fundLegacyCode: fresh.fundLegacyCode ?? prev.fundLegacyCode,
-                    groupDictionaryId: fresh.groupDictionaryId ?? prev.groupDictionaryId,
-                    groupLegacyCode: fresh.groupLegacyCode ?? prev.groupLegacyCode,
-                    localityDictionaryId: fresh.localityDictionaryId ?? prev.localityDictionaryId,
-                    localityLegacyCode: fresh.localityLegacyCode ?? prev.localityLegacyCode,
-                    materialDictionaryId: fresh.materialDictionaryId ?? prev.materialDictionaryId,
-                    techniqueDictionaryId: fresh.techniqueDictionaryId ?? prev.techniqueDictionaryId,
-                    legacyArchived: fresh.legacyArchived ?? prev.legacyArchived,
-                    legacyCard: fresh.legacyCard ?? prev.legacyCard,
-                    legacyCopied: fresh.legacyCopied ?? prev.legacyCopied,
-                    legacyVerified: fresh.legacyVerified ?? prev.legacyVerified,
-                    legacyMarked: fresh.legacyMarked ?? prev.legacyMarked
-                }));
-            }
-        } catch (err) {
-            console.error('Chyba při synchronizaci po uložení sekce:', err);
-        }
+            if (fresh._editSession?.etag === editSessionRef.current?.etag) persistedSnapshotRef.current = fresh;
+            const baseline = initialFormSnapshotRef.current ? JSON.parse(initialFormSnapshotRef.current) : {};
+            setForm((prev: any) => {
+                const next = {...prev};
+                for (const key of ['markant', 'signature', 'subjectDictionaryId', 'subjectLegacyCode', 'fundDictionaryId',
+                    'fundLegacyCode', 'groupDictionaryId', 'groupLegacyCode', 'localityDictionaryId', 'localityLegacyCode',
+                    'materialDictionaryId', 'techniqueDictionaryId', 'legacyArchived', 'legacyCard', 'legacyCopied',
+                    'legacyVerified', 'legacyMarked', 'acquisitionMethod', 'acquisitionDate', 'acquiredFrom']) {
+                    if (JSON.stringify(prev[key]) === JSON.stringify(baseline[key])) {
+                        next[key] = fresh[key] ?? '';
+                        baseline[key] = next[key];
+                    }
+                }
+                initialFormSnapshotRef.current = getFormSnapshot(baseline);
+                return next;
+            });
+        } catch (err) { setGlobalError((err as Error).message); }
     };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -829,10 +818,10 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             const res = await uploadItemImage(Number(id), file);
             await loadImages(id);
             const fresh = await getAdminItem(id);
+            await synchronizeMediaVersion(fresh);
             if (fresh) {
                 setForm((prev: any) => ({
                     ...prev,
-                    ...fresh,
                     primaryImageUrl: fresh.primaryImageUrl || null,
                     imageUrls: Array.isArray(fresh.imageUrls) ? fresh.imageUrls : [...(prev.imageUrls || []), res.url]
                 }));
@@ -869,8 +858,14 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         const currentInv = (form.inventoryNumber || '').trim();
         const currentAcc = (form.accessionNumber || '').trim();
 
-        if (!currentInv && !currentAcc) {
-            setGlobalError('Předmět musí mít vyplněno alespoň inventární číslo nebo přírůstkové číslo.');
+        if (!currentInv) {
+            setGlobalError('Inventární číslo je povinné.');
+            setActiveTab('identity');
+            return;
+        }
+
+        if (!form.title?.trim() && !form.objectType?.trim()) {
+            setGlobalError('Vyplňte alespoň titul nebo typ předmětu.');
             setActiveTab('identity');
             return;
         }
@@ -920,14 +915,22 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         setLoading(true);
 
         const payload = buildItemPayload(form);
+        if (!id) delete (payload as any).clearFund;
         preserveUnchangedEvidence(payload);
         if (id && form.inventoryNumber === initialNumbers.inventory) payload.inventoryNumber = undefined as any;
 
         try {
             if (id) {
-                await updateItem(Number(id), payload);
+                await updateItem(Number(id), payload, editSessionRef.current);
                 const updated = await getAdminItem(id);
+                if (updated._editSession && editSessionRef.current && updated._editSession.etag !== editSessionRef.current.etag) {
+                    setSuccessMessage('Hlavní údaje byly uloženy; při následném načítání se záznam znovu změnil.');
+                    throw new ApiError(412, 'Novější verzi nelze přiřadit rozpracovaným odborným sekcím. Porovnejte aktuální záznam.');
+                }
+                if (updated._editSession && editSessionRef.current) updated._editSession.acquisitionSnapshot = editSessionRef.current.acquisitionSnapshot;
                 if (updated) {
+                    editSessionRef.current = updated._editSession;
+                    persistedSnapshotRef.current = updated;
                     const safeVal = (v: any) => (v === null || v === undefined ? '' : v);
                     const safeYear = (v: any) => {
                         if (!v) return '';
@@ -953,14 +956,17 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             ...prev,
                             ...updated,
                             subCollection: safeVal(updated.subCollection),
-                            fundDictionaryId: updated.fundDictionaryId ?? prev.fundDictionaryId,
-                            fundLegacyCode: updated.fundLegacyCode ?? prev.fundLegacyCode,
+                            fundDictionaryId: updated.fundDictionaryId ?? null,
+                            fundLegacyCode: updated.fundLegacyCode ?? null,
                             auditComment: '',
                             imageUrls: Array.isArray(updated.imageUrls) ? updated.imageUrls : prev.imageUrls,
-                            author: (updated.authors && updated.authors.length > 0) ? updated.authors[0] : (updated.author || prev.author),
+                            author: updated.author ?? updated.authors?.join(', ') ?? '',
                             authorRole: initialParties.length > 0 ? initialParties[0].role : prev.authorRole,
                             parties: initialParties,
-                            material: (updated.materials && updated.materials.length > 0) ? updated.materials[0] : (updated.material || prev.material),
+                            dimensions: (updated.dimensions || []).map((d: any) => ({...d,
+                                dimensionType: d.type || d.dimensionType || '', value: d.value ?? '',
+                                unit: d.unit ?? '', note: d.note ?? ''})),
+                            material: updated.material ?? updated.materials?.join(', ') ?? '',
                             weight: safeVal(updated.weight),
                             title: safeVal(updated.title),
                             description: safeVal(updated.description),
@@ -983,7 +989,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             materialNote: safeVal(updated.materialNote),
                             originPlace: safeVal(updated.originPlace),
                             findingLocality: safeVal(updated.findingLocality),
-                            quantity: updated.quantity ?? 1,
+                            quantity: updated.quantity ?? null,
                             published: updated.published ?? prev.published,
                             latitude: safeVal(updated.latitude),
                             longitude: safeVal(updated.longitude),
@@ -1012,7 +1018,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                     setUnauthorizedError(true);
                 } else if (err.status === 403) {
                     setForbiddenError(true);
-                } else if (err.status === 409) {
+                } else if (err.status === 409 || err.status === 412 || err.status === 428) {
                     setConflictError(err.message || 'Předmět s tímto inventárním číslem již existuje. Zvolte prosím unikátní číslo.');
                 } else {
                     setGlobalError(err.message || 'Nepodařilo se uložit záznam.');
@@ -1058,28 +1064,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
     return (
         <div className="space-y-3 animate-in fade-in duration-300">
-            {/* PERMANENTNÍ IDENTIFIKAČNÍ HLAVIČKA DLE CITEM (STICKY) */}
-            <PermanentIdentificationHeader
-                fond={currentFundLabel}
-                predmet={form.objectType}
-                popis={form.description}
-                titul={form.title}
-                autor={currentAuthor}
-                datace={currentDating}
-                inventoryNumber={form.inventoryNumber || form.accessionNumber}
-                isViewMode={isViewMode}
-                isNew={!id}
-            />
-
-            {id && <InventoryIdentityPanel itemId={Number(id)} inventoryNumber={form.inventoryNumber || ''}
-                canEdit={!isViewMode && form.inventoryNumber === initialNumbers.inventory} onSaved={async () => {
-                    const fresh = await getAdminItem(id);
-                    setForm((previous: any) => ({ ...previous, inventoryNumber: fresh.inventoryNumber ?? '' }));
-                    setInitialNumbers(previous => ({ ...previous, inventory: fresh.inventoryNumber ?? '' }));
-                }} />}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 {/* HLAVIČKA FORMULÁŘE */}
-                <div className="px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white">
+                <div ref={toolbarRef} className="demus-toolbar px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white">
                     <div className="flex items-center gap-3 min-w-0 max-w-xl">
                         <GovButton
                             nativeType="button"
@@ -1103,6 +1089,10 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         </div>
                     </div>
                 <div className="flex items-center gap-2.5 flex-wrap">
+                    {!isViewMode && <button type="submit" form="item-editor" className="demus-save"
+                        disabled={loading || !validity.accession || !validity.inventory}>
+                        {loading ? 'Ukládám…' : 'Uložit'}
+                    </button>}
                     {isViewMode && (
                         <span className="px-3 py-1 bg-blue-100 text-blue-900 border border-blue-300 rounded-full text-xs font-bold flex items-center gap-1.5">
                             <span>👁️</span> Režim prohlížení (pouze pro čtení)
@@ -1168,23 +1158,43 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                 </div>
             </div>
 
-            {/* KOMPAKTNÍ 5-ZÁLOŽKOVÁ NAVIGACE */}
-            <div className="border-b border-gray-200 bg-gray-50 px-6 py-1.5 overflow-x-auto flex gap-2 select-none">
-                {MAIN_TABS.map(tab => (
-                    <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`py-2 px-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 rounded-t-sm ${
-                            activeTab === tab.id
-                                ? 'text-[#00204a] border-[#00204a] bg-white shadow-xs font-black'
-                                : 'text-gray-500 border-transparent hover:text-gray-800 hover:bg-gray-100'
-                        }`}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
+            {/* PERMANENTNÍ IDENTIFIKAČNÍ HLAVIČKA DLE CITEM (STICKY) */}
+            <PermanentIdentificationHeader
+                hasToolbar
+                fond={currentFundLabel}
+                predmet={form.objectType}
+                popis={form.description}
+                titul={form.title}
+                autor={currentAuthor}
+                datace={currentDating}
+                inventoryNumber={form.inventoryNumber || form.accessionNumber}
+                isViewMode={isViewMode}
+                isNew={!id}
+            />
+
+            {id && <InventoryIdentityPanel itemId={Number(id)} inventoryNumber={form.inventoryNumber || ''}
+                canEdit={!isViewMode && form.inventoryNumber === initialNumbers.inventory} onSaved={async () => {
+                    const fresh = await getAdminItem(id);
+                    if (persistedSnapshotRef.current) persistedSnapshotRef.current = {...persistedSnapshotRef.current, inventoryNumber:fresh.inventoryNumber};
+                    await synchronizeMediaVersion(fresh);
+                    if (initialFormSnapshotRef.current) {
+                        const baseline=JSON.parse(initialFormSnapshotRef.current);baseline.inventoryNumber=fresh.inventoryNumber ?? '';
+                        initialFormSnapshotRef.current=getFormSnapshot(baseline);
+                    }
+                    setForm((previous: any) => ({ ...previous, inventoryNumber: fresh.inventoryNumber ?? '' }));
+                    setInitialNumbers(previous => ({ ...previous, inventory: fresh.inventoryNumber ?? '' }));
+                }} />}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <nav className="demus-original-tabs" aria-label="Karty DEMUS">
+                {[['Základ','identity',''],['Určení','museum','determination'],['Vznik','museum','origin'],
+                    ['MatTech','description',''],['Míry','dimensions',''],['Zařazení','museum','classification'],
+                    ['Historie','museum','demus'],['Dokumentace','museum','documentation'],['Reference','museum','reference'],
+                    ['Manipulace','museum','manipulation'],['Akce','museum','action'],['ISO','museum','iso'],
+                    ['Plus','museum','plus'],['Vyřazení','museum','deaccession'],['Akvizice','provenance',''],
+                    ['Přílohy','museum','attachments'],['Umístění','storage',''],['Foto','photos',''],['Audit','museum','audit']].map(([label, main, sub]) =>
+                    <button key={label} type="button" aria-pressed={activeTab === main && (!sub || museumSubTab === sub)}
+                        onClick={() => {setActiveTab(main); if (sub) setMuseumSubTab(sub as any);}}>{label === 'Přílohy' ? `Přílohy (${attachments.length})` : label}</button>)}
+            </nav>
 
             {/* CHYBOVÉ A ÚSPĚŠNÉ HLÁŠKY */}
             {successMessage && (
@@ -1196,6 +1206,15 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             {conflictError && (
                 <div className="mx-6 mt-4 p-3 bg-red-50 border-l-4 border-red-600 text-xs text-red-700 font-bold rounded">
                     ⚠️ {conflictError}
+                    {id && <button type="button" className="block underline mt-2" onClick={async () => {
+                        try { setComparison(await getAdminItem(id)); } catch (e) {setGlobalError((e as Error).message);}
+                    }}>Porovnat s aktuálním záznamem</button>}
+                    {comparison && <div className="overflow-auto mt-2">
+                        <table><thead><tr><th>Pole</th><th>Moje zadání</th><th>Aktuální záznam</th></tr></thead>
+                            <tbody>{Object.keys(buildItemPayload(form)).filter(key => JSON.stringify(form[key]) !== JSON.stringify(comparison[key])).map(key =>
+                                <tr key={key}><td>{key}</td><td>{JSON.stringify(form[key])}</td><td>{JSON.stringify(comparison[key])}</td></tr>)}</tbody></table>
+                        <p>Rozpracované odborné sekce zůstávají zachovány. Pro jejich změny obnovte záznam a porovnejte původní evidenci.</p>
+                    </div>}
                 </div>
             )}
             {globalError && (
@@ -1205,19 +1224,19 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             )}
 
             {/* TĚLO FORMULÁŘE */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form id="item-editor" onSubmit={handleSubmit} className="p-6 space-y-4 demus-editor">
+                <fieldset disabled={isViewMode || loading}>
                 {/* 1. ZÁKLADNÍ ÚDAJE & IDENTIFIKACE */}
                 {activeTab === 'identity' && (
                     <div className="space-y-4 animate-in fade-in duration-150">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="accessionNumber">Přírůstkové číslo *</GovFormLabel>
-                                <GovFormInput
+                                <label htmlFor="accessionNumber">Přírůstkové číslo</label>
+                                <input
                                     id="accessionNumber"
                                     value={form.accessionNumber || ''}
                                     onChange={(e: any) => setForm({ ...form, accessionNumber: e.target.value })}
                                     onBlur={(e: any) => handleNumberBlur('accession', e.target.value)}
-                                    required
                                 />
                                 {fieldErrors.accessionNumber && <p className="text-xs font-bold text-red-600">{fieldErrors.accessionNumber}</p>}
                                 {!validity.accession && (
@@ -1238,13 +1257,13 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             </div>
 
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="inventoryNumber">Inventární číslo</GovFormLabel>
-                                <GovFormInput
+                                <label htmlFor="inventoryNumber">Inventární číslo *</label>
+                                {!id ? <NewInventoryNumber value={form.inventoryNumber || ''} onChange={value => setForm((prev: any) => ({...prev,inventoryNumber:value}))} /> : (<input
                                     id="inventoryNumber"
                                     value={form.inventoryNumber || ''}
                                     onChange={(e: any) => setForm({ ...form, inventoryNumber: e.target.value })}
                                     onBlur={(e: any) => handleNumberBlur('inventory', e.target.value)}
-                                />
+                                />)}
                                 {fieldErrors.inventoryNumber && <p className="text-xs font-bold text-red-600">{fieldErrors.inventoryNumber}</p>}
                                 {!validity.inventory && (
                                     <div className="p-2 bg-red-50 border border-red-100 rounded text-[10px] text-red-700 flex justify-between items-center font-bold">
@@ -1265,21 +1284,24 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         </div>
 
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="title">Název sbírkového předmětu *</GovFormLabel>
-                            <GovFormInput
+                            <label htmlFor="title">Název sbírkového předmětu (nebo typ)</label>
+                            <input
                                 id="title"
                                 value={form.title || ''}
                                 onChange={(e: any) => setForm({ ...form, title: e.target.value })}
-                                required
                             />
                             {fieldErrors.title && <p className="text-xs font-bold text-red-600">{fieldErrors.title}</p>}
                         </div>
 
+                        {id && <div className="grid grid-cols-2 gap-2 text-xs border p-2">
+                            <p>Zapsal: {form.legacyCreatedBy || '—'}</p><p>Datum zápisu: {form.legacyCreatedAt || '—'}</p>
+                            <p>Změnil: {form.legacyUpdatedBy || '—'}</p><p>Datum změny: {form.legacyUpdatedAt || '—'}</p>
+                        </div>}
                         {/* FOND A PODSBÍRKA DLE CITEM – NEZÁVISLÁ POLA */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <GovFormLabel htmlFor="fundDictionaryId">Fond</GovFormLabel>
+                                    <label htmlFor="fundDictionaryId">Fond</label>
                                     <button
                                         type="button"
                                         onClick={() => openDictModal('FUND', 'Nový fond', 'fundDictionaryId')}
@@ -1323,8 +1345,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             </div>
 
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="subCollection">Podsbírka</GovFormLabel>
-                                <GovFormInput
+                                <label htmlFor="subCollection">Podsbírka</label>
+                                <input
                                     id="subCollection"
                                     aria-label="Podsbírka"
                                     placeholder="např. Výtvarné umění"
@@ -1337,7 +1359,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                             <div className="space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <GovFormLabel htmlFor="objectType">Typ předmětu</GovFormLabel>
+                                    <label htmlFor="objectType">Typ předmětu</label>
                                     <button
                                         type="button"
                                         onClick={() => openDictModal('OBJECT_TYPE', 'Typ předmětu', 'objectType')}
@@ -1366,7 +1388,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
                             <div className="space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <GovFormLabel htmlFor="spravce">Správce sbírky</GovFormLabel>
+                                    <label htmlFor="spravce">Správce sbírky</label>
                                     <button
                                         type="button"
                                         onClick={() => openDictModal('SPRAVCE', 'Správce fondu', 'spravce')}
@@ -1394,7 +1416,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             </div>
 
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="objectCondition">Fyzický stav</GovFormLabel>
+                                <label htmlFor="objectCondition">Fyzický stav</label>
                                 <select
                                     id="objectCondition"
                                     className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
@@ -1411,8 +1433,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="signature">Signatura / Nápis</GovFormLabel>
-                                <GovFormInput
+                                <label htmlFor="signature">Signatura / Nápis</label>
+                                <input
                                     id="signature"
                                     value={form.signature || ''}
                                     onChange={(e: any) => setForm({ ...form, signature: e.target.value })}
@@ -1420,8 +1442,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                 />
                             </div>
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="markant">Značení / Markant</GovFormLabel>
-                                <GovFormInput
+                                <label htmlFor="markant">Značení / Markant</label>
+                                <input
                                     id="markant"
                                     value={form.markant || ''}
                                     onChange={(e: any) => setForm({ ...form, markant: e.target.value })}
@@ -1447,8 +1469,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                 {bulkMode && (
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-blue-50/50 rounded border border-blue-100">
                                         <div className="space-y-1">
-                                            <GovFormLabel htmlFor="bulkCount">Počet duplikátů</GovFormLabel>
-                                            <GovFormInput
+                                            <label htmlFor="bulkCount">Počet duplikátů</label>
+                                            <input
                                                 id="bulkCount"
                                                 type="number"
                                                 value={bulkParams.count}
@@ -1456,16 +1478,16 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <GovFormLabel htmlFor="titleSuffix">Přípona názvu</GovFormLabel>
-                                            <GovFormInput
+                                            <label htmlFor="titleSuffix">Přípona názvu</label>
+                                            <input
                                                 id="titleSuffix"
                                                 value={bulkParams.titleSuffix}
                                                 onChange={(e: any) => setBulkParams({ ...bulkParams, titleSuffix: e.target.value })}
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <GovFormLabel htmlFor="invNumSuffix">Přípona inv. čísla</GovFormLabel>
-                                            <GovFormInput
+                                            <label htmlFor="invNumSuffix">Přípona inv. čísla</label>
+                                            <input
                                                 id="invNumSuffix"
                                                 value={bulkParams.invNumSuffix}
                                                 onChange={(e: any) => setBulkParams({ ...bulkParams, invNumSuffix: e.target.value })}
@@ -1481,18 +1503,12 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider mb-2">
                                 Číselníkové zařazení předmětu
                             </h4>
-                            <MuseumSection itemId={id ? Number(id) : undefined} section="basic" onSave={handleSectionSave} />
+                            <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="basic" onSave={handleSectionSave} />
                         </div>
-                    </div>
-                )}
-
-                {/* 2. POPIS & ROZMĚRY */}
-                {activeTab === 'description' && (
-                    <div className="space-y-4 animate-in fade-in duration-150">
                         {/* Autor / Původce & Role */}
                         <div className="space-y-1" ref={authorDropdownRef}>
                             <div className="flex items-center justify-between">
-                                <GovFormLabel htmlFor="author">Autor / Tvůrce / Původce a role</GovFormLabel>
+                                <label htmlFor="author">Autor / Tvůrce / Původce a role</label>
                                 <div className="flex items-center gap-2">
                                     <button
                                         type="button"
@@ -1706,7 +1722,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
-                                    <GovFormLabel htmlFor="datingFrom">Rok od</GovFormLabel>
+                                    <label htmlFor="datingFrom">Rok od</label>
                                     <input
                                         type="number"
                                         id="datingFrom"
@@ -1721,7 +1737,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                 </div>
 
                                 <div className="space-y-1">
-                                    <GovFormLabel htmlFor="datingTo">Rok do</GovFormLabel>
+                                    <label htmlFor="datingTo">Rok do</label>
                                     <input
                                         type="number"
                                         id="datingTo"
@@ -1736,8 +1752,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                 </div>
 
                                 <div className="space-y-1">
-                                    <GovFormLabel htmlFor="datingText">Datace textem</GovFormLabel>
-                                    <GovFormInput
+                                    <label htmlFor="datingText">Datace textem</label>
+                                    <input
                                         id="datingText"
                                         value={form.datingText || ''}
                                         onChange={(e: any) => setForm({ ...form, datingText: e.target.value })}
@@ -1747,70 +1763,37 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             </div>
                         </div>
 
+                        {/* Popis předmětu */}
+                        <div className="space-y-1">
+                            <label htmlFor="description">Základní badatelský popis</label>
+                            <textarea
+                                id="description"
+                                rows={3}
+                                className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#00204a]"
+                                value={form.description || ''}
+                                onChange={e => setForm({ ...form, description: e.target.value })}
+                                placeholder="Podrobný popis vizuálního stavu, námětu, barevnosti..."
+                            />
+                        </div>
+
+                    </div>
+                )}
+
+                {/* 2. POPIS & ROZMĚRY */}
+                {activeTab === 'description' && (<div className="space-y-4">
                         {/* Materiál a Technika */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <GovFormLabel htmlFor="material">Materiál (Číselník)</GovFormLabel>
-                                    <button
-                                        type="button"
-                                        onClick={() => openDictModal('MATERIAL', 'Materiál', 'material')}
-                                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
-                                    >
-                                        + Nový materiál
-                                    </button>
-                                </div>
-                                <select
-                                    id="material"
-                                    className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
-                                    value={form.material || ''}
-                                    onChange={e => setForm({ ...form, material: e.target.value })}
-                                >
-                                    <option value="">-- Vyberte materiál --</option>
-                                    {form.material && !dicts.materials?.includes(form.material) && (
-                                        <option value={form.material}>{form.material}</option>
-                                    )}
-                                    {dicts.materials?.map((m: string) => (
-                                        <option key={m} value={m}>
-                                            {m}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            <TreeChoice type="MATERIAL" label="Materiál (Číselník)" value={form.materialDictionaryId ?? null}
+                                onChange={(dictionaryId, choice) => setForm((prev: any) => ({ ...prev, materialDictionaryId: dictionaryId, material: choice?.rawLabel ?? choice?.label ?? '' }))} />
 
-                            <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <GovFormLabel htmlFor="technique">Technika (Číselník)</GovFormLabel>
-                                    <button
-                                        type="button"
-                                        onClick={() => openDictModal('TECHNIQUE', 'Technika', 'technique')}
-                                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
-                                    >
-                                        + Nová technika
-                                    </button>
-                                </div>
-                                <select
-                                    id="technique"
-                                    className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
-                                    value={form.technique || ''}
-                                    onChange={e => setForm({ ...form, technique: e.target.value })}
-                                >
-                                    <option value="">-- Vyberte techniku --</option>
-                                    {form.technique && !dicts.techniques?.includes(form.technique) && (
-                                        <option value={form.technique}>{form.technique}</option>
-                                    )}
-                                    {dicts.techniques?.map((t: string) => (
-                                        <option key={t} value={t}>
-                                            {t}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            <TreeChoice type="TECHNIQUE" label="Technika (Číselník)" value={form.techniqueDictionaryId ?? null}
+                                onChange={(dictionaryId, choice) => setForm((prev: any) => ({ ...prev, techniqueDictionaryId: dictionaryId, technique: choice?.rawLabel ?? choice?.label ?? '' }))} />
                         </div>
+                        <p>Text materiálu: {form.material || '—'} · Text techniky: {form.technique || '—'}</p>
 
                         {/* Poznámka k materiálu a technice (DEMUS: PoznMT) */}
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="materialNote">Poznámka k materiálu a technice (PoznMT)</GovFormLabel>
+                            <label htmlFor="materialNote">Poznámka k materiálu a technice (PoznMT)</label>
                             <textarea
                                 id="materialNote"
                                 rows={2}
@@ -1826,22 +1809,13 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider mb-2">
                                 Hierarchické vazby materiálů a technik
                             </h4>
-                            <MuseumSection itemId={id ? Number(id) : undefined} section="materials" onSave={handleSectionSave} />
+                            <p className="text-xs">Materiál a technika používají skutečné ID a celou hierarchii číselníku; původní hodnoty jsou zachovány v evidenci DEMUS.</p>
                         </div>
 
-                        {/* Popis předmětu */}
-                        <div className="space-y-1">
-                            <GovFormLabel htmlFor="description">Základní badatelský popis</GovFormLabel>
-                            <textarea
-                                id="description"
-                                rows={3}
-                                className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#00204a]"
-                                value={form.description || ''}
-                                onChange={e => setForm({ ...form, description: e.target.value })}
-                                placeholder="Podrobný popis vizuálního stavu, námětu, barevnosti..."
-                            />
-                        </div>
 
+                </div>)}
+
+                {activeTab === 'dimensions' && (<div className="space-y-4">
                         {/* FYZICKÉ ROZMĚRY & MÍRY */}
                         <div className="bg-gray-50 p-4 rounded border border-gray-200 space-y-3">
                             <div className="flex justify-between items-center">
@@ -1859,20 +1833,20 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
                             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                                 <div className="space-y-1">
-                                    <GovFormLabel htmlFor="weight">Váha (g / kg)</GovFormLabel>
-                                    <GovFormInput id="weight" value={form.weight || ''} onChange={(e: any) => setForm({ ...form, weight: e.target.value })} />
+                                    <label htmlFor="weight">Váha (g / kg)</label>
+                                    <input id="weight" value={form.weight || ''} onChange={(e: any) => setForm({ ...form, weight: e.target.value })} />
                                 </div>
                                 <div className="space-y-1">
-                                    <GovFormLabel htmlFor="legacyVyska">Rychlá výška (cm)</GovFormLabel>
-                                    <GovFormInput id="legacyVyska" value={form.legacyData?.vyska || ''} onChange={(e: any) => handleLegacyChange('vyska', e.target.value)} />
+                                    <label htmlFor="legacyVyska">Původní výška</label>
+                                    <input id="legacyVyska" value={form.legacyData?.vyska || ''} readOnly />
                                 </div>
                                 <div className="space-y-1">
-                                    <GovFormLabel htmlFor="legacySirka">Rychlá šířka (cm)</GovFormLabel>
-                                    <GovFormInput id="legacySirka" value={form.legacyData?.sirka || ''} onChange={(e: any) => handleLegacyChange('sirka', e.target.value)} />
+                                    <label htmlFor="legacySirka">Původní šířka</label>
+                                    <input id="legacySirka" value={form.legacyData?.sirka || ''} readOnly />
                                 </div>
                                 <div className="space-y-1">
-                                    <GovFormLabel htmlFor="legacyHloubka">Rychlá hloubka (cm)</GovFormLabel>
-                                    <GovFormInput id="legacyHloubka" value={form.legacyData?.hloubka || ''} onChange={(e: any) => handleLegacyChange('hloubka', e.target.value)} />
+                                    <label htmlFor="legacyHloubka">Původní hloubka</label>
+                                    <input id="legacyHloubka" value={form.legacyData?.hloubka || ''} readOnly />
                                 </div>
                             </div>
 
@@ -1925,9 +1899,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => removeDimensionRow(idx)}
+                                                disabled={!!dim.legacyData} title={dim.legacyData ? 'Importovaný rozměr nelze odstranit' : 'Odebrat rozměr'} onClick={() => removeDimensionRow(idx)}
                                                 className="p-1.5 text-red-500 hover:text-red-700 rounded"
-                                                title="Odebrat rozměr"
                                             >
                                                 <FaTrash size={12} />
                                             </button>
@@ -1937,6 +1910,10 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             )}
                         </div>
 
+
+                </div>)}
+
+                {activeTab === 'photos' && (<div className="space-y-4">
                         {/* Fotodokumentace */}
                         <div className="space-y-3 bg-slate-50 border border-slate-200 rounded p-4">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -2055,8 +2032,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                 </p>
                             )}
                         </div>
-                    </div>
-                )}
+
+                </div>)}
 
                 {/* 3. PŮVOD & NABYTÍ */}
                 {activeTab === 'provenance' && (
@@ -2066,40 +2043,27 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-2">
                                 Akviziční záznamy předmětu (1:N)
                             </h4>
-                            <AcquisitionSection itemId={id ? Number(id) : undefined} />
+                            <AcquisitionSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} onSave={handleSectionSave} itemId={id ? Number(id) : undefined} />
                         </div>
 
                         {/* Základní způsob nabytí */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="acquisitionMethod">Způsob nabytí</GovFormLabel>
-                                <select
-                                    id="acquisitionMethod"
-                                    className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
-                                    value={form.acquisitionMethod || ''}
-                                    onChange={e => setForm({ ...form, acquisitionMethod: e.target.value })}
-                                >
-                                    <option>Dar</option>
-                                    <option>Koupě</option>
-                                    <option>Vlastní sběr</option>
-                                    <option>Archeologický výzkum</option>
-                                    <option>Převod</option>
-                                </select>
+                                <label htmlFor="acquisitionMethod">Způsob nabytí</label>
+                                <TreeChoice type="ACQUISITION_METHOD" label="Způsob nabytí – číselník" value={null}
+                                    onChange={(_id, choice) => setForm((prev: any) => ({...prev, acquisitionMethod: choice?.code ?? choice?.label ?? ''}))} />
+                                <p className="text-xs">Současná hodnota: {form.acquisitionMethod || '—'}</p>
                             </div>
 
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="acquisitionDate">Datum nabytí do muzea</GovFormLabel>
-                                <GovFormInput
-                                    type="date"
-                                    id="acquisitionDate"
-                                    value={form.acquisitionDate || ''}
-                                    onChange={(e: any) => setForm({ ...form, acquisitionDate: e.target.value })}
-                                />
+                                <label htmlFor="acquisitionDate">Datum nabytí do muzea</label>
+                                <YearDateInput id="acquisitionDate" label="Datum nabytí do muzea" value={form.acquisitionDate || ''}
+                                    onChange={value => setForm((prev: any) => ({...prev, acquisitionDate: value}))} />
                             </div>
 
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="acquiredFrom">Nabyto od (dárce/původce)</GovFormLabel>
-                                <GovFormInput
+                                <label htmlFor="acquiredFrom">Nabyto od (dárce/původce)</label>
+                                <input
                                     id="acquiredFrom"
                                     value={form.acquiredFrom || ''}
                                     onChange={(e: any) => setForm({ ...form, acquiredFrom: e.target.value })}
@@ -2111,8 +2075,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         {/* Místo a Země původu */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="originPlace">Místo vzniku</GovFormLabel>
-                                <GovFormInput
+                                <label htmlFor="originPlace">Místo vzniku</label>
+                                <input
                                     id="originPlace"
                                     value={form.originPlace || ''}
                                     onChange={(e: any) => setForm({ ...form, originPlace: e.target.value })}
@@ -2123,7 +2087,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             {/* Země původu s opraveným "+ Nová země" */}
                             <div className="space-y-1" ref={countryDropdownRef}>
                                 <div className="flex items-center justify-between">
-                                    <GovFormLabel htmlFor="countryOfOrigin">Země původu (Číselník)</GovFormLabel>
+                                    <label htmlFor="countryOfOrigin">Země původu (Číselník)</label>
                                     <div className="flex items-center gap-2">
                                         <button
                                             type="button"
@@ -2195,8 +2159,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
                         {/* Nálezová lokalita (DEMUS: Nalez) */}
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="findingLocality">Místo nálezu / nálezová lokalita (Nalez)</GovFormLabel>
-                            <GovFormInput
+                            <label htmlFor="findingLocality">Místo nálezu / nálezová lokalita (Nalez)</label>
+                            <input
                                 id="findingLocality"
                                 value={form.findingLocality || ''}
                                 onChange={(e: any) => setForm({ ...form, findingLocality: e.target.value })}
@@ -2209,7 +2173,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider mb-2">
                                 Lokalita a sbírkový fond
                             </h4>
-                            <MuseumSection itemId={id ? Number(id) : undefined} section="locality" onSave={handleSectionSave} />
+                            <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="locality" onSave={handleSectionSave} />
                         </div>
                     </div>
                 )}
@@ -2219,8 +2183,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                     <div className="space-y-4 animate-in fade-in duration-150">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="locationBuilding">Depozitář (Budova)</GovFormLabel>
-                                <GovFormInput
+                                <label htmlFor="locationBuilding">Depozitář (Budova)</label>
+                                <input
                                     id="locationBuilding"
                                     value={form.locationBuilding || ''}
                                     onChange={(e: any) => setForm({ ...form, locationBuilding: e.target.value })}
@@ -2228,8 +2192,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             </div>
 
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="locationRoom">Místnost</GovFormLabel>
-                                <GovFormInput
+                                <label htmlFor="locationRoom">Místnost</label>
+                                <input
                                     id="locationRoom"
                                     value={form.locationRoom || ''}
                                     onChange={(e: any) => setForm({ ...form, locationRoom: e.target.value })}
@@ -2237,8 +2201,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             </div>
 
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="permanentLocation">Trvalé uložení / Police</GovFormLabel>
-                                <GovFormInput
+                                <label htmlFor="permanentLocation">Trvalé uložení / Police</label>
+                                <input
                                     id="permanentLocation"
                                     value={form.permanentLocation || ''}
                                     onChange={(e: any) => setForm({ ...form, permanentLocation: e.target.value })}
@@ -2248,8 +2212,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="oddeleni">Oddělení muzea</GovFormLabel>
-                                <GovFormInput
+                                <label htmlFor="oddeleni">Oddělení muzea</label>
+                                <input
                                     id="oddeleni"
                                     value={form.oddeleni || ''}
                                     onChange={(e: any) => setForm({ ...form, oddeleni: e.target.value })}
@@ -2257,8 +2221,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             </div>
 
                             <div className="space-y-1">
-                                <GovFormLabel htmlFor="insuranceValue">Pojistná hodnota (Kč)</GovFormLabel>
-                                <GovFormInput
+                                <label htmlFor="insuranceValue">Pojistná hodnota (Kč)</label>
+                                <input
                                     type="number"
                                     id="insuranceValue"
                                     value={form.insuranceValue || ''}
@@ -2296,8 +2260,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
-                                    <GovFormLabel htmlFor="latitude">Zeměpisná šířka (Lat, -90 až 90)</GovFormLabel>
-                                    <GovFormInput
+                                    <label htmlFor="latitude">Zeměpisná šířka (Lat, -90 až 90)</label>
+                                    <input
                                         id="latitude"
                                         type="number"
                                         step="any"
@@ -2307,8 +2271,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <GovFormLabel htmlFor="longitude">Zeměpisná délka (Lon, -180 až 180)</GovFormLabel>
-                                    <GovFormInput
+                                    <label htmlFor="longitude">Zeměpisná délka (Lon, -180 až 180)</label>
+                                    <input
                                         id="longitude"
                                         type="number"
                                         step="any"
@@ -2318,7 +2282,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <GovFormLabel htmlFor="coordinateSystem">Souřadnicový systém</GovFormLabel>
+                                    <label htmlFor="coordinateSystem">Souřadnicový systém</label>
                                     <select
                                         id="coordinateSystem"
                                         className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
@@ -2339,60 +2303,38 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                 {activeTab === 'museum' && (
                     <div className="space-y-4 animate-in fade-in duration-150">
                         {/* Sub-navigace odborné evidence */}
-                        <div className="flex flex-wrap gap-1.5 p-1 bg-gray-100 rounded-md border border-gray-200">
-                            {[
-                                { id: 'documentation', label: '📸 Dokumentace' },
-                                { id: 'classification', label: '🏷️ Klasifikace' },
-                                { id: 'determination', label: '🔬 Určení' },
-                                { id: 'deaccession', label: '⚠️ Vyřazení' },
-                                { id: 'manipulation', label: '📦 Manipulace' },
-                                { id: 'action', label: '🎯 Akce' },
-                                { id: 'iso', label: '🛡️ ISO' },
-                                { id: 'demus', label: '🏛️ DEMUS trezor' },
-                                { id: 'attachments', label: `📎 Přílohy (${attachments.length})` },
-                                { id: 'audit', label: '📝 Audit' }
-                            ].map(st => (
-                                <button
-                                    key={st.id}
-                                    type="button"
-                                    onClick={() => setMuseumSubTab(st.id as any)}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded transition-all ${
-                                        museumSubTab === st.id
-                                            ? 'bg-[#00204a] text-white shadow-xs'
-                                            : 'text-gray-600 hover:bg-gray-200'
-                                    }`}
-                                >
-                                    {st.label}
-                                </button>
-                            ))}
-                        </div>
+
 
                         {/* Obsah vybrané podzáložky */}
                         <div className="p-4 bg-white rounded border border-gray-200">
                             {museumSubTab === 'documentation' && (
-                                <MuseumSection itemId={id ? Number(id) : undefined} section="documentation" onSave={handleSectionSave} />
+                                <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="documentation" onSave={handleSectionSave} />
                             )}
                             {museumSubTab === 'classification' && (
-                                <MuseumSection itemId={id ? Number(id) : undefined} section="classification" onSave={handleSectionSave} />
+                                <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="classification" onSave={handleSectionSave} />
                             )}
                             {museumSubTab === 'determination' && (
-                                <MuseumSection itemId={id ? Number(id) : undefined} section="determination" onSave={handleSectionSave} />
+                                <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="determination" onSave={handleSectionSave} />
                             )}
                             {museumSubTab === 'deaccession' && (
-                                <MuseumSection itemId={id ? Number(id) : undefined} section="deaccession" onSave={handleSectionSave} />
+                                <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="deaccession" onSave={handleSectionSave} />
                             )}
                             {museumSubTab === 'manipulation' && (
-                                <MuseumSection itemId={id ? Number(id) : undefined} section="manipulation" onSave={handleSectionSave} />
+                                <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="manipulation" onSave={handleSectionSave} />
                             )}
                             {museumSubTab === 'action' && (
-                                <MuseumSection itemId={id ? Number(id) : undefined} section="action" onSave={handleSectionSave} />
+                                <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="action" onSave={handleSectionSave} />
                             )}
+                            {museumSubTab === 'origin' && <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode}
+                                itemId={id ? Number(id) : undefined} section="origin" onSave={handleSectionSave} />}
+                            {museumSubTab === 'reference' && <div><p>Reference: vazby na literaturu nejsou v aktuálním API ověřeny. Dostupná původní evidence:</p><DemusLegacyDataView legacyData={form.legacyData} /></div>}
+                            {museumSubTab === 'plus' && <div><p>Plus: význam a zapisovatelný kontrakt polí Plus*/Sluz* čekají na ověření. Původní evidence zůstává pouze pro čtení:</p><DemusLegacyDataView legacyData={form.legacyData} /></div>}
                             {museumSubTab === 'iso' && (
-                                <MuseumSection itemId={id ? Number(id) : undefined} section="iso" onSave={handleSectionSave} />
+                                <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="iso" onSave={handleSectionSave} />
                             )}
                             {museumSubTab === 'demus' && (
                                 <div className="space-y-4">
-                                    <MuseumSection itemId={id ? Number(id) : undefined} section="history" onSave={handleSectionSave} />
+                                    <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="history" onSave={handleSectionSave} />
                                     <div className="p-4 bg-gray-50 border border-gray-200 rounded space-y-4">
                                         <DemusLegacyDataView legacyData={form.legacyData} />
                                     </div>
@@ -2429,7 +2371,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                                 </h5>
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                     <div className="space-y-1">
-                                                        <GovFormLabel htmlFor="attachmentFile">Soubor</GovFormLabel>
+                                                        <label htmlFor="attachmentFile">Soubor</label>
                                                         <input
                                                             id="attachmentFile"
                                                             type="file"
@@ -2439,8 +2381,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                                         {attFile && <p className="text-[11px] font-bold text-blue-700">Vybrán soubor: {attFile.name}</p>}
                                                     </div>
                                                     <div className="space-y-1">
-                                                        <GovFormLabel htmlFor="attachmentCaption">Popis souboru</GovFormLabel>
-                                                        <GovFormInput
+                                                        <label htmlFor="attachmentCaption">Popis souboru</label>
+                                                        <input
                                                             id="attachmentCaption"
                                                             value={attCaption}
                                                             onChange={(e: any) => setAttCaption(e.target.value)}
@@ -2478,8 +2420,11 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                                                         <p className="font-bold text-gray-900 truncate">{att.originalFilename || att.filename || att.fileName || 'Příloha'}</p>
                                                                         <p className="text-[11px] text-gray-500">
                                                                             {att.caption && <span className="font-semibold text-gray-700 mr-2">{att.caption}</span>}
+
                                                                             <span>{att.fileSize ? (att.fileSize / 1024).toFixed(1) : 0} KB</span>
                                                                         </p>
+                                                                        {!isViewMode && id && <AttachmentCaptionEditor itemId={Number(id)} attachmentId={att.id}
+                                                                                caption={att.caption} onSaved={async () => {await loadAttachments();await synchronizeMediaVersion(await getAdminItem(id));}}/>}
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex items-center gap-1.5">
@@ -2517,7 +2462,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             {museumSubTab === 'audit' && (
                                 <div className="space-y-4">
                                     <div className="p-4 bg-yellow-50/70 border-l-4 border-[#00204a] rounded space-y-3">
-                                        <GovFormLabel htmlFor="auditComment">Zdůvodnění provedených změn (Auditní stopa) *</GovFormLabel>
+                                        <label htmlFor="auditComment">Zdůvodnění provedených změn (Auditní stopa) *</label>
                                         <p className="text-[11px] text-gray-500 italic">
                                             Při editaci sbírkového předmětu zadejte stručné zdůvodnění změny pro zachování auditní stopy.
                                         </p>
@@ -2583,6 +2528,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                     </div>
                 )}
 
+                </fieldset>
                 {/* SPOLEČNÁ TLAČÍTKA ULOŽENÍ – VIDITELNÁ NA VŠECH TABECH */}
                 <div className="pt-4 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex gap-2.5">

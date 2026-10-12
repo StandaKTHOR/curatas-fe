@@ -1,4 +1,4 @@
-import {useEffect, useState} from "react";
+import { requireEditSession, type ItemEditSession } from './editSession';
 import {LabelDto} from "@/components/LabelPrinter";
 import {PrintItemRow} from "@/components/ItemListPrint";
 
@@ -48,7 +48,7 @@ export function buildApiUrl(path: string): URL {
     return new URL(resolved, origin);
 }
 
-export type MuseumRecordKind = 'DOCUMENTATION' | 'CLASSIFICATION' | 'DETERMINATION' | 'DEACCESSION' | 'MANIPULATION' | 'ACTION' | 'ISO';
+export type MuseumRecordKind = 'DOCUMENTATION' | 'CLASSIFICATION' | 'DETERMINATION' | 'DEACCESSION' | 'MANIPULATION' | 'ACTION' | 'ISO' | 'ORIGIN';
 export interface MuseumRecord {
     id: number;
     kind: MuseumRecordKind;
@@ -61,6 +61,7 @@ export interface MuseumRecord {
 }
 export interface MuseumItemDetail {
     itemId: number;
+    originNote?: string | null;
     markant: string | null;
     signature: string | null;
     legacyArchived: boolean | null;
@@ -105,31 +106,65 @@ const getAuthHeader = (): HeadersInit => {
     return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
-async function museumRequest<T>(itemId: number, suffix = '', init: RequestInit = {}): Promise<T> {
-    const response = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/museum${suffix}`), {
-        ...init,
-        headers: { ...getAuthHeader(), 'Content-Type': 'application/json', ...init.headers },
-    });
-    if (!response.ok) throw new Error(`Museum data request failed (${response.status})`);
-    return response.status === 204 ? undefined as T : response.json();
+async function responseError(response: Response): Promise<never> {
+    const data = await response.json().catch(() => ({}));
+    const errors = Array.isArray(data.fieldErrors)
+        ? Object.fromEntries(data.fieldErrors.map((e: {field: string; message: string}) => [e.field, e.message]))
+        : data.fieldErrors;
+    const conflict = response.status === 412 || (response.status === 409 && data.code === 'STALE_WRITE');
+    throw new ApiError(response.status, conflict
+        ? 'Záznam mezitím změnil jiný uživatel. Vaše zadání zůstává zachováno; porovnejte jej s aktuálním záznamem před dalším uložením.'
+        : data.message || data.error || `Požadavek selhal (${response.status}).`, errors);
 }
 
-export const getMuseumItem = (itemId: number) => museumRequest<MuseumItemDetail>(itemId);
-export const patchMuseumItem = (itemId: number, changes: Record<string, unknown>) =>
-    museumRequest<MuseumItemDetail>(itemId, '', { method: 'PATCH', body: JSON.stringify(changes) });
-export const createMuseumRecord = (itemId: number, kind: MuseumRecordKind, payload: Record<string, unknown>, dictionaryId: number | null = null, partyId: number | null = null) =>
-    museumRequest<MuseumRecord>(itemId, `/${kind}`, { method: 'POST', body: JSON.stringify({ payload, dictionaryId, partyId }) });
-export const updateMuseumRecord = (itemId: number, kind: MuseumRecordKind, recordId: number, payload: Record<string, unknown>, dictionaryId: number | null = null, partyId: number | null = null) =>
-    museumRequest<MuseumRecord>(itemId, `/${kind}/${recordId}`, { method: 'PUT', body: JSON.stringify({ payload, dictionaryId, partyId }) });
-export const deleteMuseumRecord = (itemId: number, kind: MuseumRecordKind, recordId: number) =>
-    museumRequest<void>(itemId, `/${kind}/${recordId}`, { method: 'DELETE' });
-export const listMuseumAcquisitions = (itemId: number) => museumRequest<MuseumAcquisition[]>(itemId, '/acquisitions');
-export const createMuseumAcquisition = (itemId: number, input: MuseumAcquisitionInput) =>
-    museumRequest<MuseumAcquisition>(itemId, '/acquisitions', { method: 'POST', body: JSON.stringify(input) });
-export const updateMuseumAcquisition = (itemId: number, id: number, input: MuseumAcquisitionInput) =>
-    museumRequest<MuseumAcquisition>(itemId, `/acquisitions/${id}`, { method: 'PUT', body: JSON.stringify(input) });
-export const deleteMuseumAcquisition = (itemId: number, id: number) =>
-    museumRequest<void>(itemId, `/acquisitions/${id}`, { method: 'DELETE' });
+async function versionedWrite<T>(itemId: number, path: string, init: RequestInit, session?: ItemEditSession): Promise<T> {
+    const editor = requireEditSession(itemId, session);
+    editor.busy = true;
+    try {
+        const response = await fetch(resolveApiUrl(path), {
+            ...init, headers: { ...getAuthHeader(), 'Content-Type': 'application/json', ...init.headers, 'If-Match': editor.etag },
+        });
+        if (!response.ok) await responseError(response);
+        const tag = response.headers.get('ETag');
+        // A successful write without its next token must not authorize another stale write.
+        editor.etag = tag || '';
+        return response.status === 204 ? undefined as T : response.json();
+    } finally { editor.busy = false; }
+}
+
+async function museumRequest<T>(itemId: number, suffix = '', init: RequestInit = {}, session?: ItemEditSession): Promise<T> {
+    const path = `/api/v1/items/${itemId}/museum${suffix}`;
+    if (init.method && init.method !== 'GET') return versionedWrite<T>(itemId, path, init, session);
+    const response = await fetch(resolveApiUrl(path), { headers: getAuthHeader() });
+    if (!response.ok) await responseError(response);
+    if (session && response.headers.get('ETag') && response.headers.get('ETag') !== session.etag) {
+        throw new ApiError(412, 'Záznam se změnil. Obnovte a porovnejte data; neuložené zadání zůstává zachováno.');
+    }
+    return response.json();
+}
+
+export const getMuseumItem = (itemId: number, session?: ItemEditSession) => museumRequest<MuseumItemDetail>(itemId, '', {}, session);
+export const patchMuseumItem = (itemId: number, changes: Record<string, unknown>, session?: ItemEditSession) =>
+    museumRequest<MuseumItemDetail>(itemId, '', { method: 'PATCH', body: JSON.stringify(changes) }, session);
+export const createMuseumRecord = (itemId: number, kind: MuseumRecordKind, payload: Record<string, unknown>, dictionaryId: number | null = null, partyId: number | null = null, session?: ItemEditSession) =>
+    museumRequest<MuseumRecord>(itemId, `/${kind}`, { method: 'POST', body: JSON.stringify({ payload, dictionaryId, partyId }) }, session);
+export const updateMuseumRecord = (itemId: number, kind: MuseumRecordKind, recordId: number, payload: Record<string, unknown>, dictionaryId: number | null = null, partyId: number | null = null, session?: ItemEditSession) =>
+    museumRequest<MuseumRecord>(itemId, `/${kind}/${recordId}`, { method: 'PATCH', body: JSON.stringify({ payload, dictionaryId, partyId }) }, session);
+export const deleteMuseumRecord = (itemId: number, kind: MuseumRecordKind, recordId: number, session?: ItemEditSession) =>
+    museumRequest<void>(itemId, `/${kind}/${recordId}`, { method: 'DELETE' }, session);
+export async function listMuseumAcquisitions(itemId: number, session?: ItemEditSession) {
+    if (session && await getItemVersion(itemId) !== session.etag) throw new ApiError(412, 'Verze akvizic neodpovídá otevřenému předmětu. Obnovte záznam.');
+    const rows = await museumRequest<MuseumAcquisition[]>(itemId, '/acquisitions');
+    if (session && await getItemVersion(itemId) !== session.etag) throw new ApiError(412, 'Akvizice se změnily během načítání. Obnovte záznam.');
+    if (session) session.acquisitionSnapshot = rows;
+    return rows;
+}
+export const createMuseumAcquisition = (itemId: number, input: MuseumAcquisitionInput, session?: ItemEditSession) =>
+    museumRequest<MuseumAcquisition>(itemId, '/acquisitions', { method: 'POST', body: JSON.stringify(input) }, session);
+export const updateMuseumAcquisition = (itemId: number, id: number, input: MuseumAcquisitionInput, session?: ItemEditSession) =>
+    museumRequest<MuseumAcquisition>(itemId, `/acquisitions/${id}`, { method: 'PATCH', body: JSON.stringify(input) }, session);
+export const deleteMuseumAcquisition = (itemId: number, id: number, session?: ItemEditSession) =>
+    museumRequest<void>(itemId, `/acquisitions/${id}`, { method: 'DELETE' }, session);
 
 export async function listPublicItems(params: {
     q?: string,
@@ -278,54 +313,33 @@ export async function createItem(body: any) {
     return r.json();
 }
 
-export async function updateItem(id: number, body: any) {
-    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}`), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-        body: JSON.stringify(body)
-    });
-    if (!r.ok) {
-        let fieldErrors: Record<string, string> | undefined = undefined;
-        let errMsg = '';
-        try {
-            const data = await r.json();
-            if (data.message) {
-                errMsg = data.message;
-            } else if (data.error) {
-                errMsg = data.error;
-            }
-            if (data.fieldErrors) {
-                if (Array.isArray(data.fieldErrors)) {
-                    fieldErrors = {};
-                    data.fieldErrors.forEach((fe: any) => {
-                        fieldErrors![fe.field] = fe.message;
-                    });
-                } else if (typeof data.fieldErrors === 'object') {
-                    fieldErrors = data.fieldErrors;
-                }
-            }
-        } catch (e) { /* ignore JSON parse error */ }
+export async function updateItem(id: number, body: Record<string, any>, session?: ItemEditSession) {
+    return versionedWrite(id, `/api/v1/items/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, session);
+}
 
-        if (!errMsg) {
-            if (r.status === 409) {
-                errMsg = 'Předmět s tímto inventárním nebo přírůstkovým číslem již existuje.';
-            } else if (r.status === 400) {
-                errMsg = 'Zadaná data předmětu nejsou platná. Zkontrolujte povinná pole.';
-            } else {
-                errMsg = `Aktualizace předmětu selhala (${r.status})`;
-            }
-        }
-        throw new ApiError(r.status, errMsg, fieldErrors);
-    }
-    return r.json();
+export async function getItemVersion(id: number): Promise<string> {
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${id}/version`), { headers: getAuthHeader() });
+    if (!response.ok) await responseError(response);
+    const etag = response.headers.get('ETag');
+    if (!etag) throw new Error('Server neposkytl ETag. Bez verze nelze bezpečně upravovat předmět.');
+    return etag;
 }
 
 export async function getAdminItem(id: string) {
-    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}`), {
-        headers: getAuthHeader()
-    });
-    if (!r.ok) throw new Error('Nepodařilo se načíst data pro editaci');
-    return r.json(); // Vrací AdminItemDetail
+    const itemId = Number(id);
+    const before = await getItemVersion(itemId);
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${id}`), { headers: getAuthHeader() });
+    if (!response.ok) await responseError(response);
+    const detail = await response.json();
+    const museumResponse = await fetch(resolveApiUrl(`/api/v1/items/${id}/museum`), { headers: getAuthHeader() });
+    if (!museumResponse.ok) await responseError(museumResponse);
+    const museum = await museumResponse.json();
+    const after = await getItemVersion(itemId);
+    if (before !== after || museumResponse.headers.get('ETag') !== before) {
+        throw new ApiError(412, 'Předmět se změnil během načítání. Načtěte jej znovu.');
+    }
+    Object.defineProperty(detail, '_editSession', {value: {itemId, etag: after, museumSnapshot: museum}});
+    return detail;
 }
 
 // Funkce pro smazání (audit se děje na pozadí)
@@ -360,7 +374,7 @@ export async function uploadItemImage(itemId: number, file: File) {
         return JSON.parse(rawResponse); // Teprve teď zkusíme JSON
     } catch (e) {
         console.error("Chyba při parsování JSONu. Server poslal tohle:", rawResponse);
-        throw new Error("Server neposlal platný JSON. Podívej se do konzole.");
+        throw new Error("Server neposlal platný JSON. Podívej se do konzole.", {cause: e});
     }
 }
 
@@ -707,11 +721,27 @@ export async function listAttachments(itemId: number) {
     return r.json();
 }
 
+export async function getAttachmentCount(itemId: number): Promise<number> {
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments/count`), {headers: getAuthHeader()});
+    if (!response.ok) await responseError(response);
+    const data = await response.json();
+    if (!Number.isInteger(data.count) || data.count < 0) throw new Error('Neplatný počet příloh ze serveru.');
+    return data.count;
+}
+
+export async function patchAttachment(itemId: number, attachmentId: number, changes: {caption?: string; sortOrder?: number; primary?: boolean}) {
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments/${attachmentId}`), {
+        method: 'PATCH', headers: {'Content-Type':'application/json', ...getAuthHeader()}, body: JSON.stringify(changes),
+    });
+    if (!response.ok) await responseError(response);
+    return response.json();
+}
+
 export async function uploadAttachment(itemId: number, file: File, caption?: string, isPrimary = false) {
     const formData = new FormData();
     formData.append('file', file);
     if (caption) formData.append('caption', caption);
-    formData.append('isPrimary', isPrimary.toString());
+    formData.append('primary', isPrimary.toString());
 
     const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments`), {
         method: 'POST',

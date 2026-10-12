@@ -43,7 +43,7 @@ describe('muzeální sekce předmětu', () => {
         const choice = screen.getAllByRole('combobox')[0];
         await userEvent.selectOptions(choice, '3');
         await userEvent.click(screen.getByRole('button', { name: 'Uložit sekci' }));
-        expect(patchMuseumItem).toHaveBeenCalledWith(7, { materialDictionaryId: 3 });
+        expect(patchMuseumItem).toHaveBeenCalledWith(7, { materialDictionaryId: 3 }, undefined);
     });
 
     it('can clear an existing dictionary reference without restoring the old selection', async () => {
@@ -53,7 +53,7 @@ describe('muzeální sekce předmětu', () => {
         await userEvent.selectOptions(screen.getAllByRole('combobox')[0], '');
         expect(screen.getAllByRole('combobox')[0]).toHaveValue('');
         await userEvent.click(screen.getByRole('button', { name: 'Uložit sekci' }));
-        expect(patchMuseumItem).toHaveBeenCalledWith(7, { materialDictionaryId: null });
+        expect(patchMuseumItem).toHaveBeenCalledWith(7, { materialDictionaryId: null }, undefined);
     });
 
     it('shows legacy audit read only', async () => {
@@ -75,7 +75,9 @@ describe('muzeální sekce předmětu', () => {
         await userEvent.type(field, 'new');
         await userEvent.click(screen.getByRole('button', { name: 'Uložit záznam' }));
         expect(updateMuseumRecord).toHaveBeenCalledWith(7, 'DOCUMENTATION', 9,
-            expect.objectContaining({ Dokument_DK: 'new', extra: 'keep' }), null, null);
+            { Dokument_DK: 'new' }, null, null, undefined);
+        expect(imported.payload.extra).toBe('keep');
+        expect(imported.legacyData.unknown).toBe('original');
     });
 
     it('stores documentation type code when selecting its dictionary entry', async () => {
@@ -86,7 +88,7 @@ describe('muzeální sekce předmětu', () => {
         await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Číselník' }), '5');
         await userEvent.click(screen.getByRole('button', { name: 'Uložit záznam' }));
         expect(createMuseumRecord).toHaveBeenCalledWith(7, 'DOCUMENTATION',
-            expect.objectContaining({ TypDok_DK: 'FO' }), 5, null);
+            expect.objectContaining({ TypDok_DK: 'FO' }), 5, null, undefined);
     });
 
     it('prevents default form submit on Enter key in TreeChoice search box', async () => {
@@ -153,6 +155,6 @@ describe('akvizice', () => {
         expect(screen.getByText('A2')).toBeInTheDocument();
         await userEvent.click(screen.getAllByRole('button', { name: 'Upravit' })[0]);
         await userEvent.click(screen.getByRole('button', { name: 'Uložit akvizici' }));
-        expect(updateMuseumAcquisition).toHaveBeenCalledWith(7, 1, expect.objectContaining({ accessionNumber: 'A1' }));
+        expect(updateMuseumAcquisition).toHaveBeenCalledWith(7, 1, expect.objectContaining({ accessionNumber: 'A1' }), undefined);
     });
 });
