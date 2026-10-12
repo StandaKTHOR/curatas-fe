@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { GovButton } from '@gov-design-system-ce/react';
-import { getItem, listAttachments, API_BASE } from '../lib/api';
+import { getItem, listAttachments, API_BASE, resolveApiUrl } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import SafeImage from "@/components/SafeImage";
 import MuseumCardPrint from '@/components/MuseumCardPrint';
@@ -19,6 +19,7 @@ import {
     FaExclamationTriangle
 } from 'react-icons/fa';
 import DemusLegacyDataView from '@/components/DemusLegacyDataView';
+import PermanentIdentificationHeader from '@/components/PermanentIdentificationHeader';
 
 // Pomocná komponenta pro čistší kód
 const DataRow = ({ label, value, fallback = 'Nezjištěno', isItalic = false }: any) => (
@@ -45,6 +46,7 @@ const LegacyRow = ({ label, value }: { label: string; value: any }) => {
 export default function Detail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const auth = useAuth();
     const token = auth?.token || null;
     const [it, setIt] = useState<any>(null);
@@ -52,6 +54,20 @@ export default function Detail() {
     const [showPrintModal, setShowPrintModal] = useState(false);
     const [showCloneModal, setShowCloneModal] = useState(false);
     const [showDeaccessionModal, setShowDeaccessionModal] = useState(false);
+
+    const handleBackToList = () => {
+        const stateFromSearch = (location.state as any)?.fromSearch;
+        const cameFromAdmin = (location.state as any)?.fromAdmin || location.pathname.startsWith('/admin') || (typeof document !== 'undefined' && document.referrer.includes('/admin/items'));
+
+        if (cameFromAdmin) {
+            const adminSearch = stateFromSearch || sessionStorage.getItem('adminItemsSearch') || '';
+            navigate(`/admin/items${adminSearch}`);
+            return;
+        }
+
+        const catSearch = stateFromSearch || sessionStorage.getItem('catalogSearch') || '';
+        navigate(`/${catSearch}`);
+    };
 
     useEffect(() => {
         if (id) getItem(id).then(setIt).catch(console.error);
@@ -80,17 +96,32 @@ export default function Detail() {
     const images = it.imageUrls || it.images || [];
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500 pb-12">
+        <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+            {/* PERMANENTNÍ IDENTIFIKAČNÍ HLAVIČKA DLE CITEM */}
+            <PermanentIdentificationHeader
+                fond={it.fundLegacyCode ? `[${it.fundLegacyCode}]` : (it.fundName || null)}
+                predmet={it.objectType}
+                popis={it.description}
+                titul={it.title}
+                autor={authors}
+                datace={it.datingText}
+                inventoryNumber={it.inventoryNumber || it.accessionNumber}
+                quantity={it.quantity}
+                isViewMode={true}
+                isNew={false}
+            />
 
             {/* HLAVIČKA */}
             <div className="border-b border-gray-200 pb-6 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
                 <div className="space-y-2">
                     <h1 className="text-3xl font-extrabold text-[#00204a] tracking-tight leading-tight">{it.title}</h1>
                     <p className="text-[#ffbc34] text-xs uppercase font-extrabold tracking-widest flex items-center gap-2">
-                        <span className="bg-[#ffbc34]/10 text-black px-2 py-0.5 rounded font-black">
-                            {it.subCollection || 'Hlavní sbírka'}
-                        </span>
-                        <span>•</span>
+                        {it.subCollection && (
+                            <span className="bg-[#ffbc34]/10 text-black px-2 py-0.5 rounded font-black">
+                                {it.subCollection}
+                            </span>
+                        )}
+                        {it.subCollection && <span>•</span>}
                         <span>{it.inventoryNumber || it.accessionNumber}</span>
                     </p>
                 </div>
@@ -129,9 +160,10 @@ export default function Detail() {
                         type="outlined"
                         color="neutral"
                         size="s"
-                        onClick={() => navigate('/')}
+                        onClick={handleBackToList}
+                        title="Zpět na seznam sbírkových předmětů se zachováním filtrů a stránkování"
                     >
-                        Zpět do katalogu
+                        ← Zpět na seznam
                     </GovButton>
                 </div>
             </div>
@@ -168,7 +200,7 @@ export default function Detail() {
                         <div className="flex gap-2 overflow-x-auto pb-2">
                             {images.map((url: string, idx: number) => (
                                 <div key={idx} className="min-w-[80px] h-[60px] rounded border border-gray-200 overflow-hidden shadow-sm bg-white hover:border-gray-400 transition-colors cursor-pointer">
-                                    <img src={url} className="w-full h-full object-cover" alt={`Náhled ${idx}`} />
+                                    <SafeImage src={url} className="w-full h-full object-cover" alt={`Náhled ${idx}`} />
                                 </div>
                             ))}
                         </div>
@@ -242,7 +274,15 @@ export default function Detail() {
                                     <span className="font-mono font-black text-[#ffbc34]">{it.inventoryNumber || '—'}</span>
                                 </div>
                                 <div className="flex justify-between items-center border-t border-gray-100 pt-2">
-                                    <span className="text-xs uppercase text-gray-400 font-extrabold tracking-wider">Správce fondu</span>
+                                    <span className="text-xs uppercase text-gray-400 font-extrabold tracking-wider">Fond</span>
+                                    <span className="font-bold text-gray-700">{it.fundLegacyCode ? `[${it.fundLegacyCode}] ${it.fundName || ''}`.trim() : (it.fundName || '—')}</span>
+                                </div>
+                                <div className="flex justify-between items-center border-t border-gray-100 pt-2">
+                                    <span className="text-xs uppercase text-gray-400 font-extrabold tracking-wider">Podsbírka</span>
+                                    <span className="font-bold text-gray-700">{it.subCollection || '—'}</span>
+                                </div>
+                                <div className="flex justify-between items-center border-t border-gray-100 pt-2">
+                                    <span className="text-xs uppercase text-gray-400 font-extrabold tracking-wider">Správce</span>
                                     <span className="font-bold text-gray-700">{it.spravce || '—'}</span>
                                 </div>
                             </div>
@@ -352,7 +392,7 @@ export default function Detail() {
                                             </div>
                                         </div>
                                         <a
-                                            href={`${API_BASE}/api/v1/items/${it.id}/attachments/${att.id}/file`}
+                                            href={resolveApiUrl(`/api/v1/items/${it.id}/attachments/${att.id}/file`)}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="inline-flex items-center gap-1 text-xs font-bold text-[#00204a] hover:underline px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
@@ -397,7 +437,7 @@ export default function Detail() {
                 onSuccess={(cloned: any) => {
                     setShowCloneModal(false);
                     if (cloned?.id) {
-                        navigate(`/detail/${cloned.id}`);
+                        navigate(`/items/${cloned.id}`);
                     }
                 }}
             />

@@ -1,4 +1,5 @@
 import React from 'react';
+import { resolveApiUrl } from '@/lib/api';
 
 export interface PrintItemRow {
     id: number;
@@ -289,7 +290,7 @@ export default function ItemListPrint({
                                     <div className="flex flex-col items-center justify-center border border-gray-200 rounded p-2 bg-gray-50 min-h-[220px]">
                                         {item.primaryImageUrl ? (
                                             <img
-                                                src={item.primaryImageUrl}
+                                                src={resolveApiUrl(item.primaryImageUrl)}
                                                 alt={item.title}
                                                 className="max-h-56 max-w-full object-contain rounded"
                                             />

@@ -2,3 +2,8 @@ node_modules/
 dist/
 .env
 /.idea/vcs.xml
+/scratch/update2_*.py
+/scratch/update2-*.log
+/docs/update2-references/
+/artifacts/
+/scratch/final-*.log

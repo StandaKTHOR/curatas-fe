@@ -1,4 +1,5 @@
 import React from 'react';
+import { resolveApiUrl } from '@/lib/api';
 
 interface MuseumCardPrintProps {
     item: any;
@@ -107,7 +108,7 @@ export default function MuseumCardPrint({ item, onClose }: MuseumCardPrintProps)
                     {/* FOTOGRAFIE PŘEDMĚTU */}
                     <div className="border-2 border-gray-300 rounded p-2 flex items-center justify-center bg-gray-50 h-[190px]">
                         {primaryImg ? (
-                            <img src={primaryImg} alt={item.title} className="max-h-full max-w-full object-contain" />
+                            <img src={resolveApiUrl(primaryImg)} alt={item.title} className="max-h-full max-w-full object-contain" />
                         ) : (
                             <span className="text-xs text-gray-400 italic">Bez fotografie</span>
                         )}

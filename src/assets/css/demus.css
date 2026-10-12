@@ -1,0 +1,98 @@
+/* Layout and colours derived from Demus Kat Printscreens, images 3, 7, 17, 22. */
+.demus-app { --demus-menu-height: 64px; color: #172a40; background: #efefef; min-height: 100vh; font-family: Arial, sans-serif; font-size: 12px; }
+.demus-app-menu { position: sticky; top: 0; z-index: 50; background: #efefef; border-bottom: 1px solid #8c939c; }
+.demus-titlebar { min-height: 28px; padding: 4px 12px; background: #a23739; color: white; display: flex; justify-content: space-between; gap: 12px; }
+.demus-menubar { min-height: 35px; padding: 3px 8px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.demus-menubar a, .demus-menubar button { color: #172a40; padding: 5px 9px; text-decoration: none; border: 1px solid transparent; border-radius: 0; white-space: nowrap; }
+.demus-menubar a.active, .demus-menubar a:hover, .demus-menubar button:hover { background: #dbe9f5; border-color: #8c939c; }
+.demus-menu-spacer { flex: 1; }
+.demus-workspace { padding: 8px; min-width: 0; }
+.demus-workspace > div { max-width: none; }
+.demus-workspace table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.demus-workspace th { background: #e0e4e9; color: #172a40; border: 1px solid #afb4bc; padding: 4px 6px; text-transform: none; letter-spacing: normal; }
+.demus-workspace td { border: 1px solid #c4c7cb; padding: 3px 6px; line-height: 18px; height: 26px; vertical-align: middle; }
+.demus-workspace tbody tr:nth-child(even) { background: #f7f8fa; }
+.demus-workspace tbody tr:hover { background: #c9e2f8; }
+.demus-workspace h1, .demus-workspace h2, .demus-workspace h3 { font-size: 15px; letter-spacing: normal; }
+.demus-editor { background: #efefef; padding: 8px; }
+.demus-editor .space-y-4 > :not([hidden]) ~ :not([hidden]), .demus-section.space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: 8px; }
+.demus-editor .gap-4 { gap: 8px; }
+.demus-editor .p-4, .demus-editor .p-5, .demus-editor .p-6 { padding: 8px; }
+.demus-editor .rounded, .demus-editor .rounded-lg, .demus-section .rounded { border-radius: 0; }
+.demus-editor input:not([type=checkbox]):not([type=radio]):not([type=file]), .demus-editor select,
+.demus-section input:not([type=checkbox]), .demus-section select { min-height: 26px; padding: 3px 5px; border: 1px solid #8b929b; border-radius: 0; font-size: 12px; line-height: 18px; color: #172a40; background: white; }
+.demus-editor input:not([type=checkbox]):not([type=radio]):not([type=file]) { width: 100%; display: block; }
+.demus-workspace td button { padding: 3px; }
+.demus-workspace td img { max-height: 24px; width: 32px; object-fit: contain; }
+.demus-workspace table input[type=checkbox] { width: 13px; height: 13px; }
+.demus-toolbar h3 { font-size: 13px; }
+.demus-toolbar p { margin: 0; }
+.demus-workspace p { font-size: 12px; }
+.demus-identification[data-toolbar=true] { top: calc(var(--demus-menu-height,64px) + var(--demus-toolbar-height,48px)); }
+.demus-editor textarea { padding: 4px 6px; border-radius: 0; font-size: 12px; }
+.demus-editor label, .demus-editor gov-form-label { font-size: 12px; font-weight: normal; color: #153a72; }
+.demus-editor gov-form-input { --form-input-padding: 3px 5px; --form-input-height: 26px; }
+.demus-toolbar { position: sticky; top: var(--demus-menu-height, 64px); z-index: 35; padding: 6px 8px; border: 1px solid #979ca4; background: #efefef; }
+.demus-save { border: 1px solid #63748a; padding: 5px 12px; background: #dbe9f5; color: #102844; font-weight: bold; }
+.demus-save:disabled { opacity: .5; }
+.demus-original-tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px 6px 0; border-bottom: 1px solid #8c939c; background: #efefef; }
+.demus-original-tabs button { font-size: 12px; padding: 3px 7px; border: 1px solid #989da4; background: linear-gradient(white, #d9dde2); color: #182c45; }
+.demus-original-tabs button[aria-pressed=true] { background: #fff; border-bottom-color: white; font-weight: bold; }
+.demus-identification { position: sticky; top: var(--demus-menu-height, 64px); z-index: 30; border: 1px solid #8c939c; background: #efefef; padding: 6px 8px; }
+.demus-identification dl { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; }
+.demus-identification dl > div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 4px; align-items: start; }
+.demus-identification dt { color: #153a72; padding-top: 3px; }
+.demus-identification dd { background: white; border: 1px solid #a0a6af; padding: 2px 5px; margin: 0; overflow-wrap: anywhere; }
+.demus-identification .demus-description { grid-column: 2; grid-row: 1 / span 5; }
+.demus-identification .demus-description dd { min-height: 108px; max-height: 160px; overflow: auto; white-space: pre-wrap; }
+.demus-date { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.demus-date > input { flex: 1; min-width: 145px; }
+.demus-date label { display: flex; gap: 4px; align-items: center; }
+.demus-date .demus-year { width: 78px; appearance: auto; -moz-appearance: auto; }
+.demus-date .demus-year::-webkit-inner-spin-button { -webkit-appearance: inner-spin-button; opacity: 1; }
+.demus-workspace :focus-visible { outline: 2px solid #145ca0; outline-offset: 2px; }
+.demus-workspace fieldset:disabled { opacity: .9; }
+.demus-app .demus-workspace .demus-datasheet td, .demus-app .demus-workspace .demus-datasheet th { padding: 3px 6px; height: 28px; white-space: nowrap; line-height: 18px; font-size: 12px; text-transform: none; font-weight: normal; }
+.demus-app .demus-workspace .demus-datasheet th { height: 28px; }
+.demus-app .demus-workspace .demus-row-actions { display: flex; align-items: center; gap: 5px; }
+.demus-app .demus-toolbar { padding: 5px 8px; min-height: 42px; background: #efefef; }
+.demus-app .demus-identification dd { line-height: 18px; font-size: 12px; }
+.demus-app .demus-identification dl { margin: 0; }
+.demus-app .demus-workspace .card-header { padding: 8px; }
+.demus-app .demus-workspace .genric-btn { padding: 4px 10px; line-height: 20px; height: auto; border-radius: 0; }
+.demus-app .demus-toolbar .min-w-0 { min-width: 0; }
+.demus-app .demus-toolbar > div { max-width: 100%; }
+.demus-app .demus-toolbar h3 { white-space: normal; overflow-wrap: anywhere; }
+.demus-app .demus-editor > fieldset { min-width: 0; }
+.demus-primary-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 12px; }
+.demus-primary-fields > .grid { grid-column: 1 / -1; }
+.demus-primary-fields p { margin: 0; }
+.demus-app .demus-editor label { margin-bottom: 0; }
+.demus-inventory-components { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 2px 12px; }
+.demus-inventory-components > div { display: grid; grid-template-columns: minmax(110px,45%) minmax(0,1fr); gap: 4px; }
+.demus-inventory-components label { margin: 0; }
+.demus-inventory-components span { white-space: pre-wrap; overflow-wrap: anywhere; }
+.demus-source-panel { border: 1px solid #a0a6af; background: #efefef; padding: 6px 8px; margin: 6px 0; }
+.demus-evidence-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 3px 12px; }
+.demus-evidence-grid > div { display: grid; grid-template-columns: minmax(120px,40%) minmax(0,1fr); gap: 4px; }
+.demus-evidence-grid dt { color: #153a72; }
+.demus-evidence-grid dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.demus-lineage button { padding: 3px 6px; border: 1px solid #989da4; background: #dbe9f5; }
+.demus-public-catalog label { display: block; font-size: 12px; color: #153a72; }
+.demus-public-catalog input:not([type=checkbox]) { width: 100%; min-height: 26px; border: 1px solid #8b929b; padding: 3px 5px; font-size: 12px; }
+@media (max-width: 640px) { .demus-primary-fields, .demus-evidence-grid, .demus-inventory-components { grid-template-columns: 1fr; } }
+.demus-app .demus-date .demus-year { width: 78px; }
+.demus-app .demus-workspace table[data-compact=true] td { white-space: nowrap; padding: 3px 6px; line-height: 18px; }
+.demus-app .demus-workspace table[data-compact=true] td img { width: 30px; height: 24px; }
+.demus-app .demus-workspace table[data-compact=true] td > div:has(img) { width: 32px; height: 24px; }
+@media (max-width: 760px) {
+    .demus-app { --demus-menu-height: 0px; }
+    .demus-app-menu { position: static; }
+    .demus-workspace { padding: 4px; }
+    .demus-identification { position: static; }
+    .demus-identification dl { grid-template-columns: 1fr; }
+    .demus-identification .demus-description { grid-column: auto; grid-row: auto; }
+    .demus-identification .demus-description dd { min-height: 48px; }
+    .demus-toolbar { top: 0; }
+}
+@media print { .demus-app-menu, .demus-toolbar, .demus-original-tabs { display: none; } .demus-identification { position: static; } }

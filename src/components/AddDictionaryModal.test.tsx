@@ -59,11 +59,12 @@ describe('AddDictionaryModal - oprava chyby Nová země', () => {
                 code: 'FRANCIE',
                 label: 'Francie'
             });
-            expect(handleSuccess).toHaveBeenCalledWith({
+            expect(handleSuccess).toHaveBeenCalledWith(expect.objectContaining({
                 code: 'FRANCIE',
                 label: 'Francie',
-                type: 'COUNTRY'
-            });
+                type: 'COUNTRY',
+                id: 101
+            }));
             expect(handleClose).toHaveBeenCalled();
         });
     });

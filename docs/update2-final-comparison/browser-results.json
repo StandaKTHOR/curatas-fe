@@ -1,0 +1,47 @@
+{
+  "fixtureOnly": true,
+  "liveBackend": false,
+  "frontend": "http://127.0.0.1:5175",
+  "apiOrigin": "https://uat.mesonline.cz",
+  "sourceSamples": [
+    "     GrJBu    1142         _CZE6MM _",
+    "       TEX   54388         _CZE6MM e",
+    "        ST    1669        14CZE6MM E",
+    "       TEX   53318         _CZE6MM e",
+    "        HN     343         1CZE6MM E"
+  ],
+  "syntheticOverlays": [
+    "current quantity=1",
+    "HTTP400 mismatch"
+  ],
+  "checks": [
+    "Staff catalogue 31px",
+    "Advanced filters discoverable",
+    "Save visible above fold",
+    "Source root determination distinct; no fabricated actor",
+    "Synthetic current quantity overlay 1 vs actual source 2",
+    "Source boolean separated from child acquisitions",
+    "Actual tuple order 1406 displayed",
+    "Stored dictionary ID 281; unknown role preserved",
+    "Actual source native year 1776",
+    "Empty whitelisted documentation excerpt has no invented media",
+    "HTTP400 preserves bibliography and exact If-Match",
+    "Read-only staff detail can navigate source history",
+    "New item toolbar visible",
+    "Public catalogue excludes storage and source APIs",
+    "Mobile save reachable"
+  ],
+  "writes": [
+    {
+      "path": "/api/v1/items/24261/museum/BIBLIOGRAPHY/109736",
+      "body": {
+        "fields": {
+          "kind": "BIBLIOGRAPHY",
+          "Ref_RF": "Entered conflicting citation"
+        }
+      },
+      "ifMatch": "\"3\""
+    }
+  ],
+  "errors": []
+}

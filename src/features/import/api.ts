@@ -1,4 +1,4 @@
-import { API_BASE } from '@/lib/api';
+import { API_BASE, resolveApiUrl } from '@/lib/api';
 import type { ImportApi } from './types';
 
 export class ImportApiError extends Error {
@@ -7,7 +7,7 @@ export class ImportApiError extends Error {
 
 // Proposed HTTP mapping: confirm against the backend controller before deployment.
 // DTOs are sourced from the backend; endpoint definitions are not yet available there.
-const base = `${API_BASE}/api/v1/imports`;
+const base = resolveApiUrl('/api/v1/imports');
 async function request(path: string, signal: AbortSignal, init: RequestInit = {}) {
   const token = localStorage.getItem('token');
   const response = await fetch(`${base}${path}`, {

@@ -7,7 +7,8 @@ interface AddDictionaryModalProps {
     dictionaryType: string;
     dictionaryTitle: string;
     onClose: () => void;
-    onSuccess: (newItem: { code: string; label: string; type: string }) => void;
+    onSuccess: (newItem: { id?: number; code: string; label: string; type: string }) => void;
+    parentOptions?: {id: number; label: string}[];
 }
 
 export default function AddDictionaryModal({
@@ -15,12 +16,14 @@ export default function AddDictionaryModal({
     dictionaryType,
     dictionaryTitle,
     onClose,
-    onSuccess
+    onSuccess,
+    parentOptions = []
 }: AddDictionaryModalProps) {
     const [label, setLabel] = useState('');
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [parentId, setParentId] = useState('');
 
     useEffect(() => {
         if (isOpen) {
@@ -28,6 +31,7 @@ export default function AddDictionaryModal({
             setCode('');
             setError(null);
             setLoading(false);
+            setParentId('');
         }
     }, [isOpen]);
 
@@ -113,15 +117,17 @@ export default function AddDictionaryModal({
         setLoading(true);
 
         try {
-            await createDictionaryItem({
+            const created = await createDictionaryItem({
                 type: dictionaryType,
                 code: finalCode,
-                label: label.trim()
+                label: label.trim(),
+                ...(parentId ? {parentId: Number(parentId)} : {})
             });
 
             onSuccess({
-                code: finalCode,
-                label: label.trim(),
+                id: created?.id,
+                code: created?.code || finalCode,
+                label: created?.label || label.trim(),
                 type: dictionaryType
             });
             onClose();
@@ -154,6 +160,12 @@ export default function AddDictionaryModal({
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-5 space-y-4">
+                    {parentOptions.length > 0 && <label className="block text-sm">Nadřazená položka
+                        <select aria-label="Nadřazená položka" value={parentId} onChange={e => setParentId(e.target.value)} className="w-full border p-1">
+                            <option value="">— kořen číselníku —</option>
+                            {parentOptions.map(parent => <option key={parent.id} value={parent.id}>{parent.label}</option>)}
+                        </select>
+                    </label>}
                     {error && (
                         <GovMessage color="error" type="bold">
                             <span className="font-bold text-xs">{error}</span>

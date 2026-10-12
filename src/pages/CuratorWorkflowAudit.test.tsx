@@ -19,7 +19,7 @@ import {
     setPrimaryItemImage,
     getMuseumItem,
     getDictionaryTree,
-    getNextAvailableNumbers
+    getNextAvailableNumbers, downloadAttachmentFile
 } from '../lib/api';
 
 vi.mock('../lib/api', () => ({
@@ -47,7 +47,9 @@ vi.mock('../lib/api', () => ({
     deleteMuseumRecord: vi.fn(),
     deaccessionItem: vi.fn(),
     searchParties: vi.fn(),
-    API_BASE: 'http://localhost:8080'
+    API_BASE: 'http://localhost:8080',
+    resolveApiUrl: (url: string) => url,
+    buildApiUrl: (path: string) => new URL(path, 'http://localhost:8080')
 }));
 
 const mockItemData = {
@@ -98,6 +100,15 @@ beforeEach(() => {
 });
 
 describe('Curator Workflow Audit - Frontend Integration', () => {
+    it('allows an authenticated attachment download in read-only detail without enabling edits',async()=>{
+        vi.mocked(listAttachments).mockResolvedValue([{id:77,originalFilename:'evidence.txt',caption:'Evidence'}] as never);
+        render(<MemoryRouter initialEntries={['/admin/items/view/123']}><Routes><Route path="/admin/items/view/:id" element={<AdminItemForm readOnly/>}/></Routes></MemoryRouter>);
+        await screen.findByDisplayValue('Gotická monstrance');
+        await userEvent.click(screen.getByRole('button',{name:/Přílohy/}));
+        await userEvent.click(await screen.findByRole('button',{name:'Stáhnout'}));
+        expect(downloadAttachmentFile).toHaveBeenCalledWith(123,77,'evidence.txt');
+        expect(screen.queryByRole('button',{name:'Uložit'})).toBeNull();
+    });
     it('displays author role in Detail view and MuseumCardPrint', async () => {
         render(
             <MemoryRouter initialEntries={['/detail/123']}>
@@ -107,7 +118,8 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
             </MemoryRouter>
         );
 
-        expect(await screen.findByText(/Mistr Pavol \(Kopista\)/)).toBeInTheDocument();
+        const authorMatches = await screen.findAllByText(/Mistr Pavol \(Kopista\)/);
+        expect(authorMatches.length).toBeGreaterThanOrEqual(1);
 
         const { container } = render(
             <MuseumCardPrint item={mockItemData} onClose={() => {}} />
@@ -126,9 +138,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
 
         await waitFor(() => expect(screen.getByDisplayValue('Gotická monstrance')).toBeInTheDocument());
 
-        // Switch to tab 2: Popis & Rozměry
-        const tab2Button = screen.getByRole('button', { name: /Popis & Rozměry/i });
-        await userEvent.click(tab2Button);
+        // Author and role belong to the primary identification card.
 
         // Verify role dropdown is present and contains expected roles
         const roleSelect = screen.getByLabelText('Role autora') as HTMLSelectElement;
@@ -140,6 +150,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         expect(roleSelect.value).toBe('Falsifikátor');
 
         // Verify materialNote (PoznMT) textarea is available
+        await userEvent.click(screen.getByRole('button', {name: 'MatTech'}));
         const matNote = screen.getByPlaceholderText(/Doplňující poznámka k materiálu/i);
         expect(matNote).toBeInTheDocument();
         expect(matNote).toHaveValue('Pozlacené stříbro s emailem');
@@ -157,7 +168,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         await waitFor(() => expect(screen.getByDisplayValue('Gotická monstrance')).toBeInTheDocument());
 
         // Switch to tab 5: Odborná evidence & DEMUS
-        const tab5Button = screen.getByRole('button', { name: /Odborná evidence & DEMUS/i });
+        const tab5Button = screen.getByRole('button', { name: 'Dokumentace' });
         await userEvent.click(tab5Button);
 
         // Switch to audit subtab
@@ -172,16 +183,11 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         const saveAuditButton = screen.getByRole('button', { name: /Uložit auditní záznam/i });
         await userEvent.click(saveAuditButton);
 
-        expect(updateItem).toHaveBeenCalledWith(123, expect.objectContaining({
-            auditComment: 'Doplnění údajů o autorovi a technice.',
-            author: 'Mistr Pavol',
-            originPlace: 'Levoča',
-            materialNote: 'Pozlacené stříbro s emailem',
-            parties: expect.arrayContaining([
-                expect.objectContaining({ partyName: 'Mistr Pavol', role: 'Kopista' })
-            ])
-        }));
+        expect(updateItem).toHaveBeenCalledWith(123, {auditComment: 'Doplnění údajů o autorovi a technice.'}, undefined);
 
+        expect(vi.mocked(updateItem).mock.calls[0][1].inventoryNumber).toBeUndefined();
+        expect(vi.mocked(updateItem).mock.calls[0][1]).not.toHaveProperty('parties');
+        expect(vi.mocked(updateItem).mock.calls[0][1]).not.toHaveProperty('dimensions');
         expect(await screen.findByText(/Auditní záznam byl úspěšně uložen/i)).toBeInTheDocument();
     });
 
@@ -204,7 +210,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         await waitFor(() => expect(screen.getByDisplayValue('Gotická monstrance')).toBeInTheDocument());
 
         // Switch to Tab 5 and subtab attachments
-        await userEvent.click(screen.getByRole('button', { name: /Odborná evidence & DEMUS/i }));
+        await userEvent.click(screen.getByRole('button', { name: 'Dokumentace' }));
 
         // Initial attachment counter should be 1
         const attSubtab = await screen.findByRole('button', { name: /Přílohy \(1\)/i });
@@ -214,7 +220,12 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         expect(screen.getByText('posudek.pdf')).toBeInTheDocument();
     });
 
-    it('fundSelector_loadsDictionaryOptionsAndPersists: loads options and updates subCollection', async () => {
+    it('fundSelector_loadsDictionaryOptionsAndPersists: loads options and updates Fund and SubCollection independently', async () => {
+        vi.mocked(getDictionaryTree).mockResolvedValue([
+            { id: 17, label: 'Archeologie', children: [] },
+            { id: 83, label: 'Numismatika', children: [] },
+            { id: 204, label: 'Výtvarné umění', children: [] }
+        ] as any);
         vi.mocked(getDictionaries).mockResolvedValue({
             funds: ['Archeologie', 'Numismatika', 'Výtvarné umění']
         } as never);
@@ -227,8 +238,9 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
             </MemoryRouter>
         );
 
-        const subColSelect = await screen.findByRole('combobox', { name: /Fond \/ Podsbírka/i });
-        expect(subColSelect).toBeInTheDocument();
+        // Fond selector
+        const fundSelect = await screen.findByRole('combobox', { name: 'Fond' });
+        expect(fundSelect).toBeInTheDocument();
 
         await waitFor(() => {
             expect(screen.getByRole('option', { name: 'Archeologie' })).toBeInTheDocument();
@@ -236,12 +248,20 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
             expect(screen.getByRole('option', { name: 'Výtvarné umění' })).toBeInTheDocument();
         });
 
-        // New item must NOT auto-select first fund; curator must select consciously
-        expect(subColSelect).toHaveValue('');
-        expect(screen.getByRole('option', { name: /vyberte Fond \/ Podsbirku/i })).toBeInTheDocument();
+        // New item must NOT auto-select first fund; default is empty
+        expect(fundSelect).toHaveValue('');
+        expect(screen.getByRole('option', { name: /— Bez přiřazeného fondu —/i })).toBeInTheDocument();
 
-        await userEvent.selectOptions(subColSelect, 'Numismatika');
-        expect(subColSelect).toHaveValue('Numismatika');
+        await userEvent.selectOptions(fundSelect, '83'); // Authoritative database ID
+        expect(fundSelect).toHaveValue('83');
+
+        // Independent SubCollection input
+        const subColInput = screen.getByRole('textbox', { name: 'Podsbírka' });
+        expect(subColInput).toBeInTheDocument();
+        expect(subColInput).toHaveValue('');
+
+        await userEvent.type(subColInput, 'Mince a medaile');
+        expect(subColInput).toHaveValue('Mince a medaile');
     });
 
     it('photoDelete_requiresConfirmationAndRemovesPhoto: confirms and calls delete API', async () => {
@@ -261,7 +281,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         await waitFor(() => expect(screen.getByDisplayValue('Gotická monstrance')).toBeInTheDocument());
 
         // Switch to Tab 2 (Popis & Rozměry)
-        const tab2 = screen.getByRole('button', { name: /2\. Popis & Rozměry/i });
+        const tab2 = screen.getByRole('button', { name: 'Foto' });
         await userEvent.click(tab2);
 
         // Verify photo rendered with Czech actions
