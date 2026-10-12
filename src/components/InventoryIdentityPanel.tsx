@@ -36,7 +36,7 @@ export function InventoryIdentityPanel({ itemId, inventoryNumber, canEdit, onSav
         } catch (reason) { setError(reason instanceof Error ? reason.message : 'Inventární údaje se nepodařilo uložit.'); }
         finally { setSaving(false); }
     };
-    return <section aria-label="Strukturované inventární číslo" className="rounded border border-gray-200 bg-white px-3 py-2 text-xs">
+    return <section aria-label="Strukturované inventární číslo" className="demus-inventory-panel border border-gray-200 px-2 py-1 text-xs">
         <div className="flex items-center justify-between gap-2">
             <h2 className="font-semibold">Inventární číslo – složky DEMUS</h2>
             {data && canEdit && !data.stale && !editing && <button type="button" className="underline" onClick={() => {
@@ -47,7 +47,7 @@ export function InventoryIdentityPanel({ itemId, inventoryNumber, canEdit, onSav
         {!data && !error && <p role="status">Načítání inventárních údajů…</p>}
         {data?.stale && <p role="alert" className="mt-1 text-amber-800">Zobrazené číslo se změnilo mimo strukturovanou evidenci. Složky je nutné odborně ověřit.</p>}
         {data && <>
-            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 md:grid-cols-3">
+            <div className="demus-inventory-components">
                 {inventoryComponentNames.map(name => <div key={name}>
                     <label htmlFor={`inventory-component-${name}`} className="block text-gray-600">{labels[name]}</label>
                     {editing && draft ? <input id={`inventory-component-${name}`} className="w-full rounded border px-1 py-0.5"

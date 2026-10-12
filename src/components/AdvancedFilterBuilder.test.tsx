@@ -5,6 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 import AdvancedFilterBuilder, { type FilterGroup } from './AdvancedFilterBuilder';
 
 describe('protected structured search contract', () => {
+  it.each(['historicalInventoryNumber','acquisitionRecordNumber'])('offers only supported text operators for %s',field=>{
+    render(<AdvancedFilterBuilder filterGroup={{id:'root',conjunction:'AND',groups:[],conditions:[{id:'1',field,operator:'EQUALS',value:'  old  number  '}]}} onChange={()=>{}} onApply={()=>{}} onReset={()=>{}}/>);
+    const operator=screen.getAllByRole('combobox')[1] as HTMLSelectElement;
+    expect(Array.from(operator.options).map(option=>option.value)).toEqual(['CONTAINS','EQUALS','NOT_EQUALS','NOT_CONTAINS','STARTS_WITH','ENDS_WITH','IS_EMPTY','IS_NOT_EMPTY']);
+  });
   it('sends leading-zero components as strings and keeps nested AND context', async () => {
     const user = userEvent.setup();
     const apply = vi.fn();

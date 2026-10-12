@@ -1038,7 +1038,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
     return (
         <div className="space-y-3 animate-in fade-in duration-300">
                 {/* HLAVIČKA FORMULÁŘE */}
-                <div ref={toolbarRef} className="demus-toolbar px-6 py-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-white">
+                <div ref={toolbarRef} className="demus-toolbar flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
                     <div className="flex items-center gap-3 min-w-0 max-w-xl">
                         <GovButton
                             nativeType="button"
@@ -1051,14 +1051,11 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             ← Zpět na seznam
                         </GovButton>
                         <div className="min-w-0">
-                            <h3 className="text-lg font-black text-gray-900 tracking-tight truncate">
+                            <h3 className="text-sm font-bold text-gray-900">
                                 {id
                                     ? `Kurátorský detail: ${form.inventoryNumber || form.accessionNumber || `#${id}`}${form.title ? ` | ${form.title}` : ''}`
                                     : 'Založení nového sbírkového předmětu'}
                             </h3>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
-                                Kurátorská správa sbírek
-                            </p>
                         </div>
                     </div>
                 <div className="flex items-center gap-2.5 flex-wrap">
@@ -1112,7 +1109,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                 type="outlined"
                                 color="neutral"
                                 size="s"
-                                disabled={uploading}
+                                disabled={uploading || isViewMode}
                                 onClick={() => document.getElementById('photo-up')?.click()}
                             >
                                 {uploading ? 'Nahrávám...' : '📸 Nahrát foto'}
@@ -1203,7 +1200,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                 <fieldset disabled={isViewMode || loading}>
                 {/* 1. ZÁKLADNÍ ÚDAJE & IDENTIFIKACE */}
                 {activeTab === 'identity' && (
-                    <div className="space-y-4 animate-in fade-in duration-150">
+                    <div className="demus-primary-fields">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1">
                                 <label htmlFor="accessionNumber">Přírůstkové číslo</label>

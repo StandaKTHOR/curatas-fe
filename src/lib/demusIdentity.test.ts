@@ -7,6 +7,15 @@ const data = { itemId: 7, inventoryNumber: 'ZV 935', sourceInventoryNumber: '  Z
     departmentCode: null, originalInventoryNumber: null, otherNumber: null, materialNote: null,
     fundCode: ' 7 ', groupCode: null };
 describe('DEMUS identity API contract', () => {
+    it('keeps numeric nulls and differing source/current quantities intact',async()=>{
+        const evidence={...data,sourceQuantity:2,quantity:1,sourceDatingFromYear:-300,sourceDatingToYear:null};
+        vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>evidence}));
+        expect(await getDemusIdentity(7)).toEqual(evidence);
+    });
+    it('rejects string quantities rather than silently coercing them',async()=>{
+        vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({...data,sourceQuantity:'2'})}));
+        await expect(getDemusIdentity(7)).rejects.toThrow('Invalid numeric DEMUS evidence');
+    });
     it('preserves source text and uses authenticated UAT paths', async () => {
         localStorage.setItem('token', 'test-token');
         const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => data });
