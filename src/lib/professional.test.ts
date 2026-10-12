@@ -22,6 +22,10 @@ describe('accepted source excerpts (isolated identifiers, never UAT seeds)',()=>
     });
 });
 describe('synthetic current overlay and date contracts',()=>{
+    it('displays verified backend root determination values without deriving other fields',()=>{
+        const record: MuseumRecord={id:1,kind:'DETERMINATION',payload:{Urcil_UR:'Returned historical actor',DatUrc_UR:'1937'},legacyData:{Predmet_S:'Root object'},dictionaryId:null,partyId:null,sourceTable:'Sbirky',sourceKey:'contract-fixture'};
+        expect(professionalDraft(record)).toEqual({Urcil_UR:'Returned historical actor',DatUrc_UR:'1937',Predmet_UR:undefined,Pozn_UR:undefined});
+    });
     it('explicit null wins and patches exclude immutable source keys',()=>{
         const record: MuseumRecord={id:1,kind:'DETERMINATION',payload:{Urcil_UR:null},legacyData:{Urcil_UR:'Historical actor',Predmet_S:'Root object'},dictionaryId:null,partyId:null,sourceTable:'Sbirky',sourceKey:'contract-fixture'};
         expect(professionalValue(record,'Urcil_UR')).toBeNull();

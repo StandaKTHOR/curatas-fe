@@ -6,6 +6,7 @@ export interface PermanentIdentificationHeaderProps {
     autor?: string | null;
     datace?: string | null;
     inventoryNumber?: string | null;
+    quantity?: number | null;
     isViewMode?: boolean;
     isNew?: boolean;
     topOffset?: string;

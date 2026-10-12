@@ -1138,6 +1138,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                 autor={currentAuthor}
                 datace={currentDating}
                 inventoryNumber={form.inventoryNumber || form.accessionNumber}
+                quantity={form.quantity}
                 isViewMode={isViewMode}
                 isNew={!id}
             />

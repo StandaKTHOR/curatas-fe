@@ -17,7 +17,7 @@ await context.route('**/*',async route=>{
     const request=route.request(),url=new URL(request.url()),path=url.pathname;
     if(url.origin!==frontend&&url.origin!==apiOrigin)return route.abort();
     if(!path.includes('/api/')&&!path.includes('/public/'))return route.continue();
-    const json=(body,status=200)=>route.fulfill({status,headers:{'Content-Type':'application/json',ETag:`"${version}"`},body:JSON.stringify(body)});
+    const json=(body,status=200)=>route.fulfill({status,headers:{'Content-Type':'application/json',ETag:`"${version}"`,'Access-Control-Allow-Origin':frontend,'Access-Control-Expose-Headers':'ETag'},body:JSON.stringify(body)});
     const id=Number(path.match(/\/items\/(\d+)/)?.[1]),item=items.find(row=>row.id===id),source=samples.items.find(row=>Number(row.id)===id);
     if(request.method()!=='GET'){
         writes.push({path,body:request.postDataJSON(),ifMatch:request.headers()['if-match']});
@@ -53,6 +53,7 @@ await context.route('**/*',async route=>{
     return json({message:`Uncovered fixture ${path}`},404);
 });
 const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
+page.on('response',response=>{if(response.status()>=400&&new URL(response.url()).origin===frontend&&!response.url().includes('/api/'))errors.push(`Static resource ${response.status()}: ${response.url()}`);});
 const tab=name=>page.getByRole('navigation',{name:'Karty DEMUS'}).getByRole('button',{name,exact:true});
 const shot=name=>page.screenshot({path:`${out}/${name}.png`});
 const open=async(id,view=false)=>{await page.goto(`${frontend}/admin/items/${view?'view':'edit'}/${id}`);await page.getByLabel('Název sbírkového předmětu (nebo typ)',{exact:true}).waitFor();};
@@ -75,7 +76,7 @@ try{
     await page.getByRole('button',{name:'Uložit záznam',exact:true}).click();await page.getByText(/Zápis nebyl přijat/).waitFor();assert.equal(await ref.inputValue(),'Entered conflicting citation');assert.equal(writes.at(-1).ifMatch,'"3"');await shot('bibliography-conflict');checks.push('HTTP400 preserves bibliography and exact If-Match');reject=0;
     await open(1003,true);await shot('item-detail');await tab('Historie').click();await page.getByRole('button',{name:'Otevřít zdrojovou historii'}).click();checks.push('Read-only staff detail can navigate source history');
     await page.goto(`${frontend}/admin/items/new`);await page.getByLabel('Název sbírkového předmětu (nebo typ)',{exact:true}).waitFor();await shot('new-item');checks.push('New item toolbar visible');
-    const anon=await browser.newContext({viewport:{width:1366,height:768}});await anon.route('**/public/v1/items**',route=>route.fulfill({json:{content:items,totalPages:1,totalElements:5,last:true}}));
+    const anon=await browser.newContext({viewport:{width:1366,height:768}});await anon.route('**/public/v1/items**',route=>route.fulfill({headers:{'Access-Control-Allow-Origin':frontend},json:{content:items,totalPages:1,totalElements:5,last:true}}));
     await anon.route('**/api/**',route=>{errors.push('Anonymous requested staff API');return route.abort();});
     const guest=await anon.newPage();await guest.goto(`${frontend}/`);await guest.locator('tbody tr').first().waitFor();await guest.screenshot({path:`${out}/public-catalog.png`});
     assert.equal(await guest.getByText('Umístění',{exact:true}).count(),0);checks.push('Public catalogue excludes storage and source APIs');await anon.close();

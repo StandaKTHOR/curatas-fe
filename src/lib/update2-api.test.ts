@@ -39,7 +39,7 @@ describe('final typed professional contracts (HTTP fixtures)',()=>{
     });
     it('preserves exact historical spacing in a nested server filter',async()=>{
         fetchMock.mockResolvedValue(reply({content:[],totalElements:0,totalPages:0}));
-        const filter=JSON.stringify({logic:'AND',rules:[{field:'historicalInventoryNumber',operator:'EQUALS',value:'GrJBu     1142'},{logic:'OR',rules:[{field:'acquisitionRecordNumber',operator:'CONTAINS',value:'AQ'}]}]});
+        const filter=JSON.stringify({conjunction:'AND',conditions:[{field:'historicalInventoryNumber',operator:'EQUALS',value:'GrJBu     1142'}],groups:[{conjunction:'OR',conditions:[{field:'acquisitionRecordNumber',operator:'CONTAINS',value:'AQ'}],groups:[]}]});
         await listAdminItems({advancedFilter:filter});
         expect(new URL(fetchMock.mock.calls[0][0]).searchParams.get('advancedFilter')).toBe(filter);
     });

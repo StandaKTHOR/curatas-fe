@@ -66,6 +66,8 @@
 .demus-app .demus-editor > fieldset { min-width: 0; }
 .demus-primary-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 12px; }
 .demus-primary-fields > .grid { grid-column: 1 / -1; }
+.demus-primary-fields p { margin: 0; }
+.demus-app .demus-editor label { margin-bottom: 0; }
 .demus-inventory-components { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 2px 12px; }
 .demus-inventory-components > div { display: grid; grid-template-columns: minmax(110px,45%) minmax(0,1fr); gap: 4px; }
 .demus-inventory-components label { margin: 0; }
