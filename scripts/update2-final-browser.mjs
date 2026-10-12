@@ -11,7 +11,7 @@ const context=await browser.newContext({viewport:{width:1366,height:768}});
 const token=`test.${Buffer.from(JSON.stringify({roles:['ADMIN'],exp:2000000000})).toString('base64url')}.test`;
 await context.addInitScript(token=>{localStorage.setItem('token',token);localStorage.setItem('loginTime',String(Date.now()));},token);
 const records=samples.items.flatMap(item=>item.sections.map(row=>({...row,id:Number(row.recordId),itemId:Number(item.id),payload:{},legacyData:row.native,sourceKey:row.sourceRecord,dictionaryId:row.dictionaryId?Number(row.dictionaryId):null,partyId:row.partyId?Number(row.partyId):null,materialDictionaryId:row.materialDictionaryId?Number(row.materialDictionaryId):null,techniqueDictionaryId:row.techniqueDictionaryId?Number(row.techniqueDictionaryId):null})));
-const items=samples.items.map(row=>({id:Number(row.id),inventoryNumber:row.inventory_number,title:row.title,material:row.material,technique:row.technique,datingText:row.dating_text,objectType:row.native.Predmet_S,description:'',subCollection:'',quantity:null,parties:[],dimensions:[],imageUrls:[],attachments:[],legacyData:row.native,published:false}));
+const items=samples.items.map(row=>({id:Number(row.id),inventoryNumber:row.inventory_number,title:row.title,material:row.material,technique:row.technique,datingText:row.dating_text,objectType:row.native.Predmet_S,description:'',subCollection:'',quantity:Number(row.id)===1003?1:null,parties:[],dimensions:[],imageUrls:[],attachments:[],legacyData:row.native,published:false}));
 let version=3,reject=0;const writes=[],checks=[],errors=[],reads=[];
 await context.route('**/*',async route=>{
     const request=route.request(),url=new URL(request.url()),path=url.pathname;

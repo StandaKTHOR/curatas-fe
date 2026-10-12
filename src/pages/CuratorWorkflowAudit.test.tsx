@@ -19,7 +19,7 @@ import {
     setPrimaryItemImage,
     getMuseumItem,
     getDictionaryTree,
-    getNextAvailableNumbers
+    getNextAvailableNumbers, downloadAttachmentFile
 } from '../lib/api';
 
 vi.mock('../lib/api', () => ({
@@ -100,6 +100,15 @@ beforeEach(() => {
 });
 
 describe('Curator Workflow Audit - Frontend Integration', () => {
+    it('allows an authenticated attachment download in read-only detail without enabling edits',async()=>{
+        vi.mocked(listAttachments).mockResolvedValue([{id:77,originalFilename:'evidence.txt',caption:'Evidence'}] as never);
+        render(<MemoryRouter initialEntries={['/admin/items/view/123']}><Routes><Route path="/admin/items/view/:id" element={<AdminItemForm readOnly/>}/></Routes></MemoryRouter>);
+        await screen.findByDisplayValue('Gotická monstrance');
+        await userEvent.click(screen.getByRole('button',{name:/Přílohy/}));
+        await userEvent.click(await screen.findByRole('button',{name:'Stáhnout'}));
+        expect(downloadAttachmentFile).toHaveBeenCalledWith(123,77,'evidence.txt');
+        expect(screen.queryByRole('button',{name:'Uložit'})).toBeNull();
+    });
     it('displays author role in Detail view and MuseumCardPrint', async () => {
         render(
             <MemoryRouter initialEntries={['/detail/123']}>

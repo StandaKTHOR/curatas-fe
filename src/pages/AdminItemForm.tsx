@@ -1197,8 +1197,16 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             {/* TĚLO FORMULÁŘE */}
             {isViewMode && id && activeTab === 'museum' && museumSubTab === 'demus' && <DemusSourceIdentity itemId={Number(id)}/>}
             {isViewMode && id && activeTab === 'museum' && museumSubTab === 'vocabularies' && <VocabularyAssociations itemId={Number(id)} data={(editSessionRef.current?.museumSnapshot as any)?.vocabularies}/>}
+            {isViewMode && id && activeTab === 'museum' && museumSubTab === 'attachments' && <section className="demus-source-panel" aria-label="Přílohy pro čtení">
+                <h3>Přílohy ({attachments.length})</h3>
+                {!attachments.length && <p>Žádné přílohy nebyly vráceny.</p>}
+                <ul>{attachments.map((att:any)=><li key={att.id} className="flex items-center justify-between gap-2">
+                    <span>{att.originalFilename||att.filename||att.fileName||'Příloha'} {att.caption}</span>
+                    <button type="button" onClick={async()=>{try{await downloadAttachmentFile(Number(id),att.id,att.originalFilename||att.filename||'priloha');}catch(e){setGlobalError('Stažení přílohy selhalo: '+(e as Error).message);}}}>Stáhnout</button>
+                </li>)}</ul>
+            </section>}
             <form id="item-editor" onSubmit={handleSubmit} className="p-6 space-y-4 demus-editor">
-                <fieldset disabled={isViewMode || loading}>
+                <fieldset disabled={loading || (isViewMode && activeTab !== 'photos')}>
                 {/* 1. ZÁKLADNÍ ÚDAJE & IDENTIFIKACE */}
                 {activeTab === 'identity' && (
                     <div className="demus-primary-fields">
@@ -1952,14 +1960,14 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                                 >
                                                     Náhled
                                                 </a>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDownloadPhoto(img.url, img.caption)}
+                                                <a
+                                                    href="#"
+                                                    onClick={event => {event.preventDefault();handleDownloadPhoto(img.url, img.caption);}}
                                                     className="text-gray-700 hover:text-gray-900 font-bold px-1 py-0.5"
                                                     title="Stáhnout fotografii"
                                                 >
                                                     Stáhnout
-                                                </button>
+                                                </a>
                                                 {!isViewMode && !img.primary && (
                                                     <button
                                                         type="button"
@@ -2321,7 +2329,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                     </div>
                                 </div>
                             )}
-                            {museumSubTab === 'attachments' && (
+                            {museumSubTab === 'attachments' && !isViewMode && (
                                 <div className="space-y-4">
                                     {!id ? (
                                         <div className="p-6 text-center bg-gray-50 border border-gray-200 rounded text-gray-500">
@@ -2409,9 +2417,10 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex items-center gap-1.5">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={async () => {
+                                                                    <a
+                                                                        href="#"
+                                                                        onClick={async event => {
+                                                                            event.preventDefault();
                                                                             try {
                                                                                 await downloadAttachmentFile(Number(id), att.id, att.originalFilename || att.filename || 'priloha');
                                                                             } catch (e: any) {
@@ -2421,7 +2430,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                                                                         className="inline-flex items-center gap-1 text-xs font-bold text-[#00204a] hover:underline px-2.5 py-1 bg-gray-100 rounded cursor-pointer"
                                                                     >
                                                                         <FaFileDownload /> Stáhnout
-                                                                    </button>
+                                                                    </a>
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleDeleteAttachment(att.id)}
