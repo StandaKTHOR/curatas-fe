@@ -27,8 +27,6 @@ export default function SafeImage({ src, alt, className }: SafeImageProps) {
     let resolvedSrc = src;
     if (resolvedSrc?.startsWith('/')) {
         resolvedSrc = resolveApiUrl(resolvedSrc);
-    } else if (API_BASE && resolvedSrc && /^http:\/\/(localhost|127\.0\.0\.1):8080/.test(resolvedSrc)) {
-        resolvedSrc = resolvedSrc.replace(/^http:\/\/(localhost|127\.0\.0\.1):8080/, API_BASE);
     }
 
     const token = localStorage.getItem('token');

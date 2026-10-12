@@ -97,6 +97,7 @@ export default function Detail() {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+            <p className="demus-source-panel">Současný katalogový počet: <strong>{it.quantity??'—'}</strong></p>
             {/* PERMANENTNÍ IDENTIFIKAČNÍ HLAVIČKA DLE CITEM */}
             <PermanentIdentificationHeader
                 fond={it.fundLegacyCode ? `[${it.fundLegacyCode}]` : (it.fundName || null)}

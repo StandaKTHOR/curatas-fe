@@ -90,7 +90,8 @@ export default function AdminItems() {
         material: searchParams.get('material') || '',
         technique: searchParams.get('technique') || '',
         location: searchParams.get('location') || '',
-        spravce: searchParams.get('spravce') || ''
+        spravce: searchParams.get('spravce') || '',
+        sourceDatingFromYear:searchParams.get('sourceDatingFromYear')||'',sourceDatingToYear:searchParams.get('sourceDatingToYear')||''
     }));
 
     const loadData = () => {
@@ -155,7 +156,7 @@ export default function AdminItems() {
         setFilters({
             accessionNumber: '', inventoryNumber: '', subCollection: '',
             objectType: '', author: '', datingFrom: '', datingTo: '',
-            originPlace: '', material: '', technique: '', location: '', spravce: ''
+            originPlace: '', material: '', technique: '', location: '', spravce: '',sourceDatingFromYear:'',sourceDatingToYear:''
         });
         setAdvancedFilterGroup(createEmptyGroup('AND'));
         setIsAdvancedFilterActive(false);
@@ -333,6 +334,8 @@ export default function AdminItems() {
                                 <label className={labelClass}>Autor / Původce</label>
                                 <input className={inputClass} value={filters.author} onChange={e => handleFilterChange('author', e.target.value)} />
                             </div>
+                            <label className="col-md-3">Původní DEMUS rok od<input type="number" aria-label="Původní DEMUS rok od" value={filters.sourceDatingFromYear} onChange={e=>handleFilterChange('sourceDatingFromYear',e.target.value)}/></label>
+                            <label className="col-md-3">Původní DEMUS rok do<input type="number" aria-label="Původní DEMUS rok do" value={filters.sourceDatingToYear} onChange={e=>handleFilterChange('sourceDatingToYear',e.target.value)}/></label>
                             <div className="col-md-3 flex flex-col justify-end">
                                 <button onClick={resetFilters} className="text-[10px] text-red-500 font-black uppercase hover:text-red-700 transition-colors mb-2 text-right">Resetovat vše</button>
                             </div>

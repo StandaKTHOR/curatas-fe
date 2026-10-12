@@ -14,13 +14,14 @@ vi.mock('../lib/api',async importOriginal => ({...await importOriginal<typeof im
     getNextAvailableNumbers:vi.fn(),listAttachments:vi.fn(),listItemImages:vi.fn(),createItem:vi.fn(),updateItem:vi.fn(),
     checkUniqueness:vi.fn(),createMuseumRecord:vi.fn(),updateMuseumRecord:vi.fn(),patchMuseumItem:vi.fn(),
     listMuseumAcquisitions:vi.fn(),updateMuseumAcquisition:vi.fn(),
-    patchAttachment:vi.fn(),
+    patchAttachment:vi.fn(),saveProfessionalRecord:vi.fn(),listProfessionalRecords:vi.fn(),
 }));
 const editor={itemId:7,etag:'"3"',museumSnapshot:{itemId:7,records:[]}};
 const detail={id:7,inventoryNumber:'TEST-7',title:'Testovací předmět',objectType:'Test',description:'',
     dimensions:[],parties:[],imageUrls:[],legacyData:{},_editSession:editor};
 beforeEach(()=>{
     vi.clearAllMocks();
+    vi.mocked(api.listProfessionalRecords).mockResolvedValue([]);
     editor.etag='"3"';
     vi.mocked(api.getAdminItem).mockResolvedValue({...detail});
     vi.mocked(api.getMuseumItem).mockResolvedValue({itemId:7,records:[]} as never);
@@ -109,11 +110,11 @@ describe('Update2 museum workflows',()=>{
         expect(screen.getByRole('button',{name:'Uložit záznam'})).toBeDisabled();
     });
     it('preserves source timestamps and sends numeric origin years',async()=>{
-        vi.mocked(api.createMuseumRecord).mockResolvedValue({} as never);
+        vi.mocked(api.saveProfessionalRecord).mockResolvedValue({} as never);
         render(<MuseumSection itemId={7} section="origin" editSession={editor}/>);
         await userEvent.type(await screen.findByLabelText('Rok od'),'1880');
         await userEvent.click(screen.getByRole('button',{name:'Uložit záznam'}));
-        expect(api.createMuseumRecord).toHaveBeenCalledWith(7,'ORIGIN',{RokOd_VZ:1880},null,null,editor);
+        expect(api.saveProfessionalRecord).toHaveBeenCalledWith(7,'ORIGIN',{fields:{kind:'ORIGIN',RokOd_VZ:1880}},editor,undefined);
     });
     it('clears acquisition dates explicitly while preserving other properties',async()=>{
         const row={id:1,accessionNumber:'A1',acquisitionDate:'1900-01-01',acquiredFrom:'Původní vlastník',legacyData:null};

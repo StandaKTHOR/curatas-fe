@@ -24,6 +24,8 @@ interface AdvancedFilterBuilderProps {
 }
 
 export const FILTER_FIELDS = [
+    {value:'historicalInventoryNumber',label:'Historické inventární číslo (alias; přesné mezery)'},
+    {value:'acquisitionRecordNumber',label:'Přírůstkové číslo akvizičního záznamu'},
     { value: 'inventoryNumber', label: 'Inventární číslo (inv_cislo)' },
     { value: 'inventory.series', label: 'Inventární řada (Rada_S)' },
     { value: 'inventory.ordinal', label: 'Pořadové číslo (PorC_S)' },
@@ -78,7 +80,7 @@ export const FILTER_OPERATORS = [
 
 export function filterOperatorsForField(field: string) {
     const textComponent = (field.startsWith('inventory.') &&
-        !['inventory.ordinal', 'inventory.hierarchyOrdinal'].includes(field)) || field === 'determinedBy';
+        !['inventory.ordinal', 'inventory.hierarchyOrdinal'].includes(field)) || ['determinedBy','historicalInventoryNumber','acquisitionRecordNumber'].includes(field);
     return textComponent ? FILTER_OPERATORS.filter(op =>
         !['GREATER_THAN', 'LESS_THAN', 'BETWEEN'].includes(op.value)) : FILTER_OPERATORS;
 }

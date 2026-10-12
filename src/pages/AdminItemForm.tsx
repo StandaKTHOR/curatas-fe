@@ -1,3 +1,6 @@
+import DemusSourceIdentity from '../components/DemusSourceIdentity';
+import {SourceAcquisitionView,VocabularyAssociations} from '../components/MuseumSourceEvidence';
+import {reviewedCalendarDate} from '../lib/dating';
 import AttachmentCaptionEditor from '../components/AttachmentCaptionEditor';
 import NewInventoryNumber from '../components/NewInventoryNumber';
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
@@ -65,18 +68,6 @@ const AUTHOR_ROLES = [
     'Jiná role'
 ];
 
-const formatDatingDate = (val: any) => {
-    if (!val && val !== 0) return null;
-    const s = String(val).trim();
-    if (/^-?\d{1,4}$/.test(s)) {
-        const isNeg = s.startsWith('-');
-        const numStr = isNeg ? s.substring(1) : s;
-        const padded = numStr.padStart(4, '0');
-        return `${isNeg ? '-' : ''}${padded}-01-01`;
-    }
-    return s.length >= 10 ? s.substring(0, 10) : null;
-};
-
 const buildItemPayload = (currentForm: any, auditCommentOverride?: string) => {
     const currentAuditComment = auditCommentOverride !== undefined
         ? auditCommentOverride
@@ -130,8 +121,8 @@ const buildItemPayload = (currentForm: any, auditCommentOverride?: string) => {
         materialNote: currentForm.materialNote || '',
         technique: currentForm.technique || '',
         datingText: currentForm.datingText || '',
-        datingFrom: formatDatingDate(currentForm.datingFrom),
-        datingTo: formatDatingDate(currentForm.datingTo),
+        datingFrom: reviewedCalendarDate(currentForm.datingFrom),
+        datingTo: reviewedCalendarDate(currentForm.datingTo),
         countryOfOrigin: currentForm.countryOfOrigin || '',
         originPlace: currentForm.originPlace || '',
         findingLocality: currentForm.findingLocality || '',
@@ -193,7 +184,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
     const [activeTab, setActiveTab] = useState('identity');
     const [museumSubTab, setMuseumSubTab] = useState<
-        'documentation' | 'classification' | 'determination' | 'deaccession' | 'manipulation' | 'action' | 'iso' | 'demus' | 'attachments' | 'audit' | 'origin' | 'reference' | 'plus'
+        'documentation' | 'classification' | 'determination' | 'deaccession' | 'manipulation' | 'action' | 'iso' | 'demus' | 'attachments' | 'audit' | 'origin' | 'reference' | 'plus' | 'vocabularies'
     >('documentation');
 
     const [loading, setLoading] = useState(false);
@@ -648,11 +639,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                     editSessionRef.current = data._editSession;
                     persistedSnapshotRef.current = data;
                     const safeVal = (v: any) => (v === null || v === undefined ? '' : v);
-                    const safeYear = (v: any) => {
-                        if (!v) return '';
-                        const s = String(v);
-                        return s.length >= 4 ? s.substring(0, 4) : s;
-                    };
+                    const safeYear = (v: any) => v == null ? '' : String(v);
 
                     setInitialNumbers({
                         inventory: safeVal(data.inventoryNumber),
@@ -834,13 +821,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         }
     };
 
-    const setCenturyDating = (fromYear: number, toYear: number, text: string) => {
-        setForm((prev: any) => ({
-            ...prev,
-            datingFrom: fromYear,
-            datingTo: toYear,
-            datingText: prev.datingText ? prev.datingText : text
-        }));
+    const setCenturyDating = (_from: number, _to: number, text: string) => {
+        setForm((prev: any) => ({...prev, datingText:text}));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -901,14 +883,9 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             }
         }
 
-        if (form.datingFrom !== '' && form.datingFrom !== null && form.datingFrom !== undefined &&
-            form.datingTo !== '' && form.datingTo !== null && form.datingTo !== undefined) {
-            const fromYear = Number(form.datingFrom);
-            const toYear = Number(form.datingTo);
-            if (!isNaN(fromYear) && !isNaN(toYear) && fromYear > toYear) {
-                setGlobalError('Rok od nesmí být větší než rok do.');
-                setActiveTab('description');
-                return;
+        for (const key of ['datingFrom','datingTo']) {
+            try {reviewedCalendarDate(form[key]);} catch(e) {
+                setFieldErrors({[key]:(e as Error).message});setGlobalError((e as Error).message);setActiveTab('identity');return;
             }
         }
 
@@ -932,11 +909,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                     editSessionRef.current = updated._editSession;
                     persistedSnapshotRef.current = updated;
                     const safeVal = (v: any) => (v === null || v === undefined ? '' : v);
-                    const safeYear = (v: any) => {
-                        if (!v) return '';
-                        const s = String(v);
-                        return s.length >= 4 ? s.substring(0, 4) : s;
-                    };
+                    const safeYear = (v: any) => v == null ? '' : String(v);
                     setInitialNumbers({
                         inventory: safeVal(updated.inventoryNumber),
                         accession: safeVal(updated.accessionNumber)
@@ -1191,7 +1164,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                     ['Historie','museum','demus'],['Dokumentace','museum','documentation'],['Reference','museum','reference'],
                     ['Manipulace','museum','manipulation'],['Akce','museum','action'],['ISO','museum','iso'],
                     ['Plus','museum','plus'],['Vyřazení','museum','deaccession'],['Akvizice','provenance',''],
-                    ['Přílohy','museum','attachments'],['Umístění','storage',''],['Foto','photos',''],['Audit','museum','audit']].map(([label, main, sub]) =>
+                    ['Číselníkové vazby','museum','vocabularies'],['Přílohy','museum','attachments'],['Umístění','storage',''],['Foto','photos',''],['Audit','museum','audit']].map(([label, main, sub]) =>
                     <button key={label} type="button" aria-pressed={activeTab === main && (!sub || museumSubTab === sub)}
                         onClick={() => {setActiveTab(main); if (sub) setMuseumSubTab(sub as any);}}>{label === 'Přílohy' ? `Přílohy (${attachments.length})` : label}</button>)}
             </nav>
@@ -1224,6 +1197,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             )}
 
             {/* TĚLO FORMULÁŘE */}
+            {isViewMode && id && activeTab === 'museum' && museumSubTab === 'demus' && <DemusSourceIdentity itemId={Number(id)}/>}
+            {isViewMode && id && activeTab === 'museum' && museumSubTab === 'vocabularies' && <VocabularyAssociations itemId={Number(id)} data={(editSessionRef.current?.museumSnapshot as any)?.vocabularies}/>}
             <form id="item-editor" onSubmit={handleSubmit} className="p-6 space-y-4 demus-editor">
                 <fieldset disabled={isViewMode || loading}>
                 {/* 1. ZÁKLADNÍ ÚDAJE & IDENTIFIKACE */}
@@ -1297,6 +1272,11 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             <p>Zapsal: {form.legacyCreatedBy || '—'}</p><p>Datum zápisu: {form.legacyCreatedAt || '—'}</p>
                             <p>Změnil: {form.legacyUpdatedBy || '—'}</p><p>Datum změny: {form.legacyUpdatedAt || '—'}</p>
                         </div>}
+                        <div className="space-y-1"><label htmlFor="quantity">Současný katalogový počet</label>
+                            <input id="quantity" type="number" step="1" value={form.quantity??''}
+                                onChange={e=>setForm((prev:any)=>({...prev,quantity:e.target.value===''?null:Number(e.target.value)}))}/>
+                            {fieldErrors.quantity&&<p role="alert">{fieldErrors.quantity}</p>}
+                        </div>
                         {/* FOND A PODSBÍRKA DLE CITEM – NEZÁVISLÁ POLA */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
@@ -1722,33 +1702,29 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1">
-                                    <label htmlFor="datingFrom">Rok od</label>
+                                    <label htmlFor="datingFrom">Revidované datum od (ISO)</label>
                                     <input
-                                        type="number"
+                                        type="text"
                                         id="datingFrom"
-                                        min="-5000"
-                                        max="2100"
-                                        step="1"
                                         className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-800 font-mono focus:outline-none focus:border-[#00204a]"
                                         value={form.datingFrom !== undefined && form.datingFrom !== null ? form.datingFrom : ''}
                                         onChange={e => setForm({ ...form, datingFrom: e.target.value })}
-                                        placeholder="např. 1850"
+                                        placeholder="např. 1850-06-15"
                                     />
+                                    {fieldErrors.datingFrom&&<p role="alert">{fieldErrors.datingFrom}</p>}
                                 </div>
 
                                 <div className="space-y-1">
-                                    <label htmlFor="datingTo">Rok do</label>
+                                    <label htmlFor="datingTo">Revidované datum do (ISO)</label>
                                     <input
-                                        type="number"
+                                        type="text"
                                         id="datingTo"
-                                        min="-5000"
-                                        max="2100"
-                                        step="1"
                                         className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-800 font-mono focus:outline-none focus:border-[#00204a]"
                                         value={form.datingTo !== undefined && form.datingTo !== null ? form.datingTo : ''}
                                         onChange={e => setForm({ ...form, datingTo: e.target.value })}
-                                        placeholder="např. 1870"
+                                        placeholder="např. 1870-06-15"
                                     />
+                                    {fieldErrors.datingTo&&<p role="alert">{fieldErrors.datingTo}</p>}
                                 </div>
 
                                 <div className="space-y-1">
@@ -1781,6 +1757,9 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
                 {/* 2. POPIS & ROZMĚRY */}
                 {activeTab === 'description' && (<div className="space-y-4">
+                    <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode}
+                        itemId={id?Number(id):undefined} section="materialTuples" onSave={handleSectionSave}/>
+                    <h3>Současná hlavní pole materiálu a techniky</h3>
                         {/* Materiál a Technika */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <TreeChoice type="MATERIAL" label="Materiál (Číselník)" value={form.materialDictionaryId ?? null}
@@ -2038,7 +2017,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                 {/* 3. PŮVOD & NABYTÍ */}
                 {activeTab === 'provenance' && (
                     <div className="space-y-4 animate-in fade-in duration-150">
-                        {/* Evidence akvizic */}
+                        <SourceAcquisitionView data={(editSessionRef.current?.museumSnapshot as any)?.sourceAcquisition}/>
+                                                {/* Evidence akvizic */}
                         <div className="p-4 bg-slate-50 border border-slate-200 rounded">
                             <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-2">
                                 Akviziční záznamy předmětu (1:N)
@@ -2327,13 +2307,16 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             )}
                             {museumSubTab === 'origin' && <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode}
                                 itemId={id ? Number(id) : undefined} section="origin" onSave={handleSectionSave} />}
-                            {museumSubTab === 'reference' && <div><p>Reference: vazby na literaturu nejsou v aktuálním API ověřeny. Dostupná původní evidence:</p><DemusLegacyDataView legacyData={form.legacyData} /></div>}
+                            {museumSubTab === 'reference' && <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current}
+                                readOnly={isViewMode} itemId={id?Number(id):undefined} section="bibliography" onSave={handleSectionSave}/>}
                             {museumSubTab === 'plus' && <div><p>Plus: význam a zapisovatelný kontrakt polí Plus*/Sluz* čekají na ověření. Původní evidence zůstává pouze pro čtení:</p><DemusLegacyDataView legacyData={form.legacyData} /></div>}
                             {museumSubTab === 'iso' && (
                                 <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="iso" onSave={handleSectionSave} />
                             )}
+                            {museumSubTab === 'vocabularies' && id && !isViewMode && <VocabularyAssociations itemId={Number(id)} data={(editSessionRef.current?.museumSnapshot as any)?.vocabularies}/>}
                             {museumSubTab === 'demus' && (
                                 <div className="space-y-4">
+                                    {id && !isViewMode && <DemusSourceIdentity itemId={Number(id)}/>}
                                     <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="history" onSave={handleSectionSave} />
                                     <div className="p-4 bg-gray-50 border border-gray-200 rounded space-y-4">
                                         <DemusLegacyDataView legacyData={form.legacyData} />

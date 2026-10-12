@@ -58,7 +58,6 @@ describe('Catalog Page UAT State Preservation', () => {
         objectType: '',
         originPlace: '',
         technique: '',
-        location: '',
         spravce: '',
       });
     });

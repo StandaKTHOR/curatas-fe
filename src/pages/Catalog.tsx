@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { GovButton, GovFormInput, GovFormLabel } from '@gov-design-system-ce/react';
+import { GovButton } from '@gov-design-system-ce/react';
 import { listPublicItems, listWorksets, WorksetSummary } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import ColumnSelectorModal, { DEFAULT_COLUMNS, ColumnConfig } from '../components/ColumnSelectorModal';
@@ -25,7 +25,7 @@ export default function Catalog() {
     const filterKeys = [
         'accessionNumber', 'inventoryNumber', 'title', 'author', 'material',
         'datingFrom', 'datingTo', 'subCollection', 'objectType', 'originPlace',
-        'technique', 'location', 'spravce'
+        'technique', 'spravce'
     ];
 
     // Načteme filtry z URL
@@ -236,28 +236,25 @@ export default function Catalog() {
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-300 pb-20">
+        <div className="space-y-2 pb-8 demus-public-catalog">
 
             {/* HLAVIČKA KATALOGU */}
             <div className="border-b border-gray-200 pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                 <div>
-                    <h2 className="text-2xl font-black text-gray-900 tracking-tight">Katalog sbírek (Host)</h2>
+                    <h2 className="text-lg font-bold text-gray-900">Katalog sbírek (Host)</h2>
                     <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mt-1">
                         Moravské zemské muzeum • Badatelský přístup k databázi
                     </p>
                 </div>
-                <div className="bg-white px-4 py-2 border border-gray-200 rounded text-right shadow-sm">
-                    <span className="text-2xl font-black text-gray-800 block leading-none">{totalElements.toLocaleString('cs-CZ')}</span>
-                    <span className="text-[9px] text-gray-400 uppercase font-bold tracking-wider block mt-1">Celkem nalezeno</span>
-                </div>
+                <p className="text-xs">Celkem nalezeno: <strong>{totalElements.toLocaleString('cs-CZ')}</strong></p>
             </div>
 
             {/* VYHLEDÁVÁNÍ & FILTR PANEL */}
-            <div className="bg-white p-5 rounded border border-gray-200 shadow-sm space-y-4">
+            <div className="bg-white p-2 border border-gray-300 space-y-2">
                 <div className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="flex-1 space-y-1">
-                        <GovFormLabel htmlFor="q">Rychlé fulltextové vyhledávání</GovFormLabel>
-                        <GovFormInput
+                        <label htmlFor="q">Rychlé fulltextové vyhledávání</label>
+                        <input
                             id="q"
                             placeholder="Název, autor, inventární nebo přírůstkové číslo..."
                             value={localSearch}
@@ -286,52 +283,48 @@ export default function Catalog() {
                 {showAdvanced && (
                     <div className="pt-5 border-t border-dashed border-gray-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 animate-in slide-in-from-top-4 duration-400">
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="accessionNumber">Přírůstkové číslo</GovFormLabel>
-                            <GovFormInput id="accessionNumber" value={localFilters.accessionNumber} onChange={(e: any) => handleFilterChange('accessionNumber', e.target.value)} />
+                            <label htmlFor="accessionNumber">Přírůstkové číslo</label>
+                            <input id="accessionNumber" value={localFilters.accessionNumber} onChange={(e: any) => handleFilterChange('accessionNumber', e.target.value)} />
                         </div>
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="inventoryNumber">Inventární číslo</GovFormLabel>
-                            <GovFormInput id="inventoryNumber" value={localFilters.inventoryNumber} onChange={(e: any) => handleFilterChange('inventoryNumber', e.target.value)} />
+                            <label htmlFor="inventoryNumber">Inventární číslo</label>
+                            <input id="inventoryNumber" value={localFilters.inventoryNumber} onChange={(e: any) => handleFilterChange('inventoryNumber', e.target.value)} />
                         </div>
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="title">Název předmětu</GovFormLabel>
-                            <GovFormInput id="title" value={localFilters.title} onChange={(e: any) => handleFilterChange('title', e.target.value)} />
+                            <label htmlFor="title">Název předmětu</label>
+                            <input id="title" value={localFilters.title} onChange={(e: any) => handleFilterChange('title', e.target.value)} />
                         </div>
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="author">Původce / Autor</GovFormLabel>
-                            <GovFormInput id="author" value={localFilters.author} onChange={(e: any) => handleFilterChange('author', e.target.value)} />
+                            <label htmlFor="author">Původce / Autor</label>
+                            <input id="author" value={localFilters.author} onChange={(e: any) => handleFilterChange('author', e.target.value)} />
                         </div>
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="material">Materiál</GovFormLabel>
-                            <GovFormInput id="material" value={localFilters.material} onChange={(e: any) => handleFilterChange('material', e.target.value)} />
+                            <label htmlFor="material">Materiál</label>
+                            <input id="material" value={localFilters.material} onChange={(e: any) => handleFilterChange('material', e.target.value)} />
                         </div>
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="technique">Technika</GovFormLabel>
-                            <GovFormInput id="technique" value={localFilters.technique} onChange={(e: any) => handleFilterChange('technique', e.target.value)} />
+                            <label htmlFor="technique">Technika</label>
+                            <input id="technique" value={localFilters.technique} onChange={(e: any) => handleFilterChange('technique', e.target.value)} />
                         </div>
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="subCollection">Fond / Podsbírka</GovFormLabel>
-                            <GovFormInput id="subCollection" value={localFilters.subCollection} onChange={(e: any) => handleFilterChange('subCollection', e.target.value)} />
+                            <label htmlFor="subCollection">Podsbírka</label>
+                            <input id="subCollection" value={localFilters.subCollection} onChange={(e: any) => handleFilterChange('subCollection', e.target.value)} />
                         </div>
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="objectType">Skupina předmětů</GovFormLabel>
-                            <GovFormInput id="objectType" value={localFilters.objectType} onChange={(e: any) => handleFilterChange('objectType', e.target.value)} />
+                            <label htmlFor="objectType">Skupina předmětů</label>
+                            <input id="objectType" value={localFilters.objectType} onChange={(e: any) => handleFilterChange('objectType', e.target.value)} />
                         </div>
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="originPlace">Místo vzniku</GovFormLabel>
-                            <GovFormInput id="originPlace" value={localFilters.originPlace} onChange={(e: any) => handleFilterChange('originPlace', e.target.value)} />
+                            <label htmlFor="originPlace">Místo vzniku</label>
+                            <input id="originPlace" value={localFilters.originPlace} onChange={(e: any) => handleFilterChange('originPlace', e.target.value)} />
                         </div>
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="location">Depozitář (Umístění)</GovFormLabel>
-                            <GovFormInput id="location" value={localFilters.location} onChange={(e: any) => handleFilterChange('location', e.target.value)} />
+                            <label htmlFor="datingFrom">Rok od</label>
+                            <input id="datingFrom" type="number" value={localFilters.datingFrom} onChange={(e: any) => handleFilterChange('datingFrom', e.target.value)} />
                         </div>
                         <div className="space-y-1">
-                            <GovFormLabel htmlFor="datingFrom">Rok od</GovFormLabel>
-                            <GovFormInput id="datingFrom" type="number" value={localFilters.datingFrom} onChange={(e: any) => handleFilterChange('datingFrom', e.target.value)} />
-                        </div>
-                        <div className="space-y-1">
-                            <GovFormLabel htmlFor="datingTo">Rok do</GovFormLabel>
-                            <GovFormInput id="datingTo" type="number" value={localFilters.datingTo} onChange={(e: any) => handleFilterChange('datingTo', e.target.value)} />
+                            <label htmlFor="datingTo">Rok do</label>
+                            <input id="datingTo" type="number" value={localFilters.datingTo} onChange={(e: any) => handleFilterChange('datingTo', e.target.value)} />
                         </div>
                     </div>
                 )}
@@ -475,11 +468,6 @@ export default function Catalog() {
                                             Podsbírka {renderSortIndicator('subCollection')}
                                         </th>
                                     )}
-                                    {isColVisible('locationBuilding') && (
-                                        <th scope="col" className="p-3 cursor-pointer hover:bg-gray-200" onClick={() => handleSort('locationBuilding')}>
-                                            Umístění {renderSortIndicator('locationBuilding')}
-                                        </th>
-                                    )}
                                     {isColVisible('spravce') && (
                                         <th scope="col" className="p-3 cursor-pointer hover:bg-gray-200" onClick={() => handleSort('spravce')}>
                                             Správce {renderSortIndicator('spravce')}
@@ -553,11 +541,6 @@ export default function Catalog() {
                                             )}
                                             {isColVisible('subCollection') && (
                                                 <td className={`${rowPad} text-gray-500`}>{it.subCollection || '—'}</td>
-                                            )}
-                                            {isColVisible('locationBuilding') && (
-                                                <td className={`${rowPad} text-gray-500 break-words`}>
-                                                    {it.locationBuilding ? `${it.locationBuilding}${it.locationRoom ? `, m. ${it.locationRoom}` : ''}` : '—'}
-                                                </td>
                                             )}
                                             {isColVisible('spravce') && (
                                                 <td className={`${rowPad} text-gray-500`}>{it.spravce || '—'}</td>
@@ -681,7 +664,7 @@ export default function Catalog() {
             {/* MODÁL NASTAVENÍ SLOUPCŮ */}
             <ColumnSelectorModal
                 isOpen={showColModal}
-                columns={columns}
+                columns={columns.filter(column=>column.id!=='locationBuilding')}
                 onSave={handleSaveColumns}
                 onClose={() => setShowColModal(false)}
             />
