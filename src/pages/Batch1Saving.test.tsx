@@ -1,3 +1,4 @@
+import { invalidateHierarchy } from '../components/ThreeLevelDictionarySelect';
 import {act, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {createMemoryRouter, Link, RouterProvider} from 'react-router-dom';
@@ -14,7 +15,7 @@ let version: number;
 const museum = () => ({itemId:7,records:[],legacyArchived:saved.legacyArchived});
 const snapshot = () => ({...saved,_editSession:{itemId:7,etag:'"'+version+'"',museumSnapshot:museum()}});
 beforeEach(() => {
-    vi.resetAllMocks(); sessionStorage.clear(); version=3;
+    vi.resetAllMocks(); invalidateHierarchy(); sessionStorage.clear(); version=3;
     saved={id:7,inventoryNumber:'BATCH-7',accessionNumber:'',title:'Původní název',objectType:'Test',
         description:'',published:false,legacyArchived:false,dimensions:[],parties:[],imageUrls:[],legacyData:{},
         createdByUser:'creator',createdAt:'2026-10-13T10:00:00Z',modifiedByUser:'curator',lastModifiedAt:'2026-10-14T10:00:00Z'};
@@ -108,4 +109,39 @@ describe('BATCH 1 saving and navigation', () => {
         await waitFor(()=>expect(router.state.location.pathname).toBe('/admin/items/edit/7'));
         expect(api.createItem).toHaveBeenCalledTimes(1);expect(window.confirm).not.toHaveBeenCalled();
     });
+});
+
+const hierarchyFixture = () => {
+    vi.mocked(api.getDictionaryTree).mockImplementation(async type => [{ id: type === 'MATERIAL' ? 10 : 40, code: null, label: 'Synthetic root', children: [
+        { id: type === 'MATERIAL' ? 20 : 50, code: null, label: 'Synthetic middle', children: [
+            { id: type === 'MATERIAL' ? 30 : 60, code: null, label: 'Synthetic leaf', children: [] } ] } ] }]);
+};
+it('BATCH 2 saves hierarchy with normal fields, reloads a clean draft and keeps the historical text', async () => {
+    hierarchyFixture(); saved.material='Unmapped DEMUS material'; saved.technique='Unmapped DEMUS technique';
+    mount(); await screen.findByDisplayValue('Původní název');
+    await userEvent.type(screen.getByLabelText(/Název sbírkového předmětu/),' nový');
+    await userEvent.click(screen.getByRole('button', { name: 'MatTech' }));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Materiál (Číselník) — úroveň 1' })).toBeEnabled());
+    for (const [label, ids] of [['Materiál', [10,20,30]], ['Technika', [40,50,60]]] as const) {
+        for (let level=0;level<3;level++) await userEvent.selectOptions(screen.getByRole('combobox', { name: `${label} (Číselník) — úroveň ${level+1}` }), String(ids[level]));
+    }
+    expect(unload()).toBe(true); await save(); await screen.findByText(/Změny byly úspěšně uloženy/);
+    expect(api.updateItem).toHaveBeenCalledWith(7, expect.objectContaining({title:'Původní název nový', materialDictionaryId:30, techniqueDictionaryId:60}),expect.anything());
+    expect(saved.material).toBe('Unmapped DEMUS material');expect(saved.technique).toBe('Unmapped DEMUS technique');
+    expect(screen.getByRole('combobox',{name:'Materiál (Číselník) — úroveň 3'})).toHaveValue('30');expect(unload()).toBe(false);
+    await save();expect(api.updateItem).toHaveBeenCalledTimes(1);
+});
+it('BATCH 2 leaves unknown text and binding untouched during an unrelated save',async()=>{
+    saved.material='Unmapped DEMUS material'; saved.materialDictionaryId=99;hierarchyFixture();
+    mount();await screen.findByDisplayValue('Původní název');await userEvent.click(screen.getByLabelText('Zveřejněno'));
+    await save();await screen.findByText(/Změny byly úspěšně uloženy/);
+    expect(saved.material).toBe('Unmapped DEMUS material');expect(saved.materialDictionaryId).toBe(99);expect(unload()).toBe(false);
+});
+it('BATCH 2 retains hierarchy draft on a stale-version conflict',async()=>{
+    hierarchyFixture();vi.mocked(api.updateItem).mockRejectedValue(new api.ApiError(412,'Konflikt verzí'));
+    mount();await screen.findByDisplayValue('Původní název');await userEvent.click(screen.getByRole('button',{name:'MatTech'}));
+    await waitFor(()=>expect(screen.getByRole('combobox',{name:'Materiál (Číselník) — úroveň 1'})).toBeEnabled());
+    await userEvent.selectOptions(screen.getByRole('combobox',{name:'Materiál (Číselník) — úroveň 1'}),'10');
+    await save();await screen.findByText(/Konflikt verzí/);expect(unload()).toBe(true);
+    expect(screen.getByRole('combobox',{name:'Materiál (Číselník) — úroveň 1'})).toHaveValue('10');
 });

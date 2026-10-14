@@ -1,3 +1,4 @@
+import ThreeLevelDictionarySelect from '../components/ThreeLevelDictionarySelect';
 import EditorNavigationGuard from '../components/EditorNavigationGuard';
 import DemusSourceIdentity from '../components/DemusSourceIdentity';
 import {SourceAcquisitionView,VocabularyAssociations} from '../components/MuseumSourceEvidence';
@@ -686,7 +687,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                         author: (data.authors && data.authors.length > 0) ? data.authors[0] : (data.author || ''),
                         authorRole: initialParties.length > 0 ? initialParties[0].role : 'Autor',
                         parties: initialParties,
-                        material: (data.materials && data.materials.length > 0) ? data.materials[0] : (data.material || ''),
+                        material: data.material ?? data.materials?.join(', ') ?? '',
                         weight: safeVal(data.weight),
                         title: safeVal(data.title),
                         description: safeVal(data.description),
@@ -1818,11 +1819,11 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                     <h3>Současná hlavní pole materiálu a techniky</h3>
                         {/* Materiál a Technika */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <TreeChoice type="MATERIAL" label="Materiál (Číselník)" value={form.materialDictionaryId ?? null}
-                                onChange={(dictionaryId, choice) => setForm((prev: any) => ({ ...prev, materialDictionaryId: dictionaryId, material: choice?.rawLabel ?? choice?.label ?? '' }))} />
+                            <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál (Číselník)" readOnly={isViewMode} historicalValue={form.material} value={form.materialDictionaryId ?? null}
+                                onChange={dictionaryId => setForm((prev: any) => ({ ...prev, materialDictionaryId: dictionaryId }))} />
 
-                            <TreeChoice type="TECHNIQUE" label="Technika (Číselník)" value={form.techniqueDictionaryId ?? null}
-                                onChange={(dictionaryId, choice) => setForm((prev: any) => ({ ...prev, techniqueDictionaryId: dictionaryId, technique: choice?.rawLabel ?? choice?.label ?? '' }))} />
+                            <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika (Číselník)" readOnly={isViewMode} historicalValue={form.technique} value={form.techniqueDictionaryId ?? null}
+                                onChange={dictionaryId => setForm((prev: any) => ({ ...prev, techniqueDictionaryId: dictionaryId }))} />
                         </div>
                         <p>Text materiálu: {form.material || '—'} · Text techniky: {form.technique || '—'}</p>
 
