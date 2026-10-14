@@ -763,8 +763,30 @@ export async function getDictionaryTree(type: string) {
     const r = await fetch(resolveApiUrl(`/api/v1/dictionaries/tree?type=${encodeURIComponent(type)}`), {
         headers: getAuthHeader()
     });
-    if (!r.ok) throw new Error('Načtení stromu číselníku selhalo');
-    return r.json();
+    if (r.status === 401) throw new ApiError(401, 'Číselník nelze načíst: přihlášení vypršelo nebo chybí. Přihlaste se znovu.');
+    if (r.status === 403) throw new ApiError(403, 'Číselník nelze načíst: přístup není povolen pro tento účet nebo síť.');
+    if (!r.ok) throw new ApiError(r.status, `Načtení stromu číselníku selhalo (HTTP ${r.status}).`);
+    let tree: unknown;
+    try { tree = await r.json(); } catch { throw new Error('Server nevrátil čitelnou odpověď číselníku.'); }
+    if (['MATERIAL', 'TECHNIQUE'].includes(type.toUpperCase())) {
+        // This endpoint returns a complete tree, not a lazy node/hasChildren response.
+        // Missing children must never be mistaken for an empty, fully loaded leaf.
+        const invalid = () => new Error('Server vrátil neúplnou nebo neplatnou hierarchii číselníku. Potomky nelze určit; uložená vazba zůstává zachována.');
+        if (!Array.isArray(tree)) throw invalid();
+        const seen = new Set<number>();
+        const pending = tree.map(node => ({node, parentId: null as number | null}));
+        while (pending.length) {
+            const {node, parentId} = pending.pop()!;
+            if (!node || typeof node !== 'object' || !Number.isSafeInteger(node.id) || node.id <= 0 ||
+                typeof node.label !== 'string' || !Array.isArray(node.children) || seen.has(node.id) ||
+                (node.type !== undefined && node.type !== type.toUpperCase()) ||
+                (node.parentId !== undefined && node.parentId !== parentId) ||
+                (node.hasChildren !== undefined && node.hasChildren !== (node.children.length > 0))) throw invalid();
+            seen.add(node.id);
+            pending.push(...node.children.map((child: any) => ({node: child, parentId: node.id})));
+        }
+    }
+    return tree as any;
 }
 
 // ==========================================

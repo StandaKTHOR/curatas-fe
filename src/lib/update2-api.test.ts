@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, getAdminItem, updateItem, patchMuseumItem, updateMuseumRecord,
     createMuseumRecord, deleteMuseumRecord, updateMuseumAcquisition, uploadAttachment, downloadAttachmentFile,
-    getAttachmentCount, patchAttachment, listAdminItems, saveProfessionalRecord, getDemusLineage, listProfessionalRecords } from './api';
+    getAttachmentCount, patchAttachment, listAdminItems, saveProfessionalRecord, getDemusLineage, listProfessionalRecords, getDictionaryTree } from './api';
 import type { ItemEditSession } from './editSession';
 
 const fetchMock = vi.fn();
@@ -154,4 +154,30 @@ it.each(['network','server','body'])('invalidates the CREATE token after uncerta
 it('retains token after definitive CREATE rejection',async()=>{
  const editor=session();fetchMock.mockResolvedValue(reply({message:'Invalid'},400));
  await expect(saveProfessionalRecord(7,'DOCUMENTATION',{fields:{kind:'DOCUMENTATION',Dokument_DK:'Proof'}},editor)).rejects.toMatchObject({status:400});expect(editor.etag).toBe('"3"');
+});
+
+
+describe('BATCH23 real dictionary HTTP contract and diagnostic states',()=>{
+    it.each([401,403,500])('reports HTTP %s as an error with its status, never as an empty leaf',async status=>{
+        fetchMock.mockResolvedValue(reply({message:'upstream error'},status));
+        await expect(getDictionaryTree('MATERIAL')).rejects.toMatchObject({status});
+    });
+    it.each([null,{},[{id:1,label:'bavlna'}],[{id:1,label:'bavlna',children:null}],
+        [{id:1,label:'bavlna',children:[],hasChildren:true}],
+        [{id:1,label:'bavlna',children:[{id:2,label:'child',parentId:99,children:[]}]}],
+        [{id:1,label:'bavlna',children:[{id:1,label:'duplicate',children:[]}]}]
+    ])('rejects incomplete/malformed tree %j without treating it as a terminal node',async tree=>{
+        fetchMock.mockResolvedValue(reply(tree));
+        await expect(getDictionaryTree('MATERIAL')).rejects.toThrow(/neúplnou nebo neplatnou hierarchii/);
+    });
+    it('distinguishes empty loaded trees, root leaves and roots with three complete levels',async()=>{
+        const leaf={id:1,type:'MATERIAL',code:'bavlna',label:'bavlna',parentId:null,children:[]};
+        const branch={id:2,type:'MATERIAL',code:null,label:'root',parentId:null,children:[
+            {id:3,type:'MATERIAL',label:'middle',parentId:2,children:[{id:4,type:'MATERIAL',label:'leaf',parentId:3,children:[]}]}]};
+        for(const tree of [[],[leaf],[branch]]){fetchMock.mockResolvedValue(reply(tree));expect(await getDictionaryTree('MATERIAL')).toEqual(tree);}
+    });
+    it('rejects successful HTML as unreadable data rather than an empty dictionary',async()=>{
+        fetchMock.mockResolvedValue(new Response('<html>proxy</html>',{status:200}));
+        await expect(getDictionaryTree('TECHNIQUE')).rejects.toThrow(/čitelnou odpověď/);
+    });
 });
