@@ -19,6 +19,7 @@ async function request(path: string, signal: AbortSignal, init: RequestInit = {}
 }
 const itemPath = (id: string) => `/${encodeURIComponent(id)}`;
 export const importApi: ImportApi = {
+  capabilities: async signal => (await request('/capabilities', signal)).json(),
   create: async signal => (await request('', signal, { method: 'POST' })).json(),
   upload: async (id, file, signal) => {
     const body = new FormData();

@@ -174,7 +174,19 @@ describe('akvizice', () => {
         expect(await screen.findByText('A1')).toBeInTheDocument();
         expect(screen.getByText('A2')).toBeInTheDocument();
         await userEvent.click(screen.getAllByRole('button', { name: 'Upravit' })[0]);
+        await userEvent.type(screen.getByLabelText('Předchozí vlastník'),'Reviewed owner');
         await userEvent.click(screen.getByRole('button', { name: 'Uložit akvizici' }));
         expect(updateMuseumAcquisition).toHaveBeenCalledWith(7, 1, expect.objectContaining({ accessionNumber: 'A1' }), undefined);
     });
+});
+
+describe('BATCH 1.1 professional CREATE recovery',()=>{
+ it.each(['refresh','network'])('prevents duplicate professional CREATE after %s failure',async mode=>{
+  const drafts={current:{}};
+  if(mode==='refresh'){vi.mocked(saveProfessionalRecord).mockResolvedValue({id:55,kind:'DOCUMENTATION',payload:{Dokument_DK:'Proof'},dictionaryId:null,partyId:null} as any);vi.mocked(getMuseumItem).mockResolvedValueOnce(detail).mockRejectedValue(new Error('Refresh failed'));}
+  else vi.mocked(saveProfessionalRecord).mockRejectedValue(new TypeError('Lost connection'));
+  render(<MuseumSection itemId={7} section='documentation' drafts={drafts}/>);await userEvent.type(await screen.findByLabelText('Dokument / název'),'Proof');
+  await userEvent.click(screen.getByRole('button',{name:'Uložit záznam'}));await screen.findByText(mode==='refresh'?/Záznam byl uložen; obnovení dat selhalo/:/Výsledek vytvoření není potvrzen/);
+  await userEvent.click(screen.getByRole('button',{name:'Uložit záznam'}));expect(saveProfessionalRecord).toHaveBeenCalledTimes(1);
+ });
 });

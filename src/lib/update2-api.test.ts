@@ -101,7 +101,7 @@ describe('Update2 snapshot and optimistic writes', () => {
     });
     it('does not reuse a token after a successful response missing ETag', async () => {
         const editor=session(); fetchMock.mockResolvedValue(reply({}));
-        await updateItem(7,{},editor);
+        await expect(updateItem(7,{},editor)).rejects.toThrow(/Server nepotvrdil verzi/);
         await expect(patchMuseumItem(7,{},editor)).rejects.toThrow(/Chybí verze/);
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
@@ -140,4 +140,17 @@ it('sends combined catalogue predicates to server paging rather than filtering a
     expect(url.searchParams.get('page')).toBe('2');
     expect(url.searchParams.get('material')).toBe('kov');
     expect(JSON.parse(url.searchParams.get('advancedFilter')!).conditions[0].field).toBe('legacyCreatedBy');
+});
+
+it.each(['network','server','body'])('invalidates the CREATE token after uncertain %s without retry',async mode=>{
+ const editor=session();
+ if(mode==='network')fetchMock.mockRejectedValue(new TypeError('Lost connection'));
+ else if(mode==='server')fetchMock.mockResolvedValue(reply({message:'Server failure'},500));
+ else fetchMock.mockResolvedValue(new Response('{broken',{status:201,headers:{ETag:'"4"'}}));
+ await expect(saveProfessionalRecord(7,'DOCUMENTATION',{fields:{kind:'DOCUMENTATION',Dokument_DK:'Proof'}},editor)).rejects.toBeDefined();
+ expect(editor.etag).toBe('');expect(fetchMock).toHaveBeenCalledTimes(1);expect(editor.busy).toBe(false);
+});
+it('retains token after definitive CREATE rejection',async()=>{
+ const editor=session();fetchMock.mockResolvedValue(reply({message:'Invalid'},400));
+ await expect(saveProfessionalRecord(7,'DOCUMENTATION',{fields:{kind:'DOCUMENTATION',Dokument_DK:'Proof'}},editor)).rejects.toMatchObject({status:400});expect(editor.etag).toBe('"3"');
 });

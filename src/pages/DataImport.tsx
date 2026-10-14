@@ -108,6 +108,15 @@ function Stats({ items }: { items: [string, string | number][] }) {
 
 export default function DataImport({ api = importApi, pollInterval = 2000 }: { api?: ImportApi; pollInterval?: number }) {
   const flow = useImport(api, pollInterval);
+  const [executionEnabled, setExecutionEnabled] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    setExecutionEnabled(false);
+    api.capabilities?.(controller.signal).then(result => {
+      if (!controller.signal.aborted) setExecutionEnabled(result.executionEnabled === true);
+    }).catch(() => {if (!controller.signal.aborted) setExecutionEnabled(false);});
+    return () => controller.abort();
+  }, [api]);
   const [file, setFile] = useState<File | null>(null);
 
   useEffect(() => { setFile(null); }, [flow.id]);
@@ -124,6 +133,7 @@ export default function DataImport({ api = importApi, pollInterval = 2000 }: { a
         <p className="text-sm text-gray-500 mt-1">Administrátorské rozhraní pro import a validaci databázových souborů MDB/ACCDB.</p>
       </div>
 
+      {!executionEnabled && <p role="status">Spuštění importu je v tomto prostředí zakázáno nebo jeho dostupnost nebyla ověřena.</p>}
       {canSelect && (
         <form className="space-y-4" onSubmit={e => { e.preventDefault(); if (file) void flow.upload(file); }}>
           <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider" htmlFor="import-file">
@@ -263,8 +273,8 @@ export default function DataImport({ api = importApi, pollInterval = 2000 }: { a
               <div className="flex justify-end">
                 <button
                     type="button"
-                    disabled={flow.busy || flow.checking || !!flow.error}
-                    onClick={() => flow.start()}
+                    disabled={!executionEnabled || flow.busy || flow.checking || !!flow.error}
+                    onClick={() => {if (executionEnabled) flow.start();}}
                     className="px-6 py-3 rounded-md bg-[#ffb511] text-gray-900 font-bold disabled:opacity-50 disabled:cursor-not-allowed">
                   {t.start}
                 </button>

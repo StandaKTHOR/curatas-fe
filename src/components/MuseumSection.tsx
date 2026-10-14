@@ -1,3 +1,4 @@
+import { uncertainWrite, uncertainCreateMessage } from '../lib/writeOutcome';
 import {professionalFields,professionalDraft,professionalValue,professionalDelta} from '../lib/professional';
 import type { ItemEditSession } from '../lib/editSession';
 import { useEffect, useState, useRef, type MutableRefObject } from 'react';
@@ -135,6 +136,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     const [clearDictionary,setClearDictionary]=useState(drafts?.current[section]?.clearDictionary??false);
     const [nativeCode,setNativeCode]=useState<string|null>(null);
     const [saving,setSaving]=useState(false);
+    const [uncertain,setUncertain]=useState(drafts?.current[section]?.uncertain??false);
     const [referenceError,setReferenceError]=useState(false);
     const [partyQuery, setPartyQuery] = useState('');
     const [partyMatches, setPartyMatches] = useState<{ id: number; firstName: string | null; lastName: string }[]>([]);
@@ -144,10 +146,10 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     const kind = recordKinds[section];
     useEffect(() => {
         if (drafts) drafts.current[section] = {changes, record, payload, dictionaryId, partyId,
-            materialId,techniqueId,clearParty,clearDictionary,
-            dirty: Object.keys(changes).length > 0 || (kind && Object.keys(professionalDelta(kind,payload,record)).length>0) || clearParty || clearDictionary ||
+            materialId,techniqueId,clearParty,clearDictionary,uncertain,
+            dirty: uncertain || Object.keys(changes).length > 0 || (kind && Object.keys(professionalDelta(kind,payload,record)).length>0) || clearParty || clearDictionary ||
                 (record ? partyId!==record.partyId||dictionaryId!==record.dictionaryId||materialId!==(record.materialDictionaryId??null)||techniqueId!==(record.techniqueDictionaryId??null) : !!partyId||!!dictionaryId||!!materialId||!!techniqueId)};
-    }, [changes, record, payload, dictionaryId, partyId, section, drafts,kind,materialId,techniqueId,clearParty,clearDictionary]);
+    }, [changes, record, payload, dictionaryId, partyId, section, drafts,kind,materialId,techniqueId,clearParty,clearDictionary,uncertain]);
 
     useEffect(() => {
         if (!itemId || (snapshotRequired && !editSession)) return;
@@ -158,7 +160,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                 if (snapshotRequired && editSession && kind) {
                     const rows=await listProfessionalRecords(itemId,kind,editSession);
                     data={...data,records:[...(data.records||[]).filter(row=>row.kind!==kind),...rows]};
-                    editSession.museumSnapshot=data;
+                    if (alive) editSession.museumSnapshot=data;
                 }
                 if (alive) setDetail(data);
             }).catch((e: Error) => {if (alive) setMessage(e.message);});
@@ -171,16 +173,25 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
 
     const value = (key: keyof MuseumItemDetail) =>
         (Object.prototype.hasOwnProperty.call(changes, key) ? changes[key] : detail[key]) as string | number | boolean | null;
-    const change = (key: keyof MuseumItemDetail, next: unknown) => setChanges(old => ({ ...old, [key]: next }));
+    const change = (key: keyof MuseumItemDetail, next: unknown) => setChanges(old => {
+        const updated = {...old};
+        if (JSON.stringify(next) === JSON.stringify(detail[key])) delete updated[key];
+        else updated[key] = next;
+        return updated;
+    });
     const saveFields = async () => {
+        if (saving || editSession?.busy || !Object.keys(changes).length) return;
+        setSaving(true);
         try {
             const fresh = await patchMuseumItem(itemId, changes, editSession);
             if (editSession) editSession.museumSnapshot = fresh;
             setDetail(fresh);
             setChanges({});
-            setMessage('Údaje uloženy.');
-            if (onSave) onSave();
+            if (drafts?.current[section]) drafts.current[section] = {...drafts.current[section], changes: {}, dirty: false};
+            setMessage('Sekce byla uložena. Ostatní rozpracované údaje zůstávají neuložené.');
+            if (onSave) await onSave();
         } catch (e) { setMessage((e as Error).message); }
+        finally {setSaving(false);}
     };
     const text = (key: keyof MuseumItemDetail, label: string) => <label className="block space-y-1 text-sm font-semibold text-gray-700" key={key}>
         <span>{label}</span>
@@ -222,6 +233,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     else fields = null;
 
     const startRecord = (existing: MuseumRecord | null) => {
+        if (uncertain) {setMessage(uncertainCreateMessage); return;}
         setRecord(existing);
         setPayload(existing ? professionalDraft(existing) : {});
         setDictionaryId(existing?.dictionaryId ?? null);
@@ -237,7 +249,12 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
         }
     };
     const saveRecord = async () => {
-        if (!kind) return;
+        if (!kind || saving || editSession?.busy) return;
+        if (uncertain) {setMessage(uncertainCreateMessage); return;}
+        if (record && Object.keys(professionalDelta(kind,payload,record)).length === 0
+            && dictionaryId === record.dictionaryId && partyId === record.partyId
+            && materialId === (record.materialDictionaryId ?? null) && techniqueId === (record.techniqueDictionaryId ?? null)
+            && !clearParty && !clearDictionary) {setMessage('Záznam nemá žádné změny k uložení.'); return;}
         const hasPayloadData = Object.values(payload).some(v => v !== null && v !== undefined && v !== '');
         if (!hasPayloadData && !dictionaryId && !partyId && !materialId && !techniqueId && !clearParty && !clearDictionary) {
             setMessage('Nelze uložit zcela prázdný záznam. Vyplňte alespoň jedno pole.');
@@ -251,6 +268,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
             }
         }
         setSaving(true);setReferenceError(false);setMessage('');
+        let committed = false;
         try {
             const changed=professionalDelta(kind,payload,record);
             const input:ProfessionalWrite=kind==='CLASSIFICATION'?{payload:changed}:{fields:{kind,...changed}};
@@ -263,14 +281,19 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                 if(techniqueId!=null&&techniqueId!==record?.techniqueDictionaryId)input.techniqueDictionaryId=techniqueId;
             }
             const saved=await saveProfessionalRecord(itemId,kind,input,editSession,record?.id);
-            if(saved?.id)setRecord(saved);
+            if (!saved?.id) throw new Error('Server nepotvrdil ID záznamu.');
+            committed = true;
+            startRecord(saved);
+            if (drafts) drafts.current[section] = {...drafts.current[section], record: saved, payload: professionalDraft(saved), dirty: false};
             const fresh = await getMuseumItem(itemId, editSession);
             if (editSession) editSession.museumSnapshot = fresh;
             setDetail(fresh);
             startRecord(null);
-            if (onSave) onSave();
+            await onSave?.();
             setMessage('Záznam uložen.');
         } catch (e) {
+            if (committed) {setMessage('Záznam byl uložen; obnovení dat selhalo: ' + (e as Error).message); return;}
+            if (!record && uncertainWrite(e)) {setUncertain(true); setMessage(uncertainCreateMessage + ' ' + (e as Error).message); return;}
             const reference=e instanceof ApiError&&e.status===400;
             setReferenceError(reference);
             setMessage(reference?'Zápis nebyl přijat. Zkontrolujte nativní reference a vybraná ID; zadaná data zůstávají zachována. '+e.message:(e as Error).message);
@@ -286,7 +309,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
         } catch (e) { setMessage((e as Error).message); }
     };
 
-    return <fieldset disabled={readOnly} className="space-y-5 demus-section">
+    return <fieldset disabled={readOnly || saving} className="space-y-5 demus-section">
         {fields && <div className="grid grid-cols-1 gap-4 rounded border border-gray-200 p-5 md:grid-cols-2">{fields}
             {section !== 'history' && <div className="col-span-full">{saveButton}</div>}</div>}
         {kind && <div className="space-y-4">
@@ -389,6 +412,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                 </div>
             </div>}
         </div>}
+        {uncertain && <button type="button" onClick={async () => {try {setDetail(await getMuseumItem(itemId)); setMessage(uncertainCreateMessage + ' Serverový seznam byl načten.');} catch (e) {setMessage((e as Error).message);}}}>Obnovit serverový seznam</button>}
         {message && <p role="status" className="text-sm text-[#00204a]">{message}</p>}
     </fieldset>;
 }

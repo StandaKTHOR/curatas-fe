@@ -153,7 +153,12 @@ async function versionedWrite<T>(itemId: number, path: string, init: RequestInit
         const tag = response.headers.get('ETag');
         // A successful write without its next token must not authorize another stale write.
         editor.etag = tag || '';
-        return response.status === 204 ? undefined as T : response.json();
+        if (!tag) throw new Error('Server nepotvrdil verzi uloženého záznamu. Obnovte záznam před dalším uložením.');
+        return response.status === 204 ? undefined as T : await response.json();
+    } catch (error) {
+        // A lost CREATE response may follow a committed transaction.
+        if (init.method === 'POST' && !(error instanceof ApiError && error.status >= 400 && error.status < 500)) editor.etag = '';
+        throw error;
     } finally { editor.busy = false; }
 }
 
@@ -384,6 +389,10 @@ export async function getAdminItem(id: string) {
     const after = await getItemVersion(itemId);
     if (before !== after || museumResponse.headers.get('ETag') !== before) {
         throw new ApiError(412, 'Předmět se změnil během načítání. Načtěte jej znovu.');
+    }
+    for (const key of ['legacyArchived','legacyCard','legacyCopied','legacyVerified','legacyMarked',
+        'legacyCreatedBy','legacyCreatedAt','legacyUpdatedBy','legacyUpdatedAt']) {
+        detail[key] = museum[key];
     }
     Object.defineProperty(detail, '_editSession', {value: {itemId, etag: after, museumSnapshot: museum}});
     return detail;

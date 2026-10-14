@@ -1,10 +1,11 @@
+import EditorNavigationGuard from '../components/EditorNavigationGuard';
 import DemusSourceIdentity from '../components/DemusSourceIdentity';
 import {SourceAcquisitionView,VocabularyAssociations} from '../components/MuseumSourceEvidence';
 import {reviewedCalendarDate} from '../lib/dating';
 import AttachmentCaptionEditor from '../components/AttachmentCaptionEditor';
 import NewInventoryNumber from '../components/NewInventoryNumber';
-import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo, useLayoutEffect, useContext } from 'react';
+import { useParams, useNavigate, useLocation, UNSAFE_DataRouterContext } from 'react-router-dom';
 import {
     getAdminItem,
     createItem,
@@ -161,8 +162,15 @@ const buildItemPayload = (currentForm: any, auditCommentOverride?: string) => {
 };
 
 export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean }) {
+    const { id } = useParams();
+    // Identity owns every form, section draft, snapshot and version token.
+    return <AdminItemEditor key={id ?? 'new'} readOnly={readOnly} />;
+}
+
+function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const dataRouter = useContext(UNSAFE_DataRouterContext);
     const location = useLocation();
     const isViewMode = readOnly || location.pathname.includes('/admin/items/view/');
     const persistedSnapshotRef = useRef<any>(null);
@@ -203,6 +211,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             e.preventDefault();
             e.stopPropagation();
         }
+        if (mainSaveRef.current || auditSaving || editSessionRef.current?.busy) return;
         if (!id || !form.auditComment?.trim()) {
             alert('Prosím vyplňte text auditního zdůvodnění.');
             return;
@@ -214,9 +223,11 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             const payload = {auditComment: comment};
             await updateItem(Number(id), payload, editSessionRef.current);
             setAuditSaveMessage('Auditní záznam byl úspěšně uložen.');
-            setForm((prev: any) => ({ ...prev, auditComment: '' }));
+            setForm((prev: any) => ({ ...prev, auditComment: prev.auditComment === comment ? '' : prev.auditComment }));
             const fresh = await getAdminItem(id);
-            setForm((prev: any) => ({...prev, events: fresh.events || []}));
+            if (fresh._editSession?.etag !== editSessionRef.current?.etag) throw new ApiError(412, 'Záznam se změnil po uložení auditu. Vaše zadání zůstává zachováno.');
+            setForm((prev: any) => ({...prev, events: fresh.events || [],
+                modifiedByUser: fresh.modifiedByUser, lastModifiedAt: fresh.lastModifiedAt}));
         } catch (err: any) {
             alert('Chyba při ukládání auditního záznamu: ' + err.message);
         } finally {
@@ -540,15 +551,22 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
     const getFormSnapshot = (f: any) => {
         if (!f) return '';
-        const clone = { ...f, auditComment: '' };
-        return JSON.stringify(clone);
+        // Compare editable input, including invalid/unfinished values, without running save validation.
+        const clone = Object.fromEntries(Object.keys(buildItemPayload({})).filter(key => key !== 'auditComment' && key !== 'clearFund')
+            .concat('authorRole').sort().map(key => [key, f[key] ?? '']));
+        return JSON.stringify(clone, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
+            ? Object.fromEntries(Object.keys(value).sort().map(key => [key,value[key]])) : value);
     };
 
     const initialFormSnapshotRef = useRef<string>('');
+    const initialFormValuesRef = useRef<any>({});
+    const formRef = useRef(form);
+    formRef.current = form;
+    const mainSaveRef = useRef(false);
     // Omit untouched values: display defaults must never become historical museum evidence.
     const preserveUnchangedEvidence = (payload: any) => {
         if (!id || !initialFormSnapshotRef.current) return;
-        const previous = buildItemPayload(JSON.parse(initialFormSnapshotRef.current));
+        const previous = buildItemPayload(initialFormValuesRef.current);
         for (const field of Object.keys(previous)) {
             if (JSON.stringify(previous[field as keyof typeof previous]) === JSON.stringify(payload[field])) {
                 delete payload[field];
@@ -556,28 +574,24 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         }
     };
 
-    const isDirty = useMemo(() => {
-        if (isViewMode) return false;
-        if (!initialFormSnapshotRef.current) return false;
-        return getFormSnapshot(form) !== initialFormSnapshotRef.current;
-    }, [form, isViewMode]);
+    const hasUnsavedChanges = () => !isViewMode && (
+        (!!initialFormSnapshotRef.current && getFormSnapshot(formRef.current) !== initialFormSnapshotRef.current)
+        || !!formRef.current.auditComment?.trim()
+        || Object.values(sectionDrafts.current).some((draft: any) => draft.dirty));
 
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-            if ((isDirty || Object.values(sectionDrafts.current).some((draft: any) => draft.dirty)) && !isViewMode) {
-                e.preventDefault();
-                e.returnValue = '';
-            }
+            if (hasUnsavedChanges()) { e.preventDefault(); e.returnValue = ''; }
         };
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-    }, [isDirty, isViewMode]);
+    });
 
     const handleBackToList = () => {
-        if ((isDirty || Object.values(sectionDrafts.current).some((draft: any) => draft.dirty)) && !isViewMode) {
-            const confirmed = window.confirm('Máte neuložené změny. Opravdu chcete odejít bez uložení?');
-            if (!confirmed) return;
+        if (mainSaveRef.current || auditSaving || editSessionRef.current?.busy) {
+            setGlobalError('Probíhá ukládání. Vyčkejte na jeho dokončení.'); return;
         }
+        if (!dataRouter && hasUnsavedChanges() && !window.confirm('Máte neuložené změny. Opravdu chcete odejít bez uložení?')) return;
         const returnSearch = (location.state as any)?.fromSearch || sessionStorage.getItem('adminItemsSearch') || '';
         navigate(`/admin/items${returnSearch}`);
     };
@@ -611,6 +625,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
     }, [form.datingText, form.datingFrom, form.datingTo]);
 
     useEffect(() => {
+        let alive = true;
         getDictionaries().then(data => {
             setDicts(data);
         }).catch(console.error);
@@ -636,6 +651,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             setLoading(true);
             getAdminItem(id)
                 .then(data => {
+                    if (!alive) return;
                     editSessionRef.current = data._editSession;
                     persistedSnapshotRef.current = data;
                     const safeVal = (v: any) => (v === null || v === undefined ? '' : v);
@@ -715,14 +731,16 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         legacyData: data.legacyData || {}
                     };
                     setForm(loadedForm);
+                    initialFormValuesRef.current = loadedForm;
                     initialFormSnapshotRef.current = getFormSnapshot(loadedForm);
                 })
-                .catch((err: Error) => setGlobalError(err.message))
-                .finally(() => setLoading(false));
+                .catch((err: Error) => {if (alive) setGlobalError(err.message);})
+                .finally(() => {if (alive) setLoading(false);});
 
             loadAttachments();
         } else {
             Promise.resolve(getNextAvailableNumbers?.()).then((next: any) => {
+                if (!alive) return;
                 if (next) {
                     setSuggestions({ accession: next.accession || '', inventory: next.inventory || '' });
                     setForm((prev: any) => {
@@ -738,9 +756,11 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                     initialFormSnapshotRef.current = getFormSnapshot(form);
                 }
             }).catch(() => {
+                if (!alive) return;
                 initialFormSnapshotRef.current = getFormSnapshot(form);
             });
         }
+        return () => {alive = false;};
     }, [id]);
 
     useEffect(() => {
@@ -777,19 +797,22 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
         if (!id) return;
         try {
             const fresh = await getAdminItem(id);
-            if (fresh._editSession?.etag === editSessionRef.current?.etag) persistedSnapshotRef.current = fresh;
-            const baseline = initialFormSnapshotRef.current ? JSON.parse(initialFormSnapshotRef.current) : {};
+            if (fresh._editSession?.etag !== editSessionRef.current?.etag) throw new ApiError(412, 'Záznam se změnil po uložení sekce. Vaše ostatní zadání zůstává zachováno.');
+            persistedSnapshotRef.current = fresh;
+            const baseline = {...initialFormValuesRef.current};
             setForm((prev: any) => {
                 const next = {...prev};
                 for (const key of ['markant', 'signature', 'subjectDictionaryId', 'subjectLegacyCode', 'fundDictionaryId',
                     'fundLegacyCode', 'groupDictionaryId', 'groupLegacyCode', 'localityDictionaryId', 'localityLegacyCode',
                     'materialDictionaryId', 'techniqueDictionaryId', 'legacyArchived', 'legacyCard', 'legacyCopied',
-                    'legacyVerified', 'legacyMarked', 'acquisitionMethod', 'acquisitionDate', 'acquiredFrom']) {
+                    'legacyVerified', 'legacyMarked', 'acquisitionMethod', 'acquisitionDate', 'acquiredFrom',
+                    'createdByUser', 'createdAt', 'modifiedByUser', 'lastModifiedAt']) {
                     if (JSON.stringify(prev[key]) === JSON.stringify(baseline[key])) {
                         next[key] = fresh[key] ?? '';
                         baseline[key] = next[key];
                     }
                 }
+                initialFormValuesRef.current = baseline;
                 initialFormSnapshotRef.current = getFormSnapshot(baseline);
                 return next;
             });
@@ -827,6 +850,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (mainSaveRef.current || editSessionRef.current?.busy) return;
         setConflictError(null);
         setGlobalError(null);
         setSuccessMessage(null);
@@ -889,13 +913,25 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             }
         }
 
-        setLoading(true);
-
-        const payload = buildItemPayload(form);
+        const basicChanges = {...(sectionDrafts.current.basic?.changes || {})};
+        const originalPayload: any = initialFormSnapshotRef.current ? buildItemPayload(initialFormValuesRef.current) : {};
+        const mainPayload = buildItemPayload(form);
+        for (const key of Object.keys(basicChanges)) {
+            if (key in originalPayload && JSON.stringify(mainPayload[key as keyof typeof mainPayload]) !== JSON.stringify(originalPayload[key])
+                && JSON.stringify(mainPayload[key as keyof typeof mainPayload]) !== JSON.stringify(basicChanges[key])) {
+                setGlobalError('Stejné pole je změněné v hlavním formuláři i sekci. Nejprve sjednoťte zadání.'); return;
+            }
+        }
+        const payload: any = {...mainPayload, ...basicChanges};
         if (!id) delete (payload as any).clearFund;
         preserveUnchangedEvidence(payload);
         if (id && form.inventoryNumber === initialNumbers.inventory) payload.inventoryNumber = undefined as any;
 
+        if (id && !Object.entries(payload).some(([key, value]) => value !== undefined && (key !== 'auditComment' || !!value))) {
+            setSuccessMessage('Nejsou žádné změny hlavních údajů ani příznaků k uložení.'); return;
+        }
+        mainSaveRef.current = true;
+        setLoading(true);
         try {
             if (id) {
                 await updateItem(Number(id), payload, editSessionRef.current);
@@ -924,8 +960,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         }))
                         : (updated.author ? [{ partyId: null, partyName: updated.author, role: 'Autor', type: 'PERSON', sortOrder: 1 }] : []);
 
-                    setForm((prev: any) => {
-                        const newUpdatedForm = {
+                    const prev = form;
+                    const newUpdatedForm = {
                             ...prev,
                             ...updated,
                             subCollection: safeVal(updated.subCollection),
@@ -970,17 +1006,24 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             markant: safeVal(updated.markant),
                             signature: safeVal(updated.signature)
                         };
-                        initialFormSnapshotRef.current = getFormSnapshot(newUpdatedForm);
-                        return newUpdatedForm;
-                    });
+                    initialFormValuesRef.current = newUpdatedForm;
+                    initialFormSnapshotRef.current = getFormSnapshot(newUpdatedForm);
+                    formRef.current = newUpdatedForm;
+                    if (sectionDrafts.current.basic) sectionDrafts.current.basic = {...sectionDrafts.current.basic, changes: {}, dirty: false};
+                    setForm(newUpdatedForm);
                 }
-                setSuccessMessage('Změny byly úspěšně uloženy.');
+                setSuccessMessage(Object.values(sectionDrafts.current).some((draft: any) => draft.dirty)
+                    ? 'Hlavní údaje a příznaky byly uloženy. Zbývající odborné změny uložte v příslušných sekcích.'
+                    : 'Změny byly úspěšně uloženy.');
             } else {
                 const savedItem = await createItem(payload);
                 if (bulkMode && savedItem?.id) {
                     await bulkCopyItem(savedItem.id, bulkParams);
                 }
                 if (savedItem?.id) {
+                    initialFormSnapshotRef.current = getFormSnapshot(form);
+                    formRef.current = form;
+                    mainSaveRef.current = false;
                     navigate(`/admin/items/edit/${savedItem.id}`, { replace: true });
                 }
             }
@@ -1005,6 +1048,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                 setGlobalError('Došlo k neočekávané chybě.');
             }
         } finally {
+            mainSaveRef.current = false;
             setLoading(false);
         }
     };
@@ -1060,7 +1104,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                     </div>
                 <div className="flex items-center gap-2.5 flex-wrap">
                     {!isViewMode && <button type="submit" form="item-editor" className="demus-save"
-                        disabled={loading || !validity.accession || !validity.inventory}>
+                        disabled={loading || auditSaving || !validity.accession || !validity.inventory}>
                         {loading ? 'Ukládám…' : 'Uložit'}
                     </button>}
                     {isViewMode && (
@@ -1085,7 +1129,8 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         </span>
                         <input
                             type="checkbox"
-                            disabled={isViewMode}
+                            aria-label="Zveřejněno"
+                            disabled={isViewMode || loading || auditSaving}
                             checked={form.published || false}
                             onChange={e => setForm({ ...form, published: e.target.checked })}
                             className="cursor-pointer rounded border-gray-300 text-[#00204a] focus:ring-0"
@@ -1144,12 +1189,13 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
             />
 
             {id && <InventoryIdentityPanel itemId={Number(id)} inventoryNumber={form.inventoryNumber || ''}
-                canEdit={!isViewMode && form.inventoryNumber === initialNumbers.inventory} onSaved={async () => {
+                canEdit={!isViewMode && !loading && !auditSaving && form.inventoryNumber === initialNumbers.inventory} onSaved={async () => {
                     const fresh = await getAdminItem(id);
                     if (persistedSnapshotRef.current) persistedSnapshotRef.current = {...persistedSnapshotRef.current, inventoryNumber:fresh.inventoryNumber};
                     await synchronizeMediaVersion(fresh);
                     if (initialFormSnapshotRef.current) {
-                        const baseline=JSON.parse(initialFormSnapshotRef.current);baseline.inventoryNumber=fresh.inventoryNumber ?? '';
+                        const baseline={...initialFormValuesRef.current};baseline.inventoryNumber=fresh.inventoryNumber ?? '';
+                        initialFormValuesRef.current=baseline;
                         initialFormSnapshotRef.current=getFormSnapshot(baseline);
                     }
                     setForm((previous: any) => ({ ...previous, inventoryNumber: fresh.inventoryNumber ?? '' }));
@@ -1205,8 +1251,10 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                     <button type="button" onClick={async()=>{try{await downloadAttachmentFile(Number(id),att.id,att.originalFilename||att.filename||'priloha');}catch(e){setGlobalError('Stažení přílohy selhalo: '+(e as Error).message);}}}>Stáhnout</button>
                 </li>)}</ul>
             </section>}
+            <EditorNavigationGuard isDirty={hasUnsavedChanges} isSaving={() => mainSaveRef.current || auditSaving || !!editSessionRef.current?.busy}/>
+            <p className="px-6 text-sm">Uložit: hlavní údaje a základní příznaky včetně Archivu. Odborné záznamy a akvizice ukládejte v příslušné sekci.</p>
             <form id="item-editor" onSubmit={handleSubmit} className="p-6 space-y-4 demus-editor">
-                <fieldset disabled={loading || (isViewMode && activeTab !== 'photos')}>
+                <fieldset disabled={loading || auditSaving || (isViewMode && activeTab !== 'photos')}>
                 {/* 1. ZÁKLADNÍ ÚDAJE & IDENTIFIKACE */}
                 {activeTab === 'identity' && (
                     <div className="demus-primary-fields">
@@ -1275,8 +1323,10 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                         </div>
 
                         {id && <div className="grid grid-cols-2 gap-2 text-xs border p-2">
-                            <p>Zapsal: {form.legacyCreatedBy || '—'}</p><p>Datum zápisu: {form.legacyCreatedAt || '—'}</p>
-                            <p>Změnil: {form.legacyUpdatedBy || '—'}</p><p>Datum změny: {form.legacyUpdatedAt || '—'}</p>
+                            <p>Založil v CURATAS: {form.createdByUser || '—'}</p><p>Datum založení v CURATAS: {form.createdAt || '—'}</p>
+                            <p>Změnil v CURATAS: {form.modifiedByUser || '—'}</p><p>Poslední změna v CURATAS: {form.lastModifiedAt || '—'}</p>
+                            <p>Zapsal v DEMUS: {form.legacyCreatedBy || '—'}</p><p>Datum zápisu v DEMUS: {form.legacyCreatedAt || '—'}</p>
+                            <p>Změnil v DEMUS: {form.legacyUpdatedBy || '—'}</p><p>Datum změny v DEMUS: {form.legacyUpdatedAt || '—'}</p>
                         </div>}
                         <div className="space-y-1"><label htmlFor="quantity">Současný katalogový počet</label>
                             <input id="quantity" type="number" step="1" value={form.quantity??''}
@@ -1489,7 +1539,7 @@ export default function AdminItemForm({ readOnly = false }: { readOnly?: boolean
                             <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider mb-2">
                                 Číselníkové zařazení předmětu
                             </h4>
-                            <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="basic" onSave={handleSectionSave} />
+                            <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="basic" key={editSessionRef.current?.etag} onSave={handleSectionSave} />
                         </div>
                         {/* Autor / Původce & Role */}
                         <div className="space-y-1" ref={authorDropdownRef}>

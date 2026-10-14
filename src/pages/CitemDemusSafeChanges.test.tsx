@@ -130,8 +130,8 @@ describe('CITEM Stage 1: Safe FE Changes Integration', () => {
         expect(select).toHaveValue('5');
         expect(screen.queryByRole('option', { name: 'Staré fondy' })).not.toBeInTheDocument();
         await userEvent.click(screen.getByRole('button', { name: /Uložit sbírkový předmět/i }));
-        await waitFor(() => expect(updateItem).toHaveBeenCalledWith(123,
-            expect.objectContaining({}), undefined));
+        await screen.findByText(/Nejsou žádné změny hlavních údajů/);
+        expect(updateItem).not.toHaveBeenCalled();
     });
 
     it('does not invent professional values or replace unknown and sentinel values on unrelated saves', async () => {

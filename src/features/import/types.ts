@@ -30,6 +30,7 @@ export interface PageDto<T> { content: T[]; totalPages: number; totalElements: n
 export interface ImportErrorPage { page: PageDto<ImportValidationError> }
 
 export interface ImportApi {
+  capabilities?(signal: AbortSignal): Promise<{executionEnabled: boolean}>;
   create(signal: AbortSignal): Promise<ImportCreateResponse>;
   upload(id: string, file: File, signal: AbortSignal): Promise<void>;
   validate(id: string, signal: AbortSignal): Promise<void>;
