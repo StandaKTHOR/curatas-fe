@@ -216,8 +216,8 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
             {bool('legacyCopied', 'Opsáno')}{bool('legacyVerified', 'Ověřeno')}{bool('legacyMarked', 'Označeno')}</div>
     </>;
     else if (section === 'materials') fields = <>
-        {tree('materialDictionaryId', 'MATERIAL', 'Materiál – hierarchie')}
-        {tree('techniqueDictionaryId', 'TECHNIQUE', 'Technika – hierarchie')}
+        <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál" readOnly={readOnly} value={value('materialDictionaryId') as number | null} onChange={id => change('materialDictionaryId', id)}/>
+        <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika" readOnly={readOnly} value={value('techniqueDictionaryId') as number | null} onChange={id => change('techniqueDictionaryId', id)}/>
         <p className="col-span-full text-sm text-gray-600">Původní text materiálu a techniky zůstává zachován v základním záznamu.</p>
     </>;
     else if (section === 'locality') fields = <>
@@ -314,7 +314,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
         {fields && <div className="grid grid-cols-1 gap-4 rounded border border-gray-200 p-5 md:grid-cols-2">{fields}
             {section !== 'history' && <div className="col-span-full">{saveButton}</div>}</div>}
         {kind && <div className="space-y-4">
-            <h3 className="font-bold">{section === 'documentation' ? 'Dokumentace DEMUS (samostatně od příloh)' : 'Záznamy'}</h3>
+            <h3 className="font-bold">{section === 'documentation' ? 'Dokumentace DEMUS (samostatně od příloh)' : kind === 'MATERIAL_TECHNIQUE' ? 'Materiál a technika' : 'Záznamy'}</h3>
             <div className="overflow-x-auto"><table className="demus-datasheet" aria-label={`Evidence ${section}`}>
                 <thead><tr><th>Záznam / zdroj</th>{recordFields[kind].map(([key,label]) => <th key={key}>{label}</th>)}<th>Akce</th></tr></thead>
                 <tbody>{detail.records.filter(x => x.kind === kind).map(row => <tr key={row.id} className={record?.id === row.id ? 'bg-blue-50' : ''}>
@@ -356,7 +356,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
             {(kind !== 'DEACCESSION' || record) && <div ref={editFormRef} className={`rounded border p-4 space-y-3 ${record ? 'border-blue-300 bg-blue-50/30' : 'border-gray-200 bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                     <h4 className="font-semibold text-gray-900">
-                        {record ? `✏️ Úprava záznamu #${record.id}` : 'Nový záznam'}
+                        {record ? `✏️ Úprava záznamu #${record.id}` : kind === 'MATERIAL_TECHNIQUE' ? 'Přidat záznam materiálu a techniky' : 'Nový záznam'}
                     </h4>
                     {record && <button type="button" className="text-xs text-blue-700 hover:underline font-medium" onClick={() => startRecord(null)}>
                         Zrušit úpravu
@@ -368,10 +368,10 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                 {nativeCode!=null&&['BIBLIOGRAPHY','CLASSIFICATION','DOCUMENTATION'].includes(kind)&&<button type="button" onClick={()=>{
                     const key=kind==='BIBLIOGRAPHY'?'Ref_RF':kind==='CLASSIFICATION'?'SysKat_ZS':'TypDok_DK';setPayload(old=>({...old,[key]:nativeCode}));
                 }}>Použít nativní kód vybrané položky: {nativeCode}</button>}
-                {kind==='MATERIAL_TECHNIQUE'&&<div className="grid grid-cols-2 gap-2">
-                    <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál páru — číselník" historicalValue={String(payload.Material_MT ?? '')} readOnly={readOnly} value={materialId} allowEmpty={!record?.materialDictionaryId} onChange={id=>setMaterialId(id)}/>
-                    <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika páru — číselník" historicalValue={String(payload.Technika_MT ?? '')} readOnly={readOnly} value={techniqueId} allowEmpty={!record?.techniqueDictionaryId} onChange={id=>setTechniqueId(id)}/>
-                    <p className="col-span-2">Párování materiálu/techniky zůstává samostatným záznamem. Generické zrušení vazby na tento pár se nepoužívá.</p>
+                {kind==='MATERIAL_TECHNIQUE'&&<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál" historicalValue={String(payload.Material_MT ?? '')} readOnly={readOnly} value={materialId} allowEmpty={!record?.materialDictionaryId} onChange={id=>setMaterialId(id)}/>
+                    <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika" historicalValue={String(payload.Technika_MT ?? '')} readOnly={readOnly} value={techniqueId} allowEmpty={!record?.techniqueDictionaryId} onChange={id=>setTechniqueId(id)}/>
+                    <p className="md:col-span-2 text-sm text-gray-600">Materiál a technika se vybírají nezávisle a ukládají společně až tlačítkem Uložit záznam. Uložený text se při výběru nemění; při uložení nové vazby se použije kód vybrané položky. Původní údaje DEMUS zůstávají zachované.</p>
                 </div>}
                 {['DETERMINATION','ORIGIN','MANIPULATION'].includes(kind) && <div className="space-y-2 text-sm">
                     <label className="block font-semibold">Současná osoba — hledat existující osoby/subjekty

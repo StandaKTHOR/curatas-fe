@@ -55,12 +55,14 @@ export default function ThreeLevelDictionarySelect({ type, label, value, histori
     };
     return <fieldset className="space-y-2" disabled={readOnly}>
         <legend className="text-sm font-semibold text-gray-700">{label}</legend>
+        {!loading && !error && !unknown && path.length > 0 && <p aria-label={`Vybraná cesta: ${label}`} className="text-sm font-medium text-[#00204a]">{path.map(node => node.label).join(' › ')}</p>}
+        {!loading && !error && !unknown && path.length > 0 && path.length < 3 && !path[path.length - 1].children?.length && <p className="text-xs text-gray-600">Tato položka nemá další úroveň v dostupném číselníku. Chybějící zařazení se nedoplňuje automaticky.</p>}
         {loading && <p role="status">Načítání číselníku…</p>}
         {error && <div role="alert">{error} <button type="button" onClick={() => {
             invalidateHierarchy(type); setRevision(current => current + 1);
         }}>Zkusit znovu</button></div>}
         {!loading && !error && !nodes.length && <p className="text-xs">Číselník zatím nemá položky. Uložené údaje zůstávají zachované.</p>}
-        {historicalValue && <p className="text-xs">Původní text: {historicalValue}{value == null ? ' (bez číselníkové vazby)' : ''}</p>}
+        {historicalValue && <p className="text-xs">Původní text: {historicalValue}{value == null ? ' (zatím nepřiřazeno v číselníku)' : ''}</p>}
         {!historicalValue && value == null && <p className="text-xs">Nevyplněno</p>}
         {!loading && !error && unknown && <p role="status">Stávající vazba #{value} nemá dostupnou tříúrovňovou cestu. Zůstává zachována.</p>}
         <input aria-label={`Hledat: ${label}`} value={query} onChange={e => setQuery(e.target.value)}
@@ -79,6 +81,7 @@ export default function ThreeLevelDictionarySelect({ type, label, value, histori
                 </select>
             </label>;
         })}
-        <p className="text-xs text-gray-600">Vazbu lze vybrat na dostupné úrovni. Původní text se výběrem nepřepisuje.</p>
+        <p className="text-xs text-gray-600">Vyberte dostupné úrovně od kořene. Změna nadřazené úrovně zruší výběr jejích potomků; údaje se uloží až po potvrzení formuláře.</p>
+        {!allowEmpty && <p className="text-xs text-gray-600">Stávající vazbu lze změnit. Její úplné odebrání tento záznam zatím nepodporuje; úprava jiných polí ji zachová.</p>}
     </fieldset>;
 }
