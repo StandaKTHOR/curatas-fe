@@ -227,10 +227,23 @@ export default function AdminItems() {
         }
     };
 
+    const [pageText, setPageText] = useState(String(page + 1));
+    const [pageError, setPageError] = useState('');
+    useEffect(() => {setPageText(String(page + 1)); setPageError('');}, [page]);
+    const confirmPage = () => {
+        const total = Math.max(1, data?.totalPages || 1);
+        if (!/^\d+$/.test(pageText) || Number(pageText) < 1 || Number(pageText) > total) {
+            setPageError(`Zadejte číslo stránky od 1 do ${total}.`); return;
+        }
+        setPageError(''); setPage(Number(pageText) - 1);
+    };
+
     const pagination = <div className="flex flex-wrap items-center gap-2 p-2" aria-label="Stránkování evidence">
         <button type="button" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Předchozí</button>
-        <label>Strana <input type="number" aria-label="Číslo stránky evidence" min="1" max={Math.max(1, data?.totalPages || 1)}
-            value={page + 1} onChange={e => { const n = Number(e.target.value); if (Number.isInteger(n)) setPage(Math.max(0, Math.min((data?.totalPages || 1) - 1, n - 1))); }} /></label>
+        <label>Strana <input type="text" inputMode="numeric" aria-label="Číslo stránky evidence" aria-invalid={!!pageError}
+            value={pageText} onChange={e => {setPageText(e.target.value);setPageError('');}}
+            onBlur={confirmPage} onKeyDown={e => {if(e.key==='Enter'){e.preventDefault();confirmPage();}}} /></label>
+        {pageError && <span role="alert">{pageError}</span>}
         <span>z {data?.totalPages || 1} · {data?.totalElements || 0} předmětů</span>
         <button type="button" disabled={page + 1 >= (data?.totalPages || 1)} onClick={() => setPage(p => p + 1)}>Další</button>
     </div>;

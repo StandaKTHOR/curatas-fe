@@ -369,9 +369,9 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                     const key=kind==='BIBLIOGRAPHY'?'Ref_RF':kind==='CLASSIFICATION'?'SysKat_ZS':'TypDok_DK';setPayload(old=>({...old,[key]:nativeCode}));
                 }}>Použít nativní kód vybrané položky: {nativeCode}</button>}
                 {kind==='MATERIAL_TECHNIQUE'&&<div className="grid grid-cols-2 gap-2">
-                    <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál tuple — číselník" historicalValue={String(payload.Material_MT ?? '')} readOnly={readOnly} value={materialId} allowEmpty={!record?.materialDictionaryId} onChange={id=>setMaterialId(id)}/>
-                    <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika tuple — číselník" historicalValue={String(payload.Technika_MT ?? '')} readOnly={readOnly} value={techniqueId} allowEmpty={!record?.techniqueDictionaryId} onChange={id=>setTechniqueId(id)}/>
-                    <p className="col-span-2">Párování materiálu/techniky zůstává samostatným záznamem. Generické zrušení vazby na tento tuple se nepoužívá.</p>
+                    <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál páru — číselník" historicalValue={String(payload.Material_MT ?? '')} readOnly={readOnly} value={materialId} allowEmpty={!record?.materialDictionaryId} onChange={id=>setMaterialId(id)}/>
+                    <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika páru — číselník" historicalValue={String(payload.Technika_MT ?? '')} readOnly={readOnly} value={techniqueId} allowEmpty={!record?.techniqueDictionaryId} onChange={id=>setTechniqueId(id)}/>
+                    <p className="col-span-2">Párování materiálu/techniky zůstává samostatným záznamem. Generické zrušení vazby na tento pár se nepoužívá.</p>
                 </div>}
                 {['DETERMINATION','ORIGIN','MANIPULATION'].includes(kind) && <div className="space-y-2 text-sm">
                     <label className="block font-semibold">Současná osoba — hledat existující osoby/subjekty

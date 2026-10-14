@@ -71,6 +71,7 @@ export default function SelectiveCloneModal({
                     </button>
                 </div>
 
+                <p className="text-sm">Kopírují se vybrané popisné údaje a odborné záznamy. Foto, přílohy, akvizice, původní audit, pohyby a vyřazení se nepřenášejí. Klon má vlastní identitu a audit; historické auditní údaje originálu jsou samostatný podklad.</p>
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     {error && (
                         <GovMessage color="error" type="bold">
@@ -105,7 +106,7 @@ export default function SelectiveCloneModal({
                                     onChange={() => handleToggle('copyDescription')}
                                     className="rounded border-gray-300 text-[#00204a] focus:ring-[#00204a]"
                                 />
-                                <span className="font-semibold text-gray-800">Název a popis</span>
+                                <span className="font-semibold text-gray-800">Název, popis, dokumentace a reference</span>
                             </label>
 
                             <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -135,7 +136,7 @@ export default function SelectiveCloneModal({
                                     onChange={() => handleToggle('copyClassification')}
                                     className="rounded border-gray-300 text-[#00204a] focus:ring-[#00204a]"
                                 />
-                                <span className="font-semibold text-gray-800">Podsbírka a skupina</span>
+                                <span className="font-semibold text-gray-800">Zařazení a určení</span>
                             </label>
 
                             <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -145,7 +146,7 @@ export default function SelectiveCloneModal({
                                     onChange={() => handleToggle('copyAuthors')}
                                     className="rounded border-gray-300 text-[#00204a] focus:ring-[#00204a]"
                                 />
-                                <span className="font-semibold text-gray-800">Autor / Původce</span>
+                                <span className="font-semibold text-gray-800">Autor a údaje vzniku</span>
                             </label>
 
                             <label className="flex items-center gap-2 cursor-pointer select-none">

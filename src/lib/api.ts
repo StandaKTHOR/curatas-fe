@@ -394,6 +394,8 @@ export async function getAdminItem(id: string) {
         'legacyCreatedBy','legacyCreatedAt','legacyUpdatedBy','legacyUpdatedAt']) {
         detail[key] = museum[key];
     }
+    detail.createdByUser = detail.createdByUser ?? detail.createdBy;
+    detail.modifiedByUser = detail.modifiedByUser ?? detail.lastModifiedBy;
     Object.defineProperty(detail, '_editSession', {value: {itemId, etag: after, museumSnapshot: museum}});
     return detail;
 }

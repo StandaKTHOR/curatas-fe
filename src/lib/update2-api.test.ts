@@ -48,11 +48,12 @@ describe('final typed professional contracts (HTTP fixtures)',()=>{
 describe('Update2 snapshot and optimistic writes', () => {
     it('accepts only a consistent version/detail/museum/version snapshot', async () => {
         fetchMock.mockResolvedValueOnce(reply({rowVersion: 3},200,'"3"'))
-            .mockResolvedValueOnce(reply({id:7,description:'snapshot'}))
+            .mockResolvedValueOnce(reply({id:7,description:'snapshot',createdBy:'creator',lastModifiedBy:'editor'}))
             .mockResolvedValueOnce(reply({itemId:7,records:[]},200,'"3"'))
             .mockResolvedValueOnce(reply({rowVersion:3},200,'"3"'));
         const item = await getAdminItem('7');
         expect(item._editSession.etag).toBe('"3"');
+        expect(item.createdByUser).toBe('creator');expect(item.modifiedByUser).toBe('editor');
         expect(JSON.stringify(item)).not.toContain('_editSession');
         expect(fetchMock.mock.calls.map(([path]) => String(path).split('/').pop())).toEqual(['version','7','museum','version']);
     });

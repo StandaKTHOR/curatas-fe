@@ -98,9 +98,9 @@ describe('BATCH 1 saving and navigation', () => {
     });
     it('shows system audit separately from historical DEMUS fields', async () => {
         saved.legacyCreatedBy='Historical DEMUS author'; mount();await screen.findByDisplayValue('Původní název');
-        expect(screen.getByText('Založil v CURATAS: creator')).toBeInTheDocument();
+        expect(screen.getByText('Založil v MESonline: creator')).toBeInTheDocument();
         expect(screen.getByText('Zapsal v DEMUS: Historical DEMUS author')).toBeInTheDocument();
-        expect(screen.getByText(/Poslední změna v CURATAS: 2026-10-14/)).toBeInTheDocument();
+        expect(screen.getByText(/Poslední změna v MESonline: 2026-10-14/)).toBeInTheDocument();
     });
     it('creates an item and navigates to its saved editor without a dirty warning', async () => {
         vi.mocked(api.createItem).mockResolvedValue({id:7});const router=mount('/admin/items/new');
@@ -156,4 +156,31 @@ it('BATCH 2.1 preserves null dictionary IDs after a basic section save',async()=
     expect(screen.queryByText(/Stávající vazba #/)).not.toBeInTheDocument();
     expect(screen.getByText(/Původní text: Historical text without FK/)).toBeInTheDocument();
     expect(unload()).toBe(false);
+});
+it.each(['Uložit','Uložit sbírkový předmět'])('BATCH 2.2 validates a missing inventory at %s in Czech',async button=>{
+    mount('/admin/items/new');await userEvent.type(await screen.findByLabelText(/Název sbírkového předmětu/),'Create proof');
+    await userEvent.click(screen.getByRole('button',{name:button}));
+    expect(await screen.findByText(/Vyplňte inventární číslo na kartě Základ/)).toBeInTheDocument();
+    expect(screen.getByRole('textbox',{name:'Inventární číslo: Hlavní číslo'})).toHaveAttribute('aria-invalid','true');
+    expect(api.createItem).not.toHaveBeenCalled();expect(unload()).toBe(true);
+});
+it('BATCH 2.2 confirms server CREATE after GET and returns without a dirty warning',async()=>{
+    vi.mocked(api.createItem).mockImplementation(async body=>{Object.assign(saved,body);return {id:7};});
+    const router=mount('/admin/items/new');await userEvent.type(await screen.findByRole('textbox',{name:'Inventární číslo: Hlavní číslo'}),'NEW-7');
+    await userEvent.type(screen.getByLabelText(/Název sbírkového předmětu/),'Created title');await save();
+    await screen.findByText(/Předmět byl úspěšně založen/);expect(router.state.location.pathname).toBe('/admin/items/edit/7');expect(unload()).toBe(false);
+    await back();expect(window.confirm).not.toHaveBeenCalled();expect(api.createItem).toHaveBeenCalledTimes(1);
+});
+it('BATCH 2.2 blocks duplicate main CREATE after an uncertain server response',async()=>{
+    vi.mocked(api.createItem).mockRejectedValue(new TypeError('Connection lost'));
+    mount('/admin/items/new');await userEvent.type(await screen.findByRole('textbox',{name:'Inventární číslo: Hlavní číslo'}),'NEW-7');
+    await userEvent.type(screen.getByLabelText(/Název sbírkového předmětu/),'Proof');await save();await screen.findByText(/Výsledek vytvoření není potvrzen/);
+    await save();expect(api.createItem).toHaveBeenCalledTimes(1);expect(screen.queryByText(/Předmět byl úspěšně založen/)).not.toBeInTheDocument();expect(unload()).toBe(true);
+});
+it('BATCH 2.2 never repeats CREATE when the saved editor refresh fails',async()=>{
+    vi.mocked(api.createItem).mockResolvedValue({id:7});vi.mocked(api.getAdminItem).mockRejectedValue(new api.ApiError(500,'GET failed'));
+    const router=mount('/admin/items/new');await userEvent.type(await screen.findByRole('textbox',{name:'Inventární číslo: Hlavní číslo'}),'NEW-7');
+    await userEvent.type(screen.getByLabelText(/Název sbírkového předmětu/),'Proof');await save();
+    await waitFor(()=>expect(router.state.location.pathname).toBe('/admin/items/edit/7'));await screen.findByText(/GET failed/);
+    expect(api.createItem).toHaveBeenCalledTimes(1);expect(screen.queryByText(/Předmět byl úspěšně založen/)).not.toBeInTheDocument();
 });

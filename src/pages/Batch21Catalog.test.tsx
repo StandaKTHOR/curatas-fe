@@ -33,3 +33,19 @@ it('BATCH 2.1 invalidates the old search during the debounce of the next query',
     expect(screen.queryByRole('button',{name:'Stale'})).not.toBeInTheDocument();
     await screen.findByRole('button',{name:'Current'});
 });
+it('BATCH 2.2 permits empty page text, paste/replace 21, and preserves filters until Enter',async()=>{
+    vi.mocked(api.listAdminItems).mockResolvedValue({...row('Paging'),totalPages:30,totalElements:1500} as any);
+    render(<MemoryRouter initialEntries={['/admin/items?q=kept']}><AdminItems/></MemoryRouter>);await screen.findByRole('button',{name:'Paging'});
+    const input=screen.getAllByRole('textbox',{name:'Číslo stránky evidence'})[0];
+    await userEvent.clear(input);expect(input).toHaveValue('');
+    await userEvent.click(input);await userEvent.paste('21');expect(input).toHaveValue('21');
+    await userEvent.keyboard('{Enter}');await waitFor(()=>expect(api.listAdminItems).toHaveBeenLastCalledWith(expect.objectContaining({page:20,q:'kept'})));
+    await userEvent.click(input);await userEvent.keyboard('{Control>}a{/Control}3');expect(input).toHaveValue('3');await userEvent.keyboard('{Enter}');
+    await waitFor(()=>expect(api.listAdminItems).toHaveBeenLastCalledWith(expect.objectContaining({page:2,q:'kept'})));
+});
+it.each(['','abc','31'])('BATCH 2.2 rejects invalid page %s without replacing the current page',async text=>{
+    vi.mocked(api.listAdminItems).mockResolvedValue({...row('Paging'),totalPages:30,totalElements:1500} as any);
+    render(<MemoryRouter><AdminItems/></MemoryRouter>);await screen.findByRole('button',{name:'Paging'});
+    const input=screen.getAllByRole('textbox',{name:'Číslo stránky evidence'})[0];await userEvent.clear(input);if(text)await userEvent.type(input,text);await userEvent.keyboard('{Enter}');
+    expect(screen.getAllByRole('alert')[0]).toHaveTextContent('od 1 do 30');expect(api.listAdminItems).toHaveBeenCalledTimes(1);
+});

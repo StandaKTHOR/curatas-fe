@@ -1,3 +1,5 @@
+import { uncertainWrite, uncertainCreateMessage } from '../lib/writeOutcome';
+import PhotoPreview from '../components/PhotoPreview';
 import ThreeLevelDictionarySelect from '../components/ThreeLevelDictionarySelect';
 import EditorNavigationGuard from '../components/EditorNavigationGuard';
 import DemusSourceIdentity from '../components/DemusSourceIdentity';
@@ -201,6 +203,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     const [conflictError, setConflictError] = useState<string | null>(null);
     const [globalError, setGlobalError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [createUncertain, setCreateUncertain] = useState(false);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [unauthorizedError, setUnauthorizedError] = useState(false);
     const [forbiddenError, setForbiddenError] = useState(false);
@@ -731,11 +734,12 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                         auditComment: '',
                         legacyData: data.legacyData || {}
                     };
+                    if ((location.state as any)?.createdItemId === Number(id)) setSuccessMessage('Předmět byl úspěšně založen.');
                     setForm(loadedForm);
                     initialFormValuesRef.current = loadedForm;
                     initialFormSnapshotRef.current = getFormSnapshot(loadedForm);
                 })
-                .catch((err: Error) => {if (alive) setGlobalError(err.message);})
+                .catch((err: Error) => {if (alive) setGlobalError(!id && uncertainWrite(err) ? uncertainCreateMessage : err.message);})
                 .finally(() => {if (alive) setLoading(false);});
 
             loadAttachments();
@@ -854,6 +858,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (mainSaveRef.current || editSessionRef.current?.busy) return;
+        if (!id && createUncertain) {setGlobalError(uncertainCreateMessage); return;}
         setConflictError(null);
         setGlobalError(null);
         setSuccessMessage(null);
@@ -868,13 +873,16 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         const currentAcc = (form.accessionNumber || '').trim();
 
         if (!currentInv) {
-            setGlobalError('Inventární číslo je povinné.');
+            setGlobalError('Vyplňte inventární číslo na kartě Základ.');
+            setFieldErrors({inventoryNumber:'Inventární číslo je povinné.'});
+            window.setTimeout(() => {document.querySelector<HTMLInputElement>('input[aria-label="Inventární číslo: Hlavní číslo"]')?.focus();},0);
             setActiveTab('identity');
             return;
         }
 
         if (!form.title?.trim() && !form.objectType?.trim()) {
-            setGlobalError('Vyplňte alespoň titul nebo typ předmětu.');
+            setGlobalError('Vyplňte alespoň titul nebo typ předmětu na kartě Základ.');
+            setFieldErrors({title:'Vyplňte titul nebo typ předmětu.'});
             setActiveTab('identity');
             return;
         }
@@ -1023,14 +1031,16 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 if (bulkMode && savedItem?.id) {
                     await bulkCopyItem(savedItem.id, bulkParams);
                 }
+                if (!savedItem?.id) throw new Error('Server nepotvrdil ID nového předmětu. Před dalším založením ověřte katalog.');
                 if (savedItem?.id) {
                     initialFormSnapshotRef.current = getFormSnapshot(form);
                     formRef.current = form;
                     mainSaveRef.current = false;
-                    navigate(`/admin/items/edit/${savedItem.id}`, { replace: true });
+                    navigate(`/admin/items/edit/${savedItem.id}`, { replace: true, state: {...location.state, createdItemId:savedItem.id} });
                 }
             }
         } catch (err) {
+            if (!id && uncertainWrite(err)) {setCreateUncertain(true);setGlobalError(uncertainCreateMessage);}
             console.error('Chyba při ukládání záznamu:', err);
             if (err instanceof ApiError) {
                 if (err.status === 401) {
@@ -1040,13 +1050,13 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 } else if (err.status === 409 || err.status === 412 || err.status === 428) {
                     setConflictError(err.message || 'Předmět s tímto inventárním číslem již existuje. Zvolte prosím unikátní číslo.');
                 } else {
-                    setGlobalError(err.message || 'Nepodařilo se uložit záznam.');
+                    setGlobalError(!id && uncertainWrite(err) ? uncertainCreateMessage : err.message || 'Nepodařilo se uložit záznam.');
                 }
                 if (err.fieldErrors) {
                     setFieldErrors(err.fieldErrors);
                 }
             } else if (err instanceof Error) {
-                setGlobalError(err.message);
+                setGlobalError(!id && uncertainWrite(err) ? uncertainCreateMessage : err.message);
             } else {
                 setGlobalError('Došlo k neočekávané chybě.');
             }
@@ -1256,7 +1266,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
             </section>}
             <EditorNavigationGuard isDirty={hasUnsavedChanges} isSaving={() => mainSaveRef.current || auditSaving || !!editSessionRef.current?.busy}/>
             <p className="px-6 text-sm">Uložit: hlavní údaje a základní příznaky včetně Archivu. Odborné záznamy a akvizice ukládejte v příslušné sekci.</p>
-            <form id="item-editor" onSubmit={handleSubmit} className="p-6 space-y-4 demus-editor">
+            <form id="item-editor" noValidate onSubmit={handleSubmit} className="p-6 space-y-4 demus-editor">
                 <fieldset disabled={loading || auditSaving || (isViewMode && activeTab !== 'photos')}>
                 {/* 1. ZÁKLADNÍ ÚDAJE & IDENTIFIKACE */}
                 {activeTab === 'identity' && (
@@ -1290,7 +1300,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
 
                             <div className="space-y-1">
                                 <label htmlFor="inventoryNumber">Inventární číslo *</label>
-                                {!id ? <NewInventoryNumber value={form.inventoryNumber || ''} onChange={value => setForm((prev: any) => ({...prev,inventoryNumber:value}))} /> : (<input
+                                {!id ? <NewInventoryNumber error={fieldErrors.inventoryNumber} value={form.inventoryNumber || ''} onChange={value => setForm((prev: any) => ({...prev,inventoryNumber:value}))} /> : (<input
                                     id="inventoryNumber"
                                     value={form.inventoryNumber || ''}
                                     onChange={(e: any) => setForm({ ...form, inventoryNumber: e.target.value })}
@@ -1326,8 +1336,8 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                         </div>
 
                         {id && <div className="grid grid-cols-2 gap-2 text-xs border p-2">
-                            <p>Založil v CURATAS: {form.createdByUser || '—'}</p><p>Datum založení v CURATAS: {form.createdAt || '—'}</p>
-                            <p>Změnil v CURATAS: {form.modifiedByUser || '—'}</p><p>Poslední změna v CURATAS: {form.lastModifiedAt || '—'}</p>
+                            <p>Založil v MESonline: {form.createdByUser || '—'}</p><p>Datum založení v MESonline: {form.createdAt || '—'}</p>
+                            <p>Změnil v MESonline: {form.modifiedByUser || '—'}</p><p>Poslední změna v MESonline: {form.lastModifiedAt || '—'}</p>
                             <p>Zapsal v DEMUS: {form.legacyCreatedBy || '—'}</p><p>Datum zápisu v DEMUS: {form.legacyCreatedAt || '—'}</p>
                             <p>Změnil v DEMUS: {form.legacyUpdatedBy || '—'}</p><p>Datum změny v DEMUS: {form.legacyUpdatedAt || '—'}</p>
                         </div>}
@@ -2004,15 +2014,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                 </div>
                                             )}
                                             <div className="p-1.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-1 text-[11px]">
-                                                <a
-                                                    href={resolveApiUrl(img.url)}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-blue-600 hover:text-blue-800 font-bold px-1 py-0.5"
-                                                    title="Otevřít plný náhled v novém okně"
-                                                >
-                                                    Náhled
-                                                </a>
+                                                <PhotoPreview src={img.url} alt={img.caption || form.title || "Fotografie"} />
                                                 <a
                                                     href="#"
                                                     onClick={event => {event.preventDefault();handleDownloadPhoto(img.url, img.caption);}}
@@ -2054,9 +2056,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                 <SafeImage src={url} alt={`Fotografie ${idx + 1}`} className="w-full h-full object-contain" />
                                             </div>
                                             <div className="p-1.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-1 text-[11px]">
-                                                <a href={resolveApiUrl(url)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 font-bold px-1 py-0.5">
-                                                    Náhled
-                                                </a>
+                                                <PhotoPreview src={url} alt="Fotografie" />
                                                 <a href={resolveApiUrl(url)} download target="_blank" rel="noopener noreferrer" className="text-gray-700 hover:text-gray-900 font-bold px-1 py-0.5">
                                                     Stáhnout
                                                 </a>
@@ -2368,7 +2368,14 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 itemId={id ? Number(id) : undefined} section="origin" onSave={handleSectionSave} />}
                             {museumSubTab === 'reference' && <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current}
                                 readOnly={isViewMode} itemId={id?Number(id):undefined} section="bibliography" onSave={handleSectionSave}/>}
-                            {museumSubTab === 'plus' && <div><p>Plus: význam a zapisovatelný kontrakt polí Plus*/Sluz* čekají na ověření. Původní evidence zůstává pouze pro čtení:</p><DemusLegacyDataView legacyData={form.legacyData} /></div>}
+                            {museumSubTab === 'plus' && <div><p>Plus: význam a zapisovatelný kontrakt polí Plus*/Sluz* čekají na ověření. Původní evidence zůstává pouze pro čtení:</p>{form.legacyData?._cloneSourceHistory && <div className="text-sm" aria-label="Historické údaje originálu">
+    <p>Historické údaje originálu (současný klon má vlastní audit):</p>
+    <p>Zapsal v DEMUS: {form.legacyData._cloneSourceHistory.legacyCreatedBy || '—'}</p>
+    <p>Datum zápisu: {form.legacyData._cloneSourceHistory.legacyCreatedAt || '—'}</p>
+    <p>Změnil v DEMUS: {form.legacyData._cloneSourceHistory.legacyUpdatedBy || '—'}</p>
+    <p>Datum změny: {form.legacyData._cloneSourceHistory.legacyUpdatedAt || '—'}</p>
+</div>}
+<DemusLegacyDataView legacyData={form.legacyData} /></div>}
                             {museumSubTab === 'iso' && (
                                 <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="iso" onSave={handleSectionSave} />
                             )}
@@ -2378,7 +2385,14 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                     {id && !isViewMode && <DemusSourceIdentity itemId={Number(id)}/>}
                                     <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="history" onSave={handleSectionSave} />
                                     <div className="p-4 bg-gray-50 border border-gray-200 rounded space-y-4">
-                                        <DemusLegacyDataView legacyData={form.legacyData} />
+                                        {form.legacyData?._cloneSourceHistory && <div className="text-sm" aria-label="Historické údaje originálu">
+    <p>Historické údaje originálu (současný klon má vlastní audit):</p>
+    <p>Zapsal v DEMUS: {form.legacyData._cloneSourceHistory.legacyCreatedBy || '—'}</p>
+    <p>Datum zápisu: {form.legacyData._cloneSourceHistory.legacyCreatedAt || '—'}</p>
+    <p>Změnil v DEMUS: {form.legacyData._cloneSourceHistory.legacyUpdatedBy || '—'}</p>
+    <p>Datum změny: {form.legacyData._cloneSourceHistory.legacyUpdatedAt || '—'}</p>
+</div>}
+<DemusLegacyDataView legacyData={form.legacyData} />
                                     </div>
                                 </div>
                             )}
