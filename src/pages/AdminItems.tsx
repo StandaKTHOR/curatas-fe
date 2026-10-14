@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import {
     listAdminItems,
@@ -21,6 +21,7 @@ import AdvancedFilterBuilder, { FilterGroup, createEmptyGroup } from '@/componen
 export default function AdminItems() {
     const [data, setData] = useState<any>(null);
     const [loadError, setLoadError] = useState('');
+    const requestRevision = useRef(0);
     const [exporting, setExporting] = useState(false);
     const [searchParams, setSearchParams] = useSearchParams();
     const location = useLocation();
@@ -121,9 +122,10 @@ export default function AdminItems() {
         sessionStorage.setItem('adminItemsSearch', searchStr);
 
         setLoadError('');
+        const revision = ++requestRevision.current;
         listAdminItems(queryParams)
-            .then(setData)
-            .catch(err => setLoadError(err.message));
+            .then(result => { if (revision === requestRevision.current) setData(result); })
+            .catch(err => { if (revision === requestRevision.current) setLoadError(err.message); });
     };
 
     const handleSort = (field: string) => {
@@ -144,7 +146,11 @@ export default function AdminItems() {
         const delayDebounceFn = setTimeout(() => {
             loadData();
         }, 400);
-        return () => clearTimeout(delayDebounceFn);
+        return () => {
+            clearTimeout(delayDebounceFn);
+            // Invalidate pending results immediately, including during the next debounce and unmount.
+            requestRevision.current++;
+        };
     }, [page, searchTerm, filters, isAdvancedFilterActive, advancedFilterGroup, sortField, sortDirection, selectedWorkset]);
 
     const handleFilterChange = (key: string, value: string) => {

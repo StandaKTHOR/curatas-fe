@@ -145,3 +145,15 @@ it('BATCH 2 retains hierarchy draft on a stale-version conflict',async()=>{
     await save();await screen.findByText(/Konflikt verzí/);expect(unload()).toBe(true);
     expect(screen.getByRole('combobox',{name:'Materiál (Číselník) — úroveň 1'})).toHaveValue('10');
 });
+it('BATCH 2.1 preserves null dictionary IDs after a basic section save',async()=>{
+    saved.materialDictionaryId=null;saved.techniqueDictionaryId=null;saved.material='Historical text without FK';
+    hierarchyFixture();mount();await screen.findByDisplayValue('Původní název');
+    await userEvent.click(screen.getByLabelText('Archiv'));
+    await userEvent.click(screen.getByRole('button',{name:'Uložit sekci'}));
+    await waitFor(()=>expect(api.getAdminItem).toHaveBeenCalledTimes(2));
+    await userEvent.click(screen.getByRole('button',{name:'MatTech'}));
+    await waitFor(()=>expect(screen.getByRole('combobox',{name:'Materiál (Číselník) — úroveň 1'})).toBeEnabled());
+    expect(screen.queryByText(/Stávající vazba #/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Původní text: Historical text without FK/)).toBeInTheDocument();
+    expect(unload()).toBe(false);
+});

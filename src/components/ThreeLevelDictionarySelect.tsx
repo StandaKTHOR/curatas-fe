@@ -59,6 +59,7 @@ export default function ThreeLevelDictionarySelect({ type, label, value, histori
         {error && <div role="alert">{error} <button type="button" onClick={() => {
             invalidateHierarchy(type); setRevision(current => current + 1);
         }}>Zkusit znovu</button></div>}
+        {!loading && !error && !nodes.length && <p className="text-xs">Číselník zatím nemá položky. Uložené údaje zůstávají zachované.</p>}
         {historicalValue && <p className="text-xs">Původní text: {historicalValue}{value == null ? ' (bez číselníkové vazby)' : ''}</p>}
         {!historicalValue && value == null && <p className="text-xs">Nevyplněno</p>}
         {!loading && !error && unknown && <p role="status">Stávající vazba #{value} nemá dostupnou tříúrovňovou cestu. Zůstává zachována.</p>}

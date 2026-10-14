@@ -809,7 +809,9 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                     'legacyVerified', 'legacyMarked', 'acquisitionMethod', 'acquisitionDate', 'acquiredFrom',
                     'createdByUser', 'createdAt', 'modifiedByUser', 'lastModifiedAt']) {
                     if (JSON.stringify(prev[key]) === JSON.stringify(baseline[key])) {
-                        next[key] = fresh[key] ?? '';
+                        const nullable = key.endsWith('DictionaryId') || ['legacyArchived', 'legacyCard',
+                            'legacyCopied', 'legacyVerified', 'legacyMarked'].includes(key);
+                        next[key] = fresh[key] ?? (nullable ? null : '');
                         baseline[key] = next[key];
                     }
                 }

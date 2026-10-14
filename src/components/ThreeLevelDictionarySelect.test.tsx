@@ -68,3 +68,17 @@ it('shares a single request between two mounted selectors', async () => {
     await waitFor(() => expect(screen.queryByText('Načítání číselníku…')).not.toBeInTheDocument());
     expect(getDictionaryTree).toHaveBeenCalledTimes(1);
 });
+it('BATCH 2.1 explains an empty dictionary without clearing stored data',async()=>{
+    vi.mocked(getDictionaryTree).mockResolvedValue([]);const onChange=vi.fn();
+    render(<ThreeLevelDictionarySelect type="MATERIAL" label="Materiál" value={99} historicalValue="Historical" onChange={onChange}/>);
+    await screen.findByText(/Číselník zatím nemá položky/);expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByText(/Stávající vazba #99/)).toBeInTheDocument();
+    expect(screen.getByText(/Původní text: Historical/)).toBeInTheDocument();
+});
+it('BATCH 2.1 keeps a shorter real hierarchy selectable without inventing a third level',async()=>{
+    vi.mocked(getDictionaryTree).mockResolvedValue([{id:1,code:null,label:'Root',children:[{id:2,code:null,label:'Child',children:[]}]}]);
+    const onChange=vi.fn();render(<ThreeLevelDictionarySelect type="MATERIAL" label="Materiál" value={2} onChange={onChange}/>);
+    await waitFor(()=>expect(screen.getByRole('combobox',{name:'Materiál — úroveň 2'})).toHaveValue('2'));
+    expect(screen.getByRole('combobox',{name:'Materiál — úroveň 3'})).toBeDisabled();
+    expect(screen.queryByText(/Stávající vazba/)).not.toBeInTheDocument();expect(onChange).not.toHaveBeenCalled();
+});
