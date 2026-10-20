@@ -10,6 +10,8 @@ import AdminItemForm from './pages/AdminItemForm';
 import DataImport from './pages/DataImport';
 import { importTexts } from './features/import/texts';
 import { useLayoutEffect, useRef } from 'react';
+import { CatalogProvider } from './features/catalog/CatalogContext';
+import CatalogSelector from './features/catalog/CatalogSelector';
 
 function AppContent() {
     const appRef = useRef<HTMLDivElement>(null);
@@ -42,6 +44,7 @@ function AppContent() {
                 {token ? <button type="button" onClick={logout}>Odhlásit se</button>
                     : <NavLink to="/login">Vstup pro kurátory</NavLink>}
             </nav>
+            {token && <CatalogSelector />}
         </header>}
         <main className="demus-workspace">
             <Routes>
@@ -66,5 +69,5 @@ function AppContent() {
 }
 
 export default function DemusApp() {
-    return <AuthProvider><AppContent /></AuthProvider>;
+    return <AuthProvider><CatalogProvider><AppContent /></CatalogProvider></AuthProvider>;
 }
