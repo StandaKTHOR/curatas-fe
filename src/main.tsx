@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import App from './App'
 import { getRouterBasename } from './lib/router'
 import '@gov-design-system-ce/fonts/lib/roboto.css'
@@ -15,9 +15,9 @@ import { defineCustomElements } from '@gov-design-system-ce/components/loader'
 
 defineCustomElements();
 
+const router = createBrowserRouter([{path: '*', element: <App/>}], {basename: getRouterBasename()});
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-        <BrowserRouter basename={getRouterBasename()}>
-            <App/>
-        </BrowserRouter>
+        <RouterProvider router={router}/>
     </React.StrictMode>)

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MuseumSection from './MuseumSection';
 import AcquisitionSection from './AcquisitionSection';
+import { invalidateHierarchy } from './ThreeLevelDictionarySelect';
 import {
     getMuseumItem, getDictionaryTree, patchMuseumItem, saveProfessionalRecord, ApiError,
     listMuseumAcquisitions, updateMuseumAcquisition,
@@ -28,7 +29,7 @@ const detail = {
 };
 
 beforeEach(() => {
-    vi.clearAllMocks();
+    vi.clearAllMocks(); invalidateHierarchy();
     vi.mocked(getMuseumItem).mockResolvedValue(detail);
     vi.mocked(getDictionaryTree).mockResolvedValue([
         { id: 1, label: 'Kovy', children: [{ id: 2, label: 'Železo', children: [{ id: 3, label: 'Litina', children: [] }] }] },
@@ -57,12 +58,12 @@ describe('muzeální sekce předmětu', () => {
         expect(saveProfessionalRecord).toHaveBeenCalledWith(7,'ORIGIN',{fields:{kind:'ORIGIN'},clearParty:true},undefined,12);
         expect(record.payload.OsobaVz_VZ).toBe('Historical actor');
     });
-    it('allows choosing an arbitrary depth in the material hierarchy', async () => {
+    it('uses three cascading levels also in the main museum material section', async () => {
         render(<MuseumSection itemId={7} section="materials" />);
-        await waitFor(() => expect(screen.getAllByRole('combobox')[0].querySelector('option[value="3"]'))
-            .toHaveTextContent('Kovy › Železo › Litina'));
-        const choice = screen.getAllByRole('combobox')[0];
-        await userEvent.selectOptions(choice, '3');
+        await waitFor(() => expect(screen.getByRole('combobox', {name:'Materiál — úroveň 1'})).toBeEnabled());
+        await userEvent.selectOptions(screen.getByRole('combobox', {name:'Materiál — úroveň 1'}), '1');
+        await userEvent.selectOptions(screen.getByRole('combobox', {name:'Materiál — úroveň 2'}), '2');
+        await userEvent.selectOptions(screen.getByRole('combobox', {name:'Materiál — úroveň 3'}), '3');
         await userEvent.click(screen.getByRole('button', { name: 'Uložit sekci' }));
         expect(patchMuseumItem).toHaveBeenCalledWith(7, { materialDictionaryId: 3 }, undefined);
     });
@@ -70,8 +71,8 @@ describe('muzeální sekce předmětu', () => {
     it('can clear an existing dictionary reference without restoring the old selection', async () => {
         vi.mocked(getMuseumItem).mockResolvedValue({ ...detail, materialDictionaryId: 3 });
         render(<MuseumSection itemId={7} section="materials" />);
-        await waitFor(() => expect(screen.getAllByRole('combobox')[0]).toHaveValue('3'));
-        await userEvent.selectOptions(screen.getAllByRole('combobox')[0], '');
+        await waitFor(() => expect(screen.getByRole('combobox',{name:'Materiál — úroveň 3'})).toHaveValue('3'));
+        await userEvent.selectOptions(screen.getByRole('combobox',{name:'Materiál — úroveň 1'}), '');
         expect(screen.getAllByRole('combobox')[0]).toHaveValue('');
         await userEvent.click(screen.getByRole('button', { name: 'Uložit sekci' }));
         expect(patchMuseumItem).toHaveBeenCalledWith(7, { materialDictionaryId: null }, undefined);
@@ -118,8 +119,8 @@ describe('muzeální sekce předmětu', () => {
                 <MuseumSection itemId={7} section="materials" />
             </form>
         );
-        await waitFor(() => expect(screen.getAllByPlaceholderText('Hledat v hierarchii')[0]).toBeInTheDocument());
-        const searchInput = screen.getAllByPlaceholderText('Hledat v hierarchii')[0];
+        await waitFor(() => expect(screen.getAllByPlaceholderText('Hledat v číselníku')[0]).toBeInTheDocument());
+        const searchInput = screen.getAllByPlaceholderText('Hledat v číselníku')[0];
         await userEvent.type(searchInput, 'paličkovaná{enter}');
         expect(onSubmit).not.toHaveBeenCalled();
     });
@@ -174,7 +175,19 @@ describe('akvizice', () => {
         expect(await screen.findByText('A1')).toBeInTheDocument();
         expect(screen.getByText('A2')).toBeInTheDocument();
         await userEvent.click(screen.getAllByRole('button', { name: 'Upravit' })[0]);
+        await userEvent.type(screen.getByLabelText('Předchozí vlastník'),'Reviewed owner');
         await userEvent.click(screen.getByRole('button', { name: 'Uložit akvizici' }));
         expect(updateMuseumAcquisition).toHaveBeenCalledWith(7, 1, expect.objectContaining({ accessionNumber: 'A1' }), undefined);
     });
+});
+
+describe('BATCH 1.1 professional CREATE recovery',()=>{
+ it.each(['refresh','network'])('prevents duplicate professional CREATE after %s failure',async mode=>{
+  const drafts={current:{}};
+  if(mode==='refresh'){vi.mocked(saveProfessionalRecord).mockResolvedValue({id:55,kind:'DOCUMENTATION',payload:{Dokument_DK:'Proof'},dictionaryId:null,partyId:null} as any);vi.mocked(getMuseumItem).mockResolvedValueOnce(detail).mockRejectedValue(new Error('Refresh failed'));}
+  else vi.mocked(saveProfessionalRecord).mockRejectedValue(new TypeError('Lost connection'));
+  render(<MuseumSection itemId={7} section='documentation' drafts={drafts}/>);await userEvent.type(await screen.findByLabelText('Dokument / název'),'Proof');
+  await userEvent.click(screen.getByRole('button',{name:'Uložit záznam'}));await screen.findByText(mode==='refresh'?/Záznam byl uložen; obnovení dat selhalo/:/Výsledek vytvoření není potvrzen/);
+  await userEvent.click(screen.getByRole('button',{name:'Uložit záznam'}));expect(saveProfessionalRecord).toHaveBeenCalledTimes(1);
+ });
 });

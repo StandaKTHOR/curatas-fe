@@ -17,6 +17,7 @@ const snapshot = (status: ImportStatusResponse['status']): ImportStatusResponse 
 });
 function mockApi(status: ImportStatusResponse['status'] = 'UPLOADED') {
   return {
+    capabilities: vi.fn().mockResolvedValue({executionEnabled: true}),
     create: vi.fn().mockResolvedValue({ id: 'job-1', status: 'CREATED' }),
     upload: vi.fn().mockResolvedValue(undefined), validate: vi.fn().mockResolvedValue(undefined),
     ready: vi.fn().mockResolvedValue(undefined), start: vi.fn().mockResolvedValue(undefined),
@@ -175,4 +176,13 @@ describe('Import dat', () => {
     await waitFor(() => expect(api.upload).toHaveBeenCalledTimes(2));
     expect(api.create).toHaveBeenCalledTimes(1);
   });
+});
+
+it.each([false,true])('blocks import when capability is disabled or fails (%s)',async failure=>{
+    const api=mockApi('VALID');
+    if(failure)api.capabilities.mockRejectedValue(new Error('unavailable'));
+    else api.capabilities.mockResolvedValue({executionEnabled:false});
+    mount(api);const button=await screen.findByRole('button',{name:t.start});
+    await waitFor(()=>expect(button).toBeDisabled());await userEvent.click(button);
+    expect(api.ready).not.toHaveBeenCalled();expect(api.start).not.toHaveBeenCalled();
 });

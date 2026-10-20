@@ -8,7 +8,7 @@ export const professionalFields: Record<MuseumRecordKind, [string,string][]> = {
     ACTION:[['Poradi_AK','Pořadí'],['Prezentace_AK','Prezentace'],['Revers_AK','Revers'],['CKtlg_AK','Číslo katalogu'],['Pozn_AK','Poznámka']],
     ISO:[['KodISO_SO','Kód ISO'],['CharISO_SO','Charakteristika'],['MatISO_SO','Materiál ISO'],['CenaISO_SO','Cena ISO'],['MenaISO_SO','Měna ISO'],['PovrchISO_SO','Povrch'],['TvarISO_SO','Tvar']],
     ORIGIN:[['OsobaVz_VZ','Osoba vzniku (historický text)'],['Role_VZ','Role'],['Datace_VZ','Datace'],['RokOd_VZ','Rok od'],['RokDo_VZ','Rok do'],['MistoVz_VZ','Místo vzniku'],['Pozn_VZ','Poznámka'],['Poradi_VZ','Pořadí']],
-    MATERIAL_TECHNIQUE:[['Material_MT','Materiál tuple'],['Technika_MT','Technika tuple'],['Pozn_MT','Poznámka MatTech'],['Poradi_MT','Pořadí']],
+    MATERIAL_TECHNIQUE:[['Material_MT','Materiál (uložený text)'],['Technika_MT','Technika (uložený text)'],['Pozn_MT','Poznámka k materiálu a technice'],['Poradi_MT','Pořadí']],
     BIBLIOGRAPHY:[['Ref_RF','Reference — nativní klíč'],['Str_RF','Strany']],
     DEACCESSION:[['DuvVyr_VS','Důvod (DEMUS kód)'],['DatVyr_VS','Datum vyřazení'],['CDoklVyr_VS','Číslo dokumentu'],['CESVyr_VS','Číslo CES'],['SchvalVyr_VS','Schválil'],['ZpUb_VS','Způsob úbytku'],['NovyMaj_VS','Nový majitel'],['Pozn_VS','Poznámka']],
 };

@@ -153,7 +153,12 @@ async function versionedWrite<T>(itemId: number, path: string, init: RequestInit
         const tag = response.headers.get('ETag');
         // A successful write without its next token must not authorize another stale write.
         editor.etag = tag || '';
-        return response.status === 204 ? undefined as T : response.json();
+        if (!tag) throw new Error('Server nepotvrdil verzi uloženého záznamu. Obnovte záznam před dalším uložením.');
+        return response.status === 204 ? undefined as T : await response.json();
+    } catch (error) {
+        // A lost CREATE response may follow a committed transaction.
+        if (init.method === 'POST' && !(error instanceof ApiError && error.status >= 400 && error.status < 500)) editor.etag = '';
+        throw error;
     } finally { editor.busy = false; }
 }
 
@@ -385,6 +390,12 @@ export async function getAdminItem(id: string) {
     if (before !== after || museumResponse.headers.get('ETag') !== before) {
         throw new ApiError(412, 'Předmět se změnil během načítání. Načtěte jej znovu.');
     }
+    for (const key of ['legacyArchived','legacyCard','legacyCopied','legacyVerified','legacyMarked',
+        'legacyCreatedBy','legacyCreatedAt','legacyUpdatedBy','legacyUpdatedAt']) {
+        detail[key] = museum[key];
+    }
+    detail.createdByUser = detail.createdByUser ?? detail.createdBy;
+    detail.modifiedByUser = detail.modifiedByUser ?? detail.lastModifiedBy;
     Object.defineProperty(detail, '_editSession', {value: {itemId, etag: after, museumSnapshot: museum}});
     return detail;
 }
@@ -752,8 +763,30 @@ export async function getDictionaryTree(type: string) {
     const r = await fetch(resolveApiUrl(`/api/v1/dictionaries/tree?type=${encodeURIComponent(type)}`), {
         headers: getAuthHeader()
     });
-    if (!r.ok) throw new Error('Načtení stromu číselníku selhalo');
-    return r.json();
+    if (r.status === 401) throw new ApiError(401, 'Číselník nelze načíst: přihlášení vypršelo nebo chybí. Přihlaste se znovu.');
+    if (r.status === 403) throw new ApiError(403, 'Číselník nelze načíst: přístup není povolen pro tento účet nebo síť.');
+    if (!r.ok) throw new ApiError(r.status, `Načtení stromu číselníku selhalo (HTTP ${r.status}).`);
+    let tree: unknown;
+    try { tree = await r.json(); } catch { throw new Error('Server nevrátil čitelnou odpověď číselníku.'); }
+    if (['MATERIAL', 'TECHNIQUE'].includes(type.toUpperCase())) {
+        // This endpoint returns a complete tree, not a lazy node/hasChildren response.
+        // Missing children must never be mistaken for an empty, fully loaded leaf.
+        const invalid = () => new Error('Server vrátil neúplnou nebo neplatnou hierarchii číselníku. Potomky nelze určit; uložená vazba zůstává zachována.');
+        if (!Array.isArray(tree)) throw invalid();
+        const seen = new Set<number>();
+        const pending = tree.map(node => ({node, parentId: null as number | null}));
+        while (pending.length) {
+            const {node, parentId} = pending.pop()!;
+            if (!node || typeof node !== 'object' || !Number.isSafeInteger(node.id) || node.id <= 0 ||
+                typeof node.label !== 'string' || !Array.isArray(node.children) || seen.has(node.id) ||
+                (node.type !== undefined && node.type !== type.toUpperCase()) ||
+                (node.parentId !== undefined && node.parentId !== parentId) ||
+                (node.hasChildren !== undefined && node.hasChildren !== (node.children.length > 0))) throw invalid();
+            seen.add(node.id);
+            pending.push(...node.children.map((child: any) => ({node: child, parentId: node.id})));
+        }
+    }
+    return tree as any;
 }
 
 // ==========================================

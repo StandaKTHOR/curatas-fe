@@ -2,11 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { GovButton } from '@gov-design-system-ce/react';
 import { getItem, listAttachments, API_BASE, resolveApiUrl } from '../lib/api';
-import { useAuth } from '../components/AuthContext';
 import SafeImage from "@/components/SafeImage";
 import MuseumCardPrint from '@/components/MuseumCardPrint';
-import SelectiveCloneModal from '@/components/SelectiveCloneModal';
-import DeaccessionModal from '@/components/DeaccessionModal';
 import {
     FaPrint,
     FaCopy,
@@ -47,13 +44,9 @@ export default function Detail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const location = useLocation();
-    const auth = useAuth();
-    const token = auth?.token || null;
     const [it, setIt] = useState<any>(null);
     const [attachments, setAttachments] = useState<any[]>([]);
     const [showPrintModal, setShowPrintModal] = useState(false);
-    const [showCloneModal, setShowCloneModal] = useState(false);
-    const [showDeaccessionModal, setShowDeaccessionModal] = useState(false);
 
     const handleBackToList = () => {
         const stateFromSearch = (location.state as any)?.fromSearch;
@@ -73,11 +66,7 @@ export default function Detail() {
         if (id) getItem(id).then(setIt).catch(console.error);
     }, [id]);
 
-    useEffect(() => {
-        if (it?.id) {
-            listAttachments(it.id).then(setAttachments).catch(() => {});
-        }
-    }, [it?.id]);
+
 
     if (!it) {
         return (
@@ -134,28 +123,7 @@ export default function Detail() {
                     >
                         <span className="flex items-center gap-1.5"><FaPrint /> Tisk karty předmětu</span>
                     </GovButton>
-                    {token && (
-                        <>
-                            <GovButton
-                                type="outlined"
-                                color="neutral"
-                                size="s"
-                                onClick={() => setShowCloneModal(true)}
-                            >
-                                <span className="flex items-center gap-1.5"><FaCopy /> Klonovat</span>
-                            </GovButton>
-                            {!it.deaccessionedAt && (
-                                <GovButton
-                                    type="outlined"
-                                    color="error"
-                                    size="s"
-                                    onClick={() => setShowDeaccessionModal(true)}
-                                >
-                                    <span className="flex items-center gap-1.5 text-red-600"><FaTrash /> Vyřadit</span>
-                                </GovButton>
-                            )}
-                        </>
-                    )}
+
                     <GovButton
                         type="outlined"
                         color="neutral"
@@ -428,30 +396,7 @@ export default function Detail() {
             {showPrintModal && (
                 <MuseumCardPrint item={it} onClose={() => setShowPrintModal(false)} />
             )}
-            <SelectiveCloneModal
-                isOpen={showCloneModal}
-                itemId={it.id}
-                itemTitle={it.title}
-                inventoryNumber={it.inventoryNumber || ''}
-                onClose={() => setShowCloneModal(false)}
-                onSuccess={(cloned: any) => {
-                    setShowCloneModal(false);
-                    if (cloned?.id) {
-                        navigate(`/items/${cloned.id}`);
-                    }
-                }}
-            />
-            <DeaccessionModal
-                isOpen={showDeaccessionModal}
-                itemId={it.id}
-                itemTitle={it.title}
-                inventoryNumber={it.inventoryNumber || it.accessionNumber || ''}
-                onClose={() => setShowDeaccessionModal(false)}
-                onSuccess={() => {
-                    setShowDeaccessionModal(false);
-                    if (id) getItem(id).then(setIt);
-                }}
-            />
+
         </div>
     );
 }
