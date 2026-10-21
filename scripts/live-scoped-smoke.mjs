@@ -55,12 +55,13 @@ try {
     assert.equal(byteEvidence.original,fixture.originalSha256);assert.equal(byteEvidence.thumbnail,fixture.thumbnailSha256);assert.equal(byteEvidence.document,fixture.documentSha256);Object.assign(hashes,byteEvidence);record('12 exact original/thumbnail/document SHA256 via real frontend transport and browser CORS');
     await page.getByRole('button',{name:'local.pdf',exact:true}).click();const downloaded=page.waitForEvent('download');await page.getByRole('button',{name:'Stáhnout originál'}).click();const download=await downloaded;
     const stream=await download.createReadStream(),hash=createHash('sha256');for await(const bytes of stream)hash.update(bytes);assert.equal(hash.digest('hex'),fixture.documentSha256);assert.equal(download.suggestedFilename(),'local.pdf');record('13 real browser document download, exact bytes');
+    await page.evaluate(()=>window.scrollTo(0,0));
     await page.screenshot({path:path.join(evidence,'scoped-workspace.png'),fullPage:true});
     const negative=await page.evaluate(async fixture=>{
-        const {scopedApi}=await import('/src/features/scoped/scopedApi.ts');const api=scopedApi(11,localStorage.getItem('token'));const result=[];
-        for(const operation of [()=>api.detail(303,new AbortController().signal),()=>api.mediaDetail(101,fixture.foreignId,new AbortController().signal)]){try{await operation();result.push('LEAK');}catch(e){result.push(e.status);}}
+        const {scopedApi}=await import('/src/features/scoped/scopedApi.ts');const api=scopedApi(11,localStorage.getItem('token'));const result=[];const local=await api.mediaDetail(101,fixture.imageId,new AbortController().signal);
+        for(const operation of [()=>api.detail(303,new AbortController().signal),()=>api.mediaDetail(101,fixture.foreignId,new AbortController().signal),()=>api.bytes(101,{...local,id:fixture.foreignId},'content',new AbortController().signal)]){try{await operation();result.push('LEAK');}catch(e){result.push(e.status);}}
         const reader=scopedApi(11,fixture.readerToken);try{await reader.patch(101,(await reader.detail(101,new AbortController().signal)).etag,{title:'DENIED'},new AbortController().signal);result.push('WRITE');}catch(e){result.push(e.status);}return result;
-    },fixture);assert.deepEqual(negative,[404,404,403]);record('14 foreign item/media404 and read-only actor write403 through FE client');
+    },fixture);assert.deepEqual(negative,[404,404,404,403]);hashes.foreignByteStatus=negative[2];record('14 foreign item/metadata/bytes404 and read-only actor write403 through FE client');
     await page.getByRole('button',{name:'original.png',exact:true}).click();await page.getByRole('button',{name:'Náhled obrázku'}).click();await expect(page.getByRole('img',{name:/Soukromý obrázek/})).toBeVisible();
     await page.locator('#catalog-context').selectOption('12');await expect(page.getByRole('img',{name:/Soukromý obrázek/})).toHaveCount(0);await expect(page.getByRole('button',{name:/SYNTHETIC 202/})).toBeVisible();record('15 catalog switch clears old media/item DOM');
     await page.locator('#catalog-context').selectOption('11');await page.getByRole('button',{name:/SYNTHETIC OTHER EDITOR/}).click();await page.getByRole('button',{name:'original.png',exact:true}).click();await page.getByRole('button',{name:'Náhled obrázku'}).click();
