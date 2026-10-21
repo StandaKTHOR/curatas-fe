@@ -10,7 +10,8 @@ const fixture = JSON.parse(await readFile(process.argv[2], 'utf8'));
 const evidence = process.argv[3];
 process.env.VITE_API_BASE = fixture.backend;
 process.env.VITE_SCOPED_WORKSPACE_ENABLED = 'true';
-const scenarios = [], requests = [], hashes = {};
+const scenarios = [], requests = [], hashes = {}, scopedRequests = [], externalRequests = [];
+let scopedPhase=false;
 const record = name => { scenarios.push(name); console.log('PASS '+name); };
 let vite, browser, page;
 const watchdog=setTimeout(async()=>{console.error('Owned smoke deadline exceeded');if(browser)await browser.close();if(vite)await vite.close();process.exit(2);},110000);watchdog.unref();
@@ -19,13 +20,15 @@ try {
     browser = await chromium.launch({ headless:true });
     const context = await browser.newContext({ acceptDownloads:true, viewport:{width:1360,height:980} });
     page = await context.newPage();page.setDefaultTimeout(12000);
+    page.on('request',request=>{if(!scopedPhase)return;const url=new URL(request.url());if(url.origin===new URL(fixture.backend).origin)scopedRequests.push({method:request.method(),path:url.pathname});else if(url.protocol.startsWith('http')&&url.origin!=='http://127.0.0.1:18183')externalRequests.push(url.origin+url.pathname);});
     page.on('response',r=>{ if(r.url().startsWith(fixture.backend)) requests.push({method:r.request().method(),path:new URL(r.url()).pathname,status:r.status()}); });
     await page.goto('http://127.0.0.1:18183/login');
     await page.getByPlaceholder('např. novak_k').fill(fixture.username);
     await page.locator('input[type=password]').fill(fixture.password);
     await page.getByRole('button',{name:'Autorizovaný vstup'}).click();
     await page.waitForURL('**/admin/items');record('1 real login with test-only credentials');
-    await page.getByRole('link',{name:'Katalogová pracovní plocha',exact:true}).click();
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('link',{name:'Katalogová pracovní plocha',exact:true}).click();scopedPhase=true;
     await page.locator('#catalog-context').selectOption('11');record('2 explicit catalog selection/revalidation');
     await page.getByRole('button',{name:/SYNTHETIC 101/}).click();record('3 scoped item list');
     await expect(page.getByTestId('item-etag')).toHaveText('"0"');
@@ -69,9 +72,11 @@ try {
     for(let n=0;n<50;n++){try{await access(path.join(evidence,'revoke.done'));break;}catch{await new Promise(r=>setTimeout(r,100));}}
     await access(path.join(evidence,'revoke.done'));await page.getByRole('button',{name:'Otevřít obrázek'}).click();await expect(page.getByText(/Soukromý obsah byl uzavřen/)).toBeVisible();await expect(page.getByRole('img',{name:/Soukromý obrázek/})).toHaveCount(0);record('16 committed grant revocation denies next byte GET and clears UI');
     await page.getByRole('button',{name:'Odhlásit se'}).click();await page.waitForURL('**/login');assert.equal(await page.evaluate(()=>localStorage.getItem('token')),null);record('17 logout clears session and private DOM');
+    const unauthorized=await page.evaluate(async()=>{const {scopedApi}=await import('/src/features/scoped/scopedApi.ts');try{await scopedApi(11,'invalid.synthetic.jwt').detail(101,new AbortController().signal);return 'LEAK';}catch(e){return e.status;}});assert.equal(unauthorized,401);record('18 invalid JWT401 and no scoped v1/static/public/external fallback');
+    assert(scopedRequests.length>20);assert(scopedRequests.every(r=>r.path.startsWith('/api/v2/')));assert.deepEqual(externalRequests,[]);
     assert(requests.some(r=>r.path.includes('/api/v2/')&&r.status===412));assert(requests.some(r=>r.path.endsWith('/content')&&r.status===403));
     // Legacy navigation after existing login may call v1; the new scoped workspace and transport never use a v1/media fallback.
-    await writeFile(path.join(evidence,'result.json'),JSON.stringify({status:'PASS',scenarios,hashes,requests,browserVersion:browser.version(),backend:fixture.backend,frontend:'http://127.0.0.1:18183',fixture:'OWNED_SYNTHETIC_ONLY'},null,2));
+    await writeFile(path.join(evidence,'result.json'),JSON.stringify({status:'PASS',scenarios,hashes,requests,scopedRequests,externalRequests,browserVersion:browser.version(),backend:fixture.backend,frontend:'http://127.0.0.1:18183',fixture:'OWNED_SYNTHETIC_ONLY'},null,2));
 } catch(error) {
     console.error(error);if(page)await writeFile(path.join(evidence,'failure.html'),await page.content()).catch(()=>{});if(page)await page.screenshot({path:path.join(evidence,'failure.png'),fullPage:true}).catch(()=>{});
     await writeFile(path.join(evidence,'result.json'),JSON.stringify({status:'FAIL',scenarios,hashes,requests,error:String(error)},null,2));process.exitCode=1;
