@@ -8,9 +8,10 @@ export default function MediaPanel({ api, itemId, onFatal }: { api: ScopedApi; i
     const [selected, setSelected] = useState<Media | null>(null);
     const [image, setImage] = useState<string | null>(null);
     const object = useRef<string | null>(null);
+    const downloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const task = useTask(onFatal); const { run, cancel } = task;
-    const clear = useCallback(() => { cancel(); if (object.current) URL.revokeObjectURL(object.current); object.current = null; setImage(null); }, [cancel]);
-    useEffect(() => () => { if (object.current) URL.revokeObjectURL(object.current); }, []);
+    const clear = useCallback(() => { cancel(); if (downloadTimer.current) clearTimeout(downloadTimer.current); downloadTimer.current = null; if (object.current) URL.revokeObjectURL(object.current); object.current = null; setImage(null); }, [cancel]);
+    useEffect(() => () => { if (downloadTimer.current) clearTimeout(downloadTimer.current); if (object.current) URL.revokeObjectURL(object.current); }, []);
     const load = useCallback((after?: string) => {
         clear(); setSelected(null); if (!after) { setRows([]); setNext(null); }
         void run(s => api.media(itemId, s, after), page => { setRows(old => after ? [...old, ...page.items] : page.items); setNext(page.nextAfterId); });
@@ -27,7 +28,8 @@ export default function MediaPanel({ api, itemId, onFatal }: { api: ScopedApi; i
             if (download) {
                 const anchor = document.createElement('a'); anchor.href = url; anchor.download = entry.name;
                 document.body.appendChild(anchor); anchor.click(); anchor.remove();
-                // Retain only until the next media action or unmount; the download may acquire the blob asynchronously.
+                // Allow browser acquisition, then release the temporary download URL. Context changes release it sooner.
+                downloadTimer.current = setTimeout(() => { if (object.current === url) { URL.revokeObjectURL(url); object.current = null; } downloadTimer.current = null; }, 1000);
             } else setImage(url);
         }, false, () => { clear(); setSelected(null); setRows([]); });
     }

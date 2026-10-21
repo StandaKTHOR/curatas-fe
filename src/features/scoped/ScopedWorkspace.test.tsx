@@ -24,7 +24,7 @@ function setup() {
 function workspace() { return render(<MemoryRouter><ScopedWorkspace /></MemoryRouter>); }
 async function detail() {fireEvent.click(await screen.findByRole('button',{name:/Local item/}));await screen.findByText('Název na serveru');await screen.findByRole('button',{name:'private.png'});}
 async function preview(){fireEvent.click(await screen.findByRole('button',{name:'private.png'}));fireEvent.click(await screen.findByRole('button',{name:'Náhled obrázku'}));return screen.findByRole('img');}
-beforeEach(setup);afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
+beforeEach(setup);afterEach(()=>{vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();vi.unstubAllEnvs();});
 describe('isolated scoped workspace',()=>{
     it('requires feature flag, session and explicit catalog before item reads',()=>{
         vi.stubEnv('VITE_SCOPED_WORKSPACE_ENABLED','false');const view=workspace();expect(screen.getByText(/není zapnuta/)).toBeInTheDocument();expect(api.list).not.toHaveBeenCalled();
@@ -101,6 +101,12 @@ describe('media byte lifecycle',()=>{
         let resolve!:(b:Blob)=>void;vi.mocked(api.bytes).mockImplementation(()=>new Promise(r=>resolve=r));const view=render(<MediaPanel api={api} itemId={101} onFatal={vi.fn()}/>);
         fireEvent.click(await screen.findByRole('button',{name:'private.png'}));fireEvent.click(await screen.findByRole('button',{name:'Náhled obrázku'}));fireEvent.click(screen.getByRole('button',{name:'Zavřít médium'}));
         await act(async()=>resolve(new Blob(['old'])));expect(URL.createObjectURL).not.toHaveBeenCalled();expect(screen.queryByRole('img')).not.toBeInTheDocument();view.unmount();
+    });
+    it('releases a temporary download URL after browser acquisition',async()=>{
+        vi.spyOn(globalThis.HTMLAnchorElement.prototype,'click').mockImplementation(()=>{});const view=render(<MediaPanel api={api} itemId={101} onFatal={vi.fn()}/>);
+        fireEvent.click(await screen.findByRole('button',{name:'private.png'}));await screen.findByRole('button',{name:'Stáhnout originál'});vi.useFakeTimers();
+        fireEvent.click(screen.getByRole('button',{name:'Stáhnout originál'}));await act(async()=>{await Promise.resolve();});expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+        act(()=>vi.advanceTimersByTime(1000));expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:private');view.unmount();expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
     });
     it('PDF has download only, no image preview or embedded document context',async()=>{
         vi.mocked(api.media).mockResolvedValue({items:[{...media,kind:'ATTACHMENT',name:'doc.pdf',mimeType:'application/pdf',variants:['content']}],nextAfterId:null});vi.mocked(api.mediaDetail).mockResolvedValue({...media,kind:'ATTACHMENT',name:'doc.pdf',mimeType:'application/pdf',variants:['content']});

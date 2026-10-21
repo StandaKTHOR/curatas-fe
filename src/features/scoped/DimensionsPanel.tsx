@@ -13,7 +13,7 @@ export default function DimensionsPanel({ api, itemId, onFatal, onChanged }: { a
         if (!after) { setRows([]); setNext(null); }
         void run(s => api.dimensions(itemId, s, after), result => {
             setRows(old => after ? [...old, ...result.value.items] : result.value.items); setNext(result.value.nextAfterId);
-            if (!editing) setTag(result.etag); 
+            if (!editing) setTag(result.etag);
         });
     }, [api, itemId, run, editing]);
     // Initial load belongs to this item mount, never to draft changes.
