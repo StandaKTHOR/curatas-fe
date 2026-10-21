@@ -13,7 +13,7 @@ export class CatalogApiError extends Error {
 }
 async function read<T>(path: string, token: string, signal: AbortSignal): Promise<T> {
     const response = await fetch(resolveApiUrl(path), {
-        headers: { Authorization: `Bearer ${token}` }, signal, cache: 'no-store',
+        headers: { Authorization: `Bearer ${token}` }, signal, cache: 'no-store', redirect: 'error', credentials: 'omit',
     });
     if (!response.ok) throw new CatalogApiError(response.status);
     return response.json() as Promise<T>;

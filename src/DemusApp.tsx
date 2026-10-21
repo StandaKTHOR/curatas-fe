@@ -12,6 +12,7 @@ import { importTexts } from './features/import/texts';
 import { useLayoutEffect, useRef } from 'react';
 import { CatalogProvider } from './features/catalog/CatalogContext';
 import CatalogSelector from './features/catalog/CatalogSelector';
+import ScopedWorkspace from './features/scoped/ScopedWorkspace';
 
 function AppContent() {
     const appRef = useRef<HTMLDivElement>(null);
@@ -34,6 +35,7 @@ function AppContent() {
             </div>
             <nav aria-label="Hlavní menu" className="demus-menubar">
                 <NavLink end to="/">Katalog sbírek</NavLink>
+                {token && import.meta.env.VITE_SCOPED_WORKSPACE_ENABLED === 'true' && <NavLink to="/scoped/items">Katalogová pracovní plocha</NavLink>}
                 {token && <NavLink to="/admin/items">Sbírky — evidence předmětů</NavLink>}
                 {admin && <NavLink to="/admin/import">{importTexts.title}</NavLink>}
                 <NavLink to="/feedback">Připomínky</NavLink>
@@ -53,6 +55,7 @@ function AppContent() {
                 <Route path="/detail/:id" element={<Detail />} />
                 <Route path="/feedback" element={<Feedback />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/scoped/items" element={<ScopedWorkspace />} />
                 <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
                     <Route path="/admin/import" element={<DataImport />} />
                 </Route>
