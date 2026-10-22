@@ -1,0 +1,5 @@
+# BATCH4B frontend receipt
+
+Tested code `7479dda5b2a0f84d896897d5ee9c6857278c2f3b` on `feature/b4b-workspace-switcher-20261022`. TypeScript, lint (23 inherited warnings/zero errors), Vitest354 and production build PASS. Three real-browser harnesses18+29+18 PASS against committed BE in a single isolated PG17 runner. New13 unit cases and18 browser scenarios prove own/shared switcher, explicit selection, independent context, read-only UI, actual persistence/revocation, late-response and blob/logout cleanup. No parallel workspace state; existing CatalogProvider remains authoritative. Legacy screens remain explicitly separate, full multi-catalog activation blocked.
+
+All11 required reports: `D:\ProjektyJava\IdeaProjects\curatas-be\scratch\batch4b-20261022\be\reports\batch4b`. Exact final heads/all commits/clean worktrees and cleanup: `D:\ProjektyJava\IdeaProjects\curatas-be\scratch\batch4b-20261022\evidence\final-state.json`. This receipt changes no tested application code. No import, push, deployment or main merge.
