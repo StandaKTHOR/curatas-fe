@@ -1,0 +1,59 @@
+{
+  "testedCommit": "0dc3a27c0c17535002e30d72b788da072a1750b8",
+  "results": {
+    "typecheck": {
+      "exitCode": 0,
+      "ended": "2026-10-22T11:18:32.9404130+02:00",
+      "head": "0dc3a27c0c17535002e30d72b788da072a1750b8",
+      "arguments": [
+        "run",
+        "typecheck"
+      ],
+      "started": "2026-10-22T11:18:27.6660306+02:00"
+    },
+    "lint": {
+      "exitCode": 0,
+      "ended": "2026-10-22T11:18:36.2727420+02:00",
+      "head": "0dc3a27c0c17535002e30d72b788da072a1750b8",
+      "arguments": [
+        "run",
+        "lint"
+      ],
+      "started": "2026-10-22T11:18:32.9946441+02:00"
+    },
+    "test": {
+      "exitCode": 0,
+      "ended": "2026-10-22T11:19:50.0780940+02:00",
+      "head": "0dc3a27c0c17535002e30d72b788da072a1750b8",
+      "arguments": [
+        "run",
+        "test",
+        "--",
+        "--maxWorkers=2",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=D:\\ProjektyJava\\IdeaProjects\\curatas-be\\scratch\\batch4c-20261022/evidence/final/fe-vitest.json"
+      ],
+      "started": "2026-10-22T11:18:36.3122120+02:00"
+    },
+    "build": {
+      "exitCode": 0,
+      "ended": "2026-10-22T11:19:55.1839507+02:00",
+      "head": "0dc3a27c0c17535002e30d72b788da072a1750b8",
+      "arguments": [
+        "run",
+        "build"
+      ],
+      "started": "2026-10-22T11:19:50.1166678+02:00"
+    }
+  },
+  "vitestTests": 380,
+  "browserScenarios": {
+    "existing": 18,
+    "mvp": 29,
+    "workspaces": 18,
+    "creation": 17
+  },
+  "backendReports": "D:\\ProjektyJava\\IdeaProjects\\curatas-be\\scratch\\batch4c-20261022\\be\\reports\\batch4c",
+  "rawEvidence": "D:\\ProjektyJava\\IdeaProjects\\curatas-be\\scratch\\batch4c-20261022\\evidence"
+}
