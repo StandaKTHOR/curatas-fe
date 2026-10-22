@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CatalogProvider, SessionCatalogProvider, useCatalog } from './CatalogContext';
 import CatalogSelector from './CatalogSelector';
 
@@ -15,7 +15,8 @@ function setup(fetcher = vi.fn().mockResolvedValue(response({ items: [a, b], nex
     const rendered = render(<CatalogProvider><CatalogSelector /></CatalogProvider>);
     return { fetcher, logout, ...rendered };
 }
-afterEach(() => { vi.unstubAllGlobals(); });
+beforeEach(() => { vi.stubEnv('VITE_SCOPED_WORKSPACE_ENABLED','false'); });
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 describe('catalog metadata context', () => {
     it('loads authorized catalogs but never auto-selects the first', async () => {

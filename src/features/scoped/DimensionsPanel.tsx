@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { decimal, type Dimension, type ScopedApi, type Versioned } from './scopedApi';
 import { useTask } from './useTask';
 
-export default function DimensionsPanel({ api, itemId, onFatal, onChanged }: { api: ScopedApi; itemId: number; onFatal: (status: number) => void; onChanged: () => void }) {
+export default function DimensionsPanel({ api, itemId, onFatal, onChanged, allowWrite=true }: { api: ScopedApi; itemId: number; onFatal: (status: number) => void; onChanged: () => void; allowWrite?: boolean }) {
     const [rows, setRows] = useState<Dimension[]>([]); const [next, setNext] = useState<number | null>(null);
     const [selected, setSelected] = useState<Versioned<Dimension> | null>(null);
     const [etag, setTag] = useState(''); const [editing, setEditing] = useState(false);
@@ -38,13 +38,13 @@ export default function DimensionsPanel({ api, itemId, onFatal, onChanged }: { a
     return <section aria-label="Rozměry">
         <h3>Rozměry</h3>
         <button type="button" disabled={task.busy || editing} onClick={() => load()}>Obnovit rozměry</button>
-        <button type="button" disabled={task.busy || !etag || editing} onClick={() => { setSelected(null); setDraft({ type: '', value: '', unit: null }); setEditing(true); setConflict(false); }}>Nový rozměr</button>
+        {allowWrite && <button type="button" disabled={task.busy || !etag || editing} onClick={() => { setSelected(null); setDraft({ type: '', value: '', unit: null }); setEditing(true); setConflict(false); }}>Nový rozměr</button>}
         {task.busy && <p role="status">Načítání rozměrů…</p>}{task.error && <p role="alert">{task.error}</p>}
         {!task.busy && !task.error && rows.length === 0 && <p>Žádné rozměry.</p>}
         <ul>{rows.map(row => <li key={row.id}><button type="button" disabled={task.busy || editing} onClick={() => open(row)}>{row.type}: {row.value ?? 'neuvedeno'} {row.unit}</button> — {row.createdInScopedApi ? 'nový scoped záznam' : 'historický, pouze čtení'}</li>)}</ul>
         {next !== null && <button type="button" disabled={task.busy || editing} onClick={() => load(next)}>Další rozměry</button>}
         {selected && !editing && <div aria-label="Detail rozměru"><p>{selected.value.type}: {selected.value.value} {selected.value.unit}</p><p>ETag předmětu: {selected.etag}</p>
-            {selected.value.createdInScopedApi && <button type="button" onClick={() => setEditing(true)}>Upravit rozměr</button>}
+            {allowWrite && selected.value.createdInScopedApi && <button type="button" onClick={() => setEditing(true)}>Upravit rozměr</button>}
             {!selected.value.createdInScopedApi && <p>Tento rozměr je pouze pro čtení.</p>}</div>}
         {editing && <form aria-label="Editor rozměru" onSubmit={e => { e.preventDefault(); save(); }}>
             <label>Typ rozměru<input value={draft.type} maxLength={255} required onChange={e => setDraft({ ...draft, type: e.target.value })} /></label>

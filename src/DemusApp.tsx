@@ -32,6 +32,7 @@ function AppContent() {
     return <div className="demus-app" ref={appRef}>
         {!login && <header className="demus-app-menu" ref={menuRef}>
             <div className="demus-titlebar"><strong>CURATAS — Katalog sbírek</strong>
+                {token && <CatalogSelector />}
                 <span>{token ? (admin ? 'Administrátor' : 'Kurátor') : 'Veřejný katalog'}</span>
             </div>
             <nav aria-label="Hlavní menu" className="demus-menubar">
@@ -47,7 +48,6 @@ function AppContent() {
                 {token ? <button type="button" onClick={logout}>Odhlásit se</button>
                     : <NavLink to="/login">Vstup pro kurátory</NavLink>}
             </nav>
-            {token && <CatalogSelector />}
         </header>}
         <main className="demus-workspace">
             <Routes>

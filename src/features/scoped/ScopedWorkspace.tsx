@@ -21,9 +21,10 @@ export default function ScopedWorkspace() {
     if (!token) return <p>Pro katalogovou pracovní plochu se <Link to="/login">přihlaste</Link>.</p>;
     if (!selectedCatalog) return <p>Vyberte katalog v horní nabídce.</p>;
     // Identity change removes old DOM/state synchronously; effect cleanup aborts requests and revokes blobs.
-    return <CatalogItems key={`${token}:${selectedCatalog.id}`} catalogId={selectedCatalog.id} catalogName={selectedCatalog.name} token={token} onUnauthorized={logout} />;
+    return <CatalogItems key={`${token}:${selectedCatalog.id}:${selectedCatalog.capabilities?.join(',') ?? ''}`} catalogId={selectedCatalog.id} catalogName={selectedCatalog.name} token={token} onUnauthorized={logout}
+        allowWrite={selectedCatalog.capabilities ? selectedCatalog.capabilities.includes('item.read') && selectedCatalog.capabilities.includes('item.write') : true} />;
 }
-export function CatalogItems({ catalogId, catalogName, token, onUnauthorized }: { catalogId: number; catalogName: string; token: string; onUnauthorized: () => void }) {
+export function CatalogItems({ catalogId, catalogName, token, onUnauthorized, allowWrite=true }: { catalogId: number; catalogName: string; token: string; onUnauthorized: () => void; allowWrite?: boolean }) {
     const api = useMemo(() => scopedApi(catalogId, token), [catalogId, token]);
     const [denied, setDenied] = useState(false); const [deniedStatus, setDeniedStatus] = useState(0); const [selected, setSelected] = useState<number | null>(null);
     const [rows, setRows] = useState<Item[]>([]); const [next, setNext] = useState<number | null>(null);
@@ -51,11 +52,11 @@ export function CatalogItems({ catalogId, catalogName, token, onUnauthorized }: 
         {!task.busy && !task.error && rows.length === 0 && <p>V tomto katalogu nejsou dostupné předměty.</p>}
         {!denied && <><ul>{rows.map(row => <li key={row.id}><button type="button" onClick={() => setSelected(row.id)}>{row.title ?? 'Bez názvu'} — <span className="scoped-exact">{row.inventoryNumber}</span></button></li>)}</ul>
             {next !== null && <button type="button" disabled={task.busy} onClick={() => load(next)}>Další předměty</button>}
-            {selected !== null && <ItemDetail key={selected} api={api} itemId={selected} onFatal={fatal} />}</>}
+            {selected !== null && <ItemDetail key={selected} api={api} itemId={selected} onFatal={fatal} allowWrite={allowWrite} />}</>}
         {denied && <p role="alert">{errorText(deniedStatus)} Soukromý obsah byl uzavřen. Nový pokus vyžaduje obnovení předmětů.</p>}
     </article>;
 }
-function ItemDetail({ api, itemId, onFatal }: { api: ScopedApi; itemId: number; onFatal: (status: number) => void }) {
+function ItemDetail({ api, itemId, onFatal, allowWrite }: { api: ScopedApi; itemId: number; onFatal: (status: number) => void; allowWrite: boolean }) {
     const [server, setServer] = useState<Versioned<Item> | null>(null); const [unavailable, setUnavailable] = useState(false);
     const [editing, setEditing] = useState(false); const [editTag, setEditTag] = useState(''); const [draft, setDraft] = useState({ title: '', inventoryNumber: '' });
     const [conflict, setConflict] = useState(false); const [compared, setCompared] = useState(false);
@@ -81,7 +82,8 @@ function ItemDetail({ api, itemId, onFatal }: { api: ScopedApi; itemId: number; 
             <dl><dt>Název na serveru</dt><dd>{server.value.title}</dd><dt>Inventární číslo na serveru</dt><dd className="scoped-exact" data-testid="current-inventory">{server.value.inventoryNumber}</dd>
                 <dt>Přírůstkové číslo</dt><dd className="scoped-exact">{server.value.accessionNumber}</dd><dt>ETag</dt><dd data-testid="item-etag">{server.etag}</dd></dl>
             <p>Dostupné: scalar detail, rozměry a nová soukromá média podle zapnutých funkcí. Zápis vyžaduje explicitní item.write; výběr katalogu jej neuděluje.</p>
-            {!editing && <button type="button" disabled={task.busy} onClick={() => { setDraft({ title: server.value.title ?? '', inventoryNumber: server.value.inventoryNumber ?? '' }); setEditTag(server.etag); setEditing(true); setConflict(false); setCompared(false); }}>Upravit předmět</button>}
+            {!allowWrite && <p>Předmět je pouze pro čtení.</p>}
+            {allowWrite && !editing && <button type="button" disabled={task.busy} onClick={() => { setDraft({ title: server.value.title ?? '', inventoryNumber: server.value.inventoryNumber ?? '' }); setEditTag(server.etag); setEditing(true); setConflict(false); setCompared(false); }}>Upravit předmět</button>}
             {editing && <form aria-label="Editor předmětu" onSubmit={e => { e.preventDefault(); save(); }}>
                 <label>Název předmětu<input value={draft.title} maxLength={4096} required onChange={e => setDraft({ ...draft, title: e.target.value })} /></label>
                 <label>Inventární číslo<input value={draft.inventoryNumber} maxLength={255} required onChange={e => setDraft({ ...draft, inventoryNumber: e.target.value })} /></label>
@@ -92,7 +94,7 @@ function ItemDetail({ api, itemId, onFatal }: { api: ScopedApi; itemId: number; 
                     <button type="button" disabled={task.busy} onClick={compare}>Načíst server pro porovnání</button>
                     {compared && <button type="button" onClick={() => { setEditTag(server.etag); setConflict(false); }}>Potvrdit porovnání a použít nový ETag</button>}</div>}
             </form>}
-            <DimensionsPanel api={api} itemId={itemId} onFatal={onFatal} onChanged={load} />
+            <DimensionsPanel api={api} itemId={itemId} onFatal={onFatal} onChanged={load} allowWrite={allowWrite} />
             <InventoryEvidencePanel key={server.etag} api={api} itemId={itemId} onFatal={onFatal} />
             <MediaPanel api={api} itemId={itemId} onFatal={onFatal} />
         </>}
