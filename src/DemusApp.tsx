@@ -13,6 +13,7 @@ import { useLayoutEffect, useRef } from 'react';
 import { CatalogProvider } from './features/catalog/CatalogContext';
 import CatalogSelector from './features/catalog/CatalogSelector';
 import ScopedWorkspace from './features/scoped/ScopedWorkspace';
+import ScopedDictionaries from './features/dictionaryManagement/ScopedDictionaries';
 
 function AppContent() {
     const appRef = useRef<HTMLDivElement>(null);
@@ -56,6 +57,7 @@ function AppContent() {
                 <Route path="/feedback" element={<Feedback />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/scoped/items" element={<ScopedWorkspace />} />
+                <Route path="/scoped/dictionaries" element={<ScopedDictionaries />} />
                 <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
                     <Route path="/admin/import" element={<DataImport />} />
                 </Route>

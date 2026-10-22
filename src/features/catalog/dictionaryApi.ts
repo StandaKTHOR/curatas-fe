@@ -44,22 +44,33 @@ export function catalogDictionaries(catalogId: number, token: string) {
         return `${root}/${type}`;
     }
     async function request<T>(path: string, signal: AbortSignal, init: RequestInit = {}) {
-        const response = await fetch(resolveApiUrl(path), { ...init, signal, cache: 'no-store',
+        if(signal.aborted)throw new Error('Cancelled');
+        const response = await fetch(resolveApiUrl(path), { ...init, signal, cache: 'no-store',redirect:'error',credentials:'omit',
             headers: { Authorization: `Bearer ${token}`, ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...init.headers } });
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));
             throw new CatalogDictionaryApiError(response.status, error.code || `HTTP_${response.status}`,
                 error.message || `Požadavek selhal (${response.status}).`, error.fieldErrors);
         }
-        return { body: await response.json() as T, response };
+        const body=await response.json() as T;if(signal.aborted)throw new Error('Cancelled');return { body, response };
     }
-    async function versioned(type: CatalogDictionaryType, path: string, signal: AbortSignal, init?: RequestInit): Promise<VersionedDictionaryValue> {
+    const uuid=(id:string)=>{if(typeof id!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))throw new Error('Catalog UUID required');return id;};
+    function validValue(v:CatalogDictionaryValue,type:CatalogDictionaryType){
+        if(v.catalogId!==catalogId||v.type!==type||!Number.isSafeInteger(v.version)||v.version<0||typeof v.label!=='string'||(v.code!==null&&typeof v.code!=='string'))throw new Error('Invalid catalog dictionary response or missing version');
+        uuid(v.id);if(v.parentId!==null)uuid(v.parentId);return v;
+    }
+    function write(input:CatalogDictionaryWrite){
+        if(Object.keys(input).some(k=>!['label','code','parentId','reason'].includes(k))||typeof input.label!=='string'||!input.label.trim()||input.label.length>255
+            ||typeof input.reason!=='string'||!input.reason.trim()||input.reason.length>1000||(input.code!==null&&(typeof input.code!=='string'||input.code.length>255)))throw new Error('Invalid dictionary fields');
+        if(input.parentId!==null)uuid(input.parentId);return JSON.stringify(input);
+    }
+    async function versioned(type: CatalogDictionaryType, path: string, signal: AbortSignal, init?: RequestInit,expectedId?:string): Promise<VersionedDictionaryValue> {
         const { body: value, response } = await request<CatalogDictionaryValue>(path, signal, init);
         const etag = response.headers.get('ETag');
         if (!etag || !/^"[0-9]+"$/.test(etag) || !Number.isSafeInteger(value.version) || etag !== `"${value.version}"`
-            || value.catalogId !== catalogId || value.type !== type)
+            || value.catalogId !== catalogId || value.type !== type || (expectedId!==undefined&&value.id.toLowerCase()!==expectedId.toLowerCase()))
             throw new Error('Invalid catalog dictionary response or missing version; reload before editing');
-        return { value, etag };
+        validValue(value,type);return { value, etag };
     }
     return {
         metadata: async (signal: AbortSignal) => (await request<CatalogDictionaryMetadata[]>(root, signal)).body,
@@ -71,16 +82,17 @@ export function catalogDictionaries(catalogId: number, token: string) {
             if (query.q !== undefined) params.set('q', query.q);
             if (query.parentId) params.set('parentId', query.parentId);
             if (query.rootsOnly !== undefined) params.set('rootsOnly', String(query.rootsOnly));
-            return (await request<CatalogDictionaryPage>(`${typePath(type)}/values?${params}`, signal)).body;
+            const page=(await request<CatalogDictionaryPage>(`${typePath(type)}/values?${params}`, signal)).body;
+            if(!Array.isArray(page.items))throw new Error('Invalid dictionary page');page.items.forEach(v=>validValue(v,type));if(page.nextAfterId!==null)uuid(page.nextAfterId);return page;
         },
         detail: (type: CatalogDictionaryType, id: CatalogDictionaryValueId, signal: AbortSignal) =>
-            versioned(type, `${typePath(type)}/values/${encodeURIComponent(id)}`, signal),
+            versioned(type, `${typePath(type)}/values/${uuid(id)}`, signal,undefined,id),
         create: (type: CatalogDictionaryType, input: CatalogDictionaryWrite, signal: AbortSignal) =>
-            versioned(type, `${typePath(type)}/values`, signal, { method: 'POST', body: JSON.stringify(input) }),
+            versioned(type, `${typePath(type)}/values`, signal, { method: 'POST', body: write(input) }),
         update: (type: CatalogDictionaryType, id: CatalogDictionaryValueId, etag: string, input: CatalogDictionaryWrite, signal: AbortSignal) => {
             if (!/^"[0-9]+"$/.test(etag)) throw new Error('A strong dictionary ETag is required');
-            return versioned(type, `${typePath(type)}/values/${encodeURIComponent(id)}`, signal,
-                { method: 'PUT', headers: { 'If-Match': etag }, body: JSON.stringify(input) });
+            return versioned(type, `${typePath(type)}/values/${uuid(id)}`, signal,
+                { method: 'PUT', headers: { 'If-Match': etag }, body: write(input) },id);
         },
     };
 }

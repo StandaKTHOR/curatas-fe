@@ -8,3 +8,6 @@
 .scoped-workspace dt { font-weight: bold; margin-top: .5rem; }
 .scoped-workspace dd { margin-left: 0; overflow-wrap: anywhere; }
 .scoped-exact { white-space: pre-wrap; }
+.scoped-workspace > ul { list-style: none; padding: 0; }
+.scoped-workspace > ul > li { border-bottom: 1px solid #dbe2e7; padding: .1rem 0; }
+.scoped-workspace > ul > li > button { padding: .25rem .45rem; margin: .1rem; }

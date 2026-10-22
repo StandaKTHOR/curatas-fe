@@ -5,6 +5,7 @@ export interface Dimension { id: number; itemId: number; catalogId: number; type
 export interface Media { id: string; itemId: number; catalogId: number; kind: 'IMAGE' | 'ATTACHMENT'; name: string; mimeType: string; byteSize: number; variants: ('content' | 'thumbnail')[] }
 export interface Versioned<T> { value: T; etag: string }
 export interface Page<T, C> { items: T[]; nextAfterId: C | null }
+export interface InventoryEvidence {itemVersion:string;inventoryNumber:string|null;sourceLocalId:string|null;sourceInventoryNumber:string|null;sourceComponents:Record<string,string|null>;aliases:{id:string;inventoryNumber:string|null;components:Record<string,string|null>}[];nextAfterId:string|null}
 export class ScopedError extends Error {
     constructor(public readonly status: number) { super(errorText(status)); }
 }
@@ -88,12 +89,22 @@ export function scopedApi(catalogId: number, token: string) {
         return { value: dimension(body.dimension, parent, id ?? undefined), etag: tag(response, body.itemVersion) };
     }
     return {
-        list: async (signal: AbortSignal, after = 0, limit = 50): Promise<Page<Item, number>> => {
-            const { body } = await read(root + bounds(after, limit), signal);
+        list: async (signal: AbortSignal, after = 0, limit = 50, filters?: {inventory:string;title:string}): Promise<Page<Item, number>> => {
+            const query=new URLSearchParams();
+            if(filters){for(const [key,value] of Object.entries(filters)){if(!['inventory','title'].includes(key)||typeof value!=='string'||value.length>100)throw new Error('Invalid search');if(value)query.set(key,value);}}
+            const { body } = await read(root + bounds(after, limit)+(query.size?'&'+query.toString():''), signal);
             return { items: body.items.map((v: any) => item(v)), nextAfterId: body.nextAfterId === null ? null : integer(body.nextAfterId) };
         },
         detail: async (id: number, signal: AbortSignal): Promise<Versioned<Item>> => {
             const { body, response } = await read(itemPath(id), signal); return { value: item(body, id), etag: tag(response, body.version) };
+        },
+        inventoryEvidence: async (id:number,signal:AbortSignal,after?:string):Promise<InventoryEvidence> => {
+            const {body,response}=await read(`${itemPath(id)}/inventory-evidence?limit=50${after?'&afterId='+uuid(after):''}`,signal);
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||!Array.isArray(body.aliases))throw new Error('Foreign inventory evidence');
+            tag(response,body.itemVersion);
+            const fields=['series','ordinal','division','hierarchyOrdinal','hierarchyDivision','stateCode','custodianCode','departmentCode','collectionCode'];
+            const components=(v:any)=>Object.fromEntries(fields.map(k=>[k,nullable(v[k]??null)]));
+            return {itemVersion:version(body.itemVersion),inventoryNumber:nullable(body.inventoryNumber),sourceLocalId:nullable(body.sourceLocalId),sourceInventoryNumber:nullable(body.sourceInventoryNumber),sourceComponents:components(body.sourceComponents),aliases:body.aliases.map((v:any)=>({id:uuid(v.id),inventoryNumber:nullable(v.inventoryNumber),components:components(v.components)})),nextAfterId:body.nextAfterId===null?null:uuid(body.nextAfterId)};
         },
         patch: async (id: number, etag: string, input: Partial<Pick<Item, 'title' | 'inventoryNumber'>>, signal: AbortSignal): Promise<Versioned<Item>> => {
             const { body, response } = await read(itemPath(id), signal, { method: 'PATCH', headers: { 'If-Match': strongTag(etag) }, body: patch(input) });

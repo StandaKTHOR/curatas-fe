@@ -6,6 +6,7 @@ import { errorText, scopedApi, type Item, type ScopedApi, type Versioned } from 
 import { useTask } from './useTask';
 import DimensionsPanel from './DimensionsPanel';
 import MediaPanel from './MediaPanel';
+import InventoryEvidencePanel from './InventoryEvidencePanel';
 import './scoped.css';
 
 export default function ScopedWorkspace() {
@@ -26,16 +27,25 @@ export function CatalogItems({ catalogId, catalogName, token, onUnauthorized }: 
     const api = useMemo(() => scopedApi(catalogId, token), [catalogId, token]);
     const [denied, setDenied] = useState(false); const [deniedStatus, setDeniedStatus] = useState(0); const [selected, setSelected] = useState<number | null>(null);
     const [rows, setRows] = useState<Item[]>([]); const [next, setNext] = useState<number | null>(null);
+    const [query,setQuery]=useState({inventory:'',title:''});const [applied,setApplied]=useState({inventory:'',title:''});
     const fatal = useCallback((status: number) => { setDenied(true); setDeniedStatus(status); setRows([]); setNext(null); setSelected(null); if (status === 401) onUnauthorized(); }, [onUnauthorized]);
     const task = useTask(fatal); const { run } = task;
     const load = useCallback((after = 0) => {
         setSelected(null); if (!after) { setRows([]); setNext(null); }
-        void run(s => api.list(s, after), page => { setDenied(false); setRows(old => after ? [...old, ...page.items] : page.items); setNext(page.nextAfterId); });
-    }, [api, run]);
+        void run(s => applied.inventory||applied.title?api.list(s,after,50,applied):api.list(s, after), page => { setDenied(false); setRows(old => after ? [...old, ...page.items] : page.items); setNext(page.nextAfterId); });
+    }, [api, run,applied]);
     useEffect(() => { load(); }, [load]);
     return <article className="scoped-workspace" aria-label="Katalogová pracovní plocha">
         <h1>Katalogová pracovní plocha — {catalogName}</h1>
         <p>Samostatná práce s katalogově vlastněnými předměty. Historická globální evidence a její média sem nejsou převáděny.</p>
+        <Link to="/scoped/dictionaries">Správa materiálů a technik</Link>
+        <form aria-label="Vyhledání předmětů" onSubmit={e=>{e.preventDefault();setApplied({...query});}}>
+            <label>Hledat inventární číslo<input maxLength={100} value={query.inventory} onChange={e=>setQuery({...query,inventory:e.target.value})}/></label>
+            <label>Hledat název<input maxLength={100} value={query.title} onChange={e=>setQuery({...query,title:e.target.value})}/></label>
+            <button disabled={task.busy}>Vyhledat předměty</button>
+            <button type="button" disabled={task.busy} onClick={()=>{setQuery({inventory:'',title:''});setApplied({inventory:'',title:''});}}>Vymazat filtry</button>
+            <p>Doslovná část aktuálního čísla a názvu; obě podmínky platí současně. Historické aliasy tímto filtrem neprohledáváte.</p>
+        </form>
         <button type="button" disabled={task.busy} onClick={() => load()}>Obnovit předměty</button>
         {task.busy && <p role="status">Načítání předmětů…</p>}{task.error && <p role="alert">{task.error}</p>}
         {!task.busy && !task.error && rows.length === 0 && <p>V tomto katalogu nejsou dostupné předměty.</p>}
@@ -68,7 +78,7 @@ function ItemDetail({ api, itemId, onFatal }: { api: ScopedApi; itemId: number; 
         {task.busy && <p role="status">Načítání detailu…</p>}{task.error && <p role="alert">{task.error}</p>}
         {unavailable && <p>Záznam není dostupný. Pro nový pokus obnovte detail.</p>}
         {server && !unavailable && <>
-            <dl><dt>Název na serveru</dt><dd>{server.value.title}</dd><dt>Inventární číslo na serveru</dt><dd className="scoped-exact">{server.value.inventoryNumber}</dd>
+            <dl><dt>Název na serveru</dt><dd>{server.value.title}</dd><dt>Inventární číslo na serveru</dt><dd className="scoped-exact" data-testid="current-inventory">{server.value.inventoryNumber}</dd>
                 <dt>Přírůstkové číslo</dt><dd className="scoped-exact">{server.value.accessionNumber}</dd><dt>ETag</dt><dd data-testid="item-etag">{server.etag}</dd></dl>
             <p>Dostupné: scalar detail, rozměry a nová soukromá média podle zapnutých funkcí. Zápis vyžaduje explicitní item.write; výběr katalogu jej neuděluje.</p>
             {!editing && <button type="button" disabled={task.busy} onClick={() => { setDraft({ title: server.value.title ?? '', inventoryNumber: server.value.inventoryNumber ?? '' }); setEditTag(server.etag); setEditing(true); setConflict(false); setCompared(false); }}>Upravit předmět</button>}
@@ -83,6 +93,7 @@ function ItemDetail({ api, itemId, onFatal }: { api: ScopedApi; itemId: number; 
                     {compared && <button type="button" onClick={() => { setEditTag(server.etag); setConflict(false); }}>Potvrdit porovnání a použít nový ETag</button>}</div>}
             </form>}
             <DimensionsPanel api={api} itemId={itemId} onFatal={onFatal} onChanged={load} />
+            <InventoryEvidencePanel key={server.etag} api={api} itemId={itemId} onFatal={onFatal} />
             <MediaPanel api={api} itemId={itemId} onFatal={onFatal} />
         </>}
     </section>;

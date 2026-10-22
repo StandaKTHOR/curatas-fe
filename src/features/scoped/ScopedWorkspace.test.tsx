@@ -14,7 +14,7 @@ const item = { id:101,catalogId:11,title:'Local item',inventoryNumber:' 0001/02 
 const dimension = { id:5,itemId:101,catalogId:11,type:'historical',value:'12.30',unit:'cm',createdInScopedApi:false };
 const media = { id:'12345678-1234-1234-1234-123456789abc',itemId:101,catalogId:11,kind:'IMAGE' as const,name:'private.png',mimeType:'image/png',byteSize:3,variants:['content','thumbnail'] as ('content'|'thumbnail')[] };
 function setup() {
-    api={list:vi.fn().mockResolvedValue({items:[item],nextAfterId:null}),detail:vi.fn().mockResolvedValue({value:item,etag:'"3"'}),patch:vi.fn().mockResolvedValue({value:{...item,title:'Saved',version:'4'},etag:'"4"'}),
+    api={inventoryEvidence:vi.fn(),list:vi.fn().mockResolvedValue({items:[item],nextAfterId:null}),detail:vi.fn().mockResolvedValue({value:item,etag:'"3"'}),patch:vi.fn().mockResolvedValue({value:{...item,title:'Saved',version:'4'},etag:'"4"'}),
         dimensions:vi.fn().mockResolvedValue({value:{items:[dimension],nextAfterId:null},etag:'"3"'}),dimension:vi.fn().mockResolvedValue({value:dimension,etag:'"3"'}),
         createDimension:vi.fn().mockResolvedValue({value:{...dimension,type:'new',createdInScopedApi:true},etag:'"4"'}),patchDimension:vi.fn(),
         media:vi.fn().mockResolvedValue({items:[media],nextAfterId:null}),mediaDetail:vi.fn().mockResolvedValue(media),bytes:vi.fn().mockResolvedValue(new Blob(['abc'],{type:'image/png'}))};

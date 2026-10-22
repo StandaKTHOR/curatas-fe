@@ -5,7 +5,7 @@ afterEach(()=>vi.unstubAllGlobals());
 it.each([401,403,404,412])('every scoped data family rejects %s without any v1/static/public fallback or automatic retry',async status=>{
     const fetcher=vi.fn().mockImplementation(async()=>new Response('{}',{status}));vi.stubGlobal('fetch',fetcher);
     const api=scopedApi(11,'current-session');const signal=new AbortController().signal;
-    const operations=[()=>api.list(signal),()=>api.detail(101,signal),()=>api.patch(101,'"0"',{title:'draft'},signal),
+    const operations=[()=>api.inventoryEvidence(101,signal),()=>api.list(signal),()=>api.detail(101,signal),()=>api.patch(101,'"0"',{title:'draft'},signal),
         ()=>api.dimensions(101,signal),()=>api.dimension(101,5,signal),()=>api.createDimension(101,'"0"',{type:'h',value:'12.30',unit:'cm'},signal),
         ()=>api.patchDimension(101,5,'"0"',{type:'h',value:'12.30',unit:'cm'},signal),()=>api.media(101,signal),()=>api.mediaDetail(101,media.id,signal),
         ()=>api.bytes(101,media,'content',signal),()=>api.bytes(101,media,'thumbnail',signal)];
