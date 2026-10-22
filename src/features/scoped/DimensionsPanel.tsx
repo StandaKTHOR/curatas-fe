@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { decimal, type Dimension, type ScopedApi, type Versioned } from './scopedApi';
 import { useTask } from './useTask';
+import DimensionBatchForm from './DimensionBatchForm';
 
 export default function DimensionsPanel({ api, itemId, onFatal, onChanged, allowWrite=true }: { api: ScopedApi; itemId: number; onFatal: (status: number) => void; onChanged: () => void; allowWrite?: boolean }) {
     const [rows, setRows] = useState<Dimension[]>([]); const [next, setNext] = useState<number | null>(null);
     const [selected, setSelected] = useState<Versioned<Dimension> | null>(null);
     const [etag, setTag] = useState(''); const [editing, setEditing] = useState(false);
+    const [batch,setBatch]=useState(false);
     const [draft, setDraft] = useState({ type: '', value: '', unit: null as string | null });
     const [conflict, setConflict] = useState(false); const [compared, setCompared] = useState(false);
     const task = useTask(onFatal); const { run } = task;
@@ -38,7 +40,9 @@ export default function DimensionsPanel({ api, itemId, onFatal, onChanged, allow
     return <section aria-label="Rozměry">
         <h3>Rozměry</h3>
         <button type="button" disabled={task.busy || editing} onClick={() => load()}>Obnovit rozměry</button>
-        {allowWrite && <button type="button" disabled={task.busy || !etag || editing} onClick={() => { setSelected(null); setDraft({ type: '', value: '', unit: null }); setEditing(true); setConflict(false); }}>Nový rozměr</button>}
+        {allowWrite && <button type="button" disabled={task.busy || !etag || editing || batch} onClick={() => { setSelected(null); setDraft({ type: '', value: '', unit: null }); setEditing(true); setConflict(false); }}>Nový rozměr</button>}
+        {allowWrite&&api.createDimensionsBatch&&<button type="button" disabled={task.busy||!etag||editing||batch} onClick={()=>{setSelected(null);setBatch(true);}}>Pořídit více rozměrů</button>}
+        {allowWrite&&batch&&<DimensionBatchForm api={api} itemId={itemId} etag={etag} onFatal={onFatal} onCancel={()=>setBatch(false)} onSaved={tag=>{setTag(tag);setBatch(false);load();onChanged();}}/>}
         {task.busy && <p role="status">Načítání rozměrů…</p>}{task.error && <p role="alert">{task.error}</p>}
         {!task.busy && !task.error && rows.length === 0 && <p>Žádné rozměry.</p>}
         <ul>{rows.map(row => <li key={row.id}><button type="button" disabled={task.busy || editing} onClick={() => open(row)}>{row.type}: {row.value ?? 'neuvedeno'} {row.unit}</button> — {row.createdInScopedApi ? 'nový scoped záznam' : 'historický, pouze čtení'}</li>)}</ul>

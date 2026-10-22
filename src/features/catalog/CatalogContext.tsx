@@ -50,6 +50,7 @@ export function SessionCatalogProvider({ token, onUnauthorized, children }: {
     }, []);
     const load = useCallback(async (afterId = 0) => {
         if (!token) return;
+        if(afterId===0&&!window.dispatchEvent(new Event('curatas:catalog-discard',{cancelable:true})))return;
         const controller = start();
         if (afterId === 0) { setSelected(null); setCatalogs([]); setNext(null); }
         try {
@@ -66,6 +67,7 @@ export function SessionCatalogProvider({ token, onUnauthorized, children }: {
         return () => { request.current?.abort(); };
     }, [load]);
     const selectCatalog = useCallback(async (id: number | null) => {
+        if(!window.dispatchEvent(new Event('curatas:catalog-discard',{cancelable:true})))return;
         const controller = start(); setSelected(null);
         if (id === null || !token) { setLoading(false); return; }
         try {

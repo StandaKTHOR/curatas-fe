@@ -9,6 +9,7 @@ export interface AvailableCatalog {
     catalogId?: number;
     accessType?: 'OWN' | 'SHARED' | 'UNCLASSIFIED';
     capabilities?: string[];
+    creationEnabled?: boolean;
 }
 export interface CatalogPage { items: AvailableCatalog[]; nextAfterId: number | null }
 export class CatalogApiError extends Error {
@@ -31,7 +32,8 @@ function workspace(value: AvailableCatalog): AvailableCatalog {
         || !value.institution || !Number.isSafeInteger(value.institution.id) || value.institution.id < 1
         || typeof value.institution.name !== 'string' || typeof value.institution.code !== 'string'
         || !['OWN','SHARED','UNCLASSIFIED'].includes(value.accessType ?? '') || !Array.isArray(value.capabilities)
-        || !value.capabilities.includes('catalog.read') || value.capabilities.some(c => !capabilities.has(c))) throw new CatalogApiError(502);
+        || !value.capabilities.includes('catalog.read') || value.capabilities.some(c => !capabilities.has(c))
+        || (value.creationEnabled !== undefined && typeof value.creationEnabled !== 'boolean')) throw new CatalogApiError(502);
     return value;
 }
 const prefix = () => workspaceMode() ? '/api/v2/workspaces' : '/api/v2/catalogs';

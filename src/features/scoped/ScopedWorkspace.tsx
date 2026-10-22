@@ -7,6 +7,8 @@ import { useTask } from './useTask';
 import DimensionsPanel from './DimensionsPanel';
 import MediaPanel from './MediaPanel';
 import InventoryEvidencePanel from './InventoryEvidencePanel';
+import NewItemForm from './NewItemForm';
+import ItemOriginPanel from './ItemOriginPanel';
 import './scoped.css';
 
 export default function ScopedWorkspace() {
@@ -22,14 +24,16 @@ export default function ScopedWorkspace() {
     if (!selectedCatalog) return <p>Vyberte katalog v horní nabídce.</p>;
     // Identity change removes old DOM/state synchronously; effect cleanup aborts requests and revokes blobs.
     return <CatalogItems key={`${token}:${selectedCatalog.id}:${selectedCatalog.capabilities?.join(',') ?? ''}`} catalogId={selectedCatalog.id} catalogName={selectedCatalog.name} token={token} onUnauthorized={logout}
-        allowWrite={selectedCatalog.capabilities ? selectedCatalog.capabilities.includes('item.read') && selectedCatalog.capabilities.includes('item.write') : true} />;
+        allowWrite={selectedCatalog.capabilities ? selectedCatalog.capabilities.includes('item.read') && selectedCatalog.capabilities.includes('item.write') : true}
+        allowCreate={selectedCatalog.creationEnabled===true&&['catalog.read','item.read','item.create'].every(c=>selectedCatalog.capabilities?.includes(c))} />;
 }
-export function CatalogItems({ catalogId, catalogName, token, onUnauthorized, allowWrite=true }: { catalogId: number; catalogName: string; token: string; onUnauthorized: () => void; allowWrite?: boolean }) {
+export function CatalogItems({ catalogId, catalogName, token, onUnauthorized, allowWrite=true, allowCreate=false }: { catalogId: number; catalogName: string; token: string; onUnauthorized: () => void; allowWrite?: boolean; allowCreate?: boolean }) {
     const api = useMemo(() => scopedApi(catalogId, token), [catalogId, token]);
     const [denied, setDenied] = useState(false); const [deniedStatus, setDeniedStatus] = useState(0); const [selected, setSelected] = useState<number | null>(null);
     const [rows, setRows] = useState<Item[]>([]); const [next, setNext] = useState<number | null>(null);
+    const [creating,setCreating]=useState(false);
     const [query,setQuery]=useState({inventory:'',title:''});const [applied,setApplied]=useState({inventory:'',title:''});
-    const fatal = useCallback((status: number) => { setDenied(true); setDeniedStatus(status); setRows([]); setNext(null); setSelected(null); if (status === 401) onUnauthorized(); }, [onUnauthorized]);
+    const fatal = useCallback((status: number) => { setDenied(true); setDeniedStatus(status); setRows([]); setNext(null); setSelected(null);setCreating(false); if (status === 401) onUnauthorized(); }, [onUnauthorized]);
     const task = useTask(fatal); const { run } = task;
     const load = useCallback((after = 0) => {
         setSelected(null); if (!after) { setRows([]); setNext(null); }
@@ -40,6 +44,8 @@ export function CatalogItems({ catalogId, catalogName, token, onUnauthorized, al
         <h1>Katalogová pracovní plocha — {catalogName}</h1>
         <p>Samostatná práce s katalogově vlastněnými předměty. Historická globální evidence a její média sem nejsou převáděny.</p>
         <Link to="/scoped/dictionaries">Správa materiálů a technik</Link>
+        {allowCreate&&!denied&&!creating&&<button type="button" onClick={()=>{setSelected(null);setCreating(true);}}>Nový předmět</button>}
+        {allowCreate&&creating&&!denied&&<NewItemForm api={api} catalogName={catalogName} onFatal={fatal} onCancel={()=>setCreating(false)} onCreated={result=>{setCreating(false);setSelected(result.item.id);}}/>}
         <form aria-label="Vyhledání předmětů" onSubmit={e=>{e.preventDefault();setApplied({...query});}}>
             <label>Hledat inventární číslo<input maxLength={100} value={query.inventory} onChange={e=>setQuery({...query,inventory:e.target.value})}/></label>
             <label>Hledat název<input maxLength={100} value={query.title} onChange={e=>setQuery({...query,title:e.target.value})}/></label>
@@ -52,7 +58,7 @@ export function CatalogItems({ catalogId, catalogName, token, onUnauthorized, al
         {!task.busy && !task.error && rows.length === 0 && <p>V tomto katalogu nejsou dostupné předměty.</p>}
         {!denied && <><ul>{rows.map(row => <li key={row.id}><button type="button" onClick={() => setSelected(row.id)}>{row.title ?? 'Bez názvu'} — <span className="scoped-exact">{row.inventoryNumber}</span></button></li>)}</ul>
             {next !== null && <button type="button" disabled={task.busy} onClick={() => load(next)}>Další předměty</button>}
-            {selected !== null && <ItemDetail key={selected} api={api} itemId={selected} onFatal={fatal} allowWrite={allowWrite} />}</>}
+            {selected !== null && !creating && <ItemDetail key={selected} api={api} itemId={selected} onFatal={fatal} allowWrite={allowWrite} />}</>}
         {denied && <p role="alert">{errorText(deniedStatus)} Soukromý obsah byl uzavřen. Nový pokus vyžaduje obnovení předmětů.</p>}
     </article>;
 }
@@ -79,6 +85,7 @@ function ItemDetail({ api, itemId, onFatal, allowWrite }: { api: ScopedApi; item
         {task.busy && <p role="status">Načítání detailu…</p>}{task.error && <p role="alert">{task.error}</p>}
         {unavailable && <p>Záznam není dostupný. Pro nový pokus obnovte detail.</p>}
         {server && !unavailable && <>
+            <ItemOriginPanel key={`origin:${server.etag}`} api={api} itemId={itemId} onFatal={onFatal}/>
             <dl><dt>Název na serveru</dt><dd>{server.value.title}</dd><dt>Inventární číslo na serveru</dt><dd className="scoped-exact" data-testid="current-inventory">{server.value.inventoryNumber}</dd>
                 <dt>Přírůstkové číslo</dt><dd className="scoped-exact">{server.value.accessionNumber}</dd><dt>ETag</dt><dd data-testid="item-etag">{server.etag}</dd></dl>
             <p>Dostupné: scalar detail, rozměry a nová soukromá média podle zapnutých funkcí. Zápis vyžaduje explicitní item.write; výběr katalogu jej neuděluje.</p>

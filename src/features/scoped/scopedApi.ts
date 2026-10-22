@@ -4,6 +4,9 @@ export interface Item { id: number; catalogId: number; title: string | null; inv
 export interface Dimension { id: number; itemId: number; catalogId: number; type: string; value: string | null; unit: string | null; createdInScopedApi: boolean }
 export interface Media { id: string; itemId: number; catalogId: number; kind: 'IMAGE' | 'ATTACHMENT'; name: string; mimeType: string; byteSize: number; variants: ('content' | 'thumbnail')[] }
 export interface Versioned<T> { value: T; etag: string }
+export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string}
+export interface Creation {item:Item;origin:'MES_CREATED';requestId:string;replayed:boolean}
+export interface ItemOrigin {catalogId:number;itemId:number;itemVersion:string;origin:'MES_CREATED'|'UNRECORDED';createdAt:string|null}
 export interface Page<T, C> { items: T[]; nextAfterId: C | null }
 export interface InventoryEvidence {itemVersion:string;inventoryNumber:string|null;sourceLocalId:string|null;sourceInventoryNumber:string|null;sourceComponents:Record<string,string|null>;aliases:{id:string;inventoryNumber:string|null;components:Record<string,string|null>}[];nextAfterId:string|null}
 export class ScopedError extends Error {
@@ -88,7 +91,31 @@ export function scopedApi(catalogId: number, token: string) {
             { method: id === null ? 'POST' : 'PATCH', headers: { 'If-Match': strongTag(etag) }, body: dimensionBody(input) });
         return { value: dimension(body.dimension, parent, id ?? undefined), etag: tag(response, body.itemVersion) };
     }
+    async function creation(path:string,requestId:string,signal:AbortSignal,init?:RequestInit):Promise<Versioned<Creation>> {
+        uuid(requestId);const {body,response}=await read(path,signal,init);const created=item(body.item);
+        if(body.origin!=='MES_CREATED'||body.requestId!==requestId.toLowerCase()||typeof body.replayed!=='boolean'
+            ||response.headers.get('Location')!==itemPath(created.id))throw new Error('Invalid creation receipt');
+        return {value:{item:created,origin:'MES_CREATED',requestId:body.requestId,replayed:body.replayed},etag:tag(response,created.version)};
+    }
     return {
+        createItem:async(requestId:string,input:NewItemFields,signal:AbortSignal)=>{
+            if(Object.keys(input).length!==3||Object.keys(input).some(k=>!['title','inventoryNumber','accessionNumber'].includes(k)))throw new Error('Invalid creation fields');
+            for(const key of ['title','inventoryNumber','accessionNumber'] as const){const value=input[key];if(typeof value!=='string'||!value.trim()||value.length>(key==='title'?4096:255))throw new Error('Invalid creation field');}
+            return creation(root,requestId,signal,{method:'POST',headers:{'Idempotency-Key':uuid(requestId)},body:JSON.stringify(input)});
+        },
+        creationOutcome:(requestId:string,signal:AbortSignal)=>creation(`${root}/creation-requests/${uuid(requestId)}`,requestId,signal),
+        itemOrigin:async(id:number,signal:AbortSignal):Promise<ItemOrigin>=>{
+            const {body,response}=await read(`${itemPath(id)}/origin`,signal);if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||!['MES_CREATED','UNRECORDED'].includes(body.origin)
+                ||(body.origin==='MES_CREATED'?(typeof body.createdAt!=='string'||Number.isNaN(Date.parse(body.createdAt))):body.createdAt!==null))throw new Error('Invalid item origin');
+            tag(response,body.itemVersion);return {catalogId,itemId:id,itemVersion:version(body.itemVersion),origin:body.origin,createdAt:body.createdAt};
+        },
+        createDimensionsBatch:async(parent:number,etag:string,dimensions:{type:string;value:string;unit:string|null}[],signal:AbortSignal):Promise<Versioned<Dimension[]>>=>{
+            if(!dimensions.length||dimensions.length>20)throw new Error('One to twenty dimensions required');
+            const {body,response}=await read(`${itemPath(parent)}/dimensions/batch`,signal,{method:'POST',headers:{'If-Match':strongTag(etag)},body:`{"dimensions":[${dimensions.map(dimensionBody).join(',')}]}`});
+            if(!Array.isArray(body.dimensions)||body.dimensions.length!==dimensions.length)throw new Error('Invalid batch receipt');
+            const values=body.dimensions.map((v:any)=>dimension(v,parent)) as Dimension[];if(new Set(values.map(v=>v.id)).size!==values.length)throw new Error('Duplicate batch identity');
+            return {value:values,etag:tag(response,body.itemVersion)};
+        },
         list: async (signal: AbortSignal, after = 0, limit = 50, filters?: {inventory:string;title:string}): Promise<Page<Item, number>> => {
             const query=new URLSearchParams();
             if(filters){for(const [key,value] of Object.entries(filters)){if(!['inventory','title'].includes(key)||typeof value!=='string'||value.length>100)throw new Error('Invalid search');if(value)query.set(key,value);}}
@@ -138,4 +165,5 @@ export function scopedApi(catalogId: number, token: string) {
         },
     };
 }
-export type ScopedApi = ReturnType<typeof scopedApi>;
+type AddedCuratorMethods='createItem'|'creationOutcome'|'itemOrigin'|'createDimensionsBatch';
+export type ScopedApi = Omit<ReturnType<typeof scopedApi>,AddedCuratorMethods> & Partial<Pick<ReturnType<typeof scopedApi>,AddedCuratorMethods>>;
