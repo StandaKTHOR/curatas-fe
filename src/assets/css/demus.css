@@ -2,6 +2,10 @@
 .demus-app { --demus-menu-height: 64px; color: #172a40; background: #efefef; min-height: 100vh; font-family: Arial, sans-serif; font-size: 12px; }
 .demus-app-menu { position: sticky; top: 0; z-index: 50; background: #efefef; border-bottom: 1px solid #8c939c; }
 .demus-titlebar { min-height: 28px; padding: 4px 12px; background: #a23739; color: white; display: flex; justify-content: space-between; gap: 12px; }
+.demus-titlebar { align-items: flex-start; flex-wrap: wrap; }
+.demus-titlebar .demus-catalog-context { margin-left: auto; max-width: min(650px, 100%); font-size: 0.8rem; text-align: right; }
+.demus-titlebar .demus-catalog-context select { max-width: 100%; }
+.demus-titlebar .demus-catalog-context p { margin: 3px 0; }
 .demus-menubar { min-height: 35px; padding: 3px 8px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 .demus-menubar a, .demus-menubar button { color: #172a40; padding: 5px 9px; text-decoration: none; border: 1px solid transparent; border-radius: 0; white-space: nowrap; }
 .demus-menubar a.active, .demus-menubar a:hover, .demus-menubar button:hover { background: #dbe9f5; border-color: #8c939c; }

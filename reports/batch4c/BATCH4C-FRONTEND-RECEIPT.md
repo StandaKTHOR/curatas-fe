@@ -1,0 +1,5 @@
+# BATCH4C frontend receipt
+
+Tested code `0dc3a27c0c17535002e30d72b788da072a1750b8` on `feature/b4c-curator-editor-20261022`. TypeScript, lint (23 inherited warnings/zero errors), Vitest380 and production build PASS. Four real-browser harnesses18+29+18+17 PASS against committed BE in a single isolated PG17 runner. New26 FE behavior cases prove exact manual create fields, explicit item.create, duplicate-submit and no-auto-POST-retry recovery, receipt/Location/ETag scope, create-only permissions, draft warning/context/session cleanup, bounded repeated dimension entry and stable complete comparison before retry. Default server creation flag OFF; no historical identity/import or public material/technique item binding enabled.
+
+All11 required reports and16-area tracker: `D:\ProjektyJava\IdeaProjects\curatas-be\scratch\batch4c-20261022\be\reports\batch4c`. Exact final heads/all commits/clean status and process cleanup: `D:\ProjektyJava\IdeaProjects\curatas-be\scratch\batch4c-20261022\evidence\final-state.json`. This receipt changes no tested application code. No push/deployment/main merge. Museum MVP release readiness remains BLOCKED.

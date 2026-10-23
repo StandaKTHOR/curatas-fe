@@ -1,0 +1,13 @@
+.scoped-workspace { max-width: 1100px; margin: 1rem auto; padding: 1.5rem; background: #fff; }
+.scoped-workspace section { border-top: 1px solid #bac5ce; margin-top: 1.5rem; padding-top: 1rem; }
+.scoped-workspace button { margin: .25rem .5rem .25rem 0; padding: .45rem .7rem; border: 1px solid #59748a; border-radius: 3px; background: #edf4f9; color: #163952; }
+.scoped-workspace button:disabled { opacity: .55; }
+.scoped-workspace label { display: block; margin: .8rem 0; }
+.scoped-workspace input:not([type=checkbox]) { display: block; width: min(100%, 600px); border: 1px solid #8293a1; padding: .5rem; }
+.scoped-workspace [role=alert] { color: #8a1426; border-left: 4px solid #8a1426; padding-left: 1rem; }
+.scoped-workspace dt { font-weight: bold; margin-top: .5rem; }
+.scoped-workspace dd { margin-left: 0; overflow-wrap: anywhere; }
+.scoped-exact { white-space: pre-wrap; }
+.scoped-workspace > ul { list-style: none; padding: 0; }
+.scoped-workspace > ul > li { border-bottom: 1px solid #dbe2e7; padding: .1rem 0; }
+.scoped-workspace > ul > li > button { padding: .25rem .45rem; margin: .1rem; }
