@@ -1,4 +1,5 @@
 import ThreeLevelDictionarySelect from './ThreeLevelDictionarySelect';
+import {originalIntegrationEnabled} from '../features/catalog/originalAdapter';
 import { uncertainWrite, uncertainCreateMessage } from '../lib/writeOutcome';
 import {professionalFields,professionalDraft,professionalValue,professionalDelta} from '../lib/professional';
 import type { ItemEditSession } from '../lib/editSession';
@@ -154,6 +155,10 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
 
     useEffect(() => {
         if (!itemId || (snapshotRequired && !editSession)) return;
+        if(originalIntegrationEnabled()){
+            setMessage(`Sekce ${section}: BLOCKED — původní opakovaný odborný záznam nemá ověřený scoped kontrakt. Čtení ani zápis nejsou nahrazeny skalárním textem; původní údaje tím nejsou označeny jako prázdné.`);
+            return;
+        }
         let alive = true;
         Promise.resolve(editSession?.museumSnapshot as MuseumItemDetail | undefined)
             .then(snapshot => snapshot || getMuseumItem(itemId, editSession))

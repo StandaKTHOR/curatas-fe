@@ -1,3 +1,5 @@
+import {originalCanEdit,originalEditHref} from '../features/catalog/originalEdit';
+import {originalIntegrationEnabled,originalItemHref,originalSession} from '../features/catalog/originalAdapter';
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import {
@@ -31,8 +33,8 @@ export default function AdminItems() {
         return p !== null ? Math.max(0, parseInt(p, 10)) : 0;
     });
     const [searchTerm, setSearchTerm] = useState<string>(() => searchParams.get('q') || '');
-    const [sortField, setSortField] = useState<string>(() => searchParams.get('sortField') || 'createdAt');
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(() => (searchParams.get('sortDirection') as 'asc' | 'desc') || 'desc');
+    const [sortField, setSortField] = useState<string>(() => searchParams.get('sortField') || (originalIntegrationEnabled()?'inventoryNumber':'createdAt'));
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(() => (searchParams.get('sortDirection') as 'asc' | 'desc') || (originalIntegrationEnabled()?'asc':'desc'));
     const [selectedWorkset, setSelectedWorkset] = useState<string>(() => searchParams.get('worksetId') || '');
 
     const [showAdvanced, setShowAdvanced] = useState(false);
@@ -115,6 +117,7 @@ export default function AdminItems() {
                 newParams.set(k, String(v));
             }
         });
+        if(originalIntegrationEnabled())newParams.set('catalog',String(originalSession().catalog.id));
         const searchStr = '?' + newParams.toString();
         if (location.search !== searchStr) {
             setSearchParams(newParams, { replace: true });
@@ -125,7 +128,7 @@ export default function AdminItems() {
         const revision = ++requestRevision.current;
         listAdminItems(queryParams)
             .then(result => { if (revision === requestRevision.current) setData(result); })
-            .catch(err => { if (revision === requestRevision.current) setLoadError(err.message); });
+            .catch(err => { if (revision === requestRevision.current) {setData(null);setLoadError(err.message);} });
     };
 
     const handleSort = (field: string) => {
@@ -139,7 +142,7 @@ export default function AdminItems() {
     };
 
     useEffect(() => {
-        listWorksets().then(setWorksets).catch(() => {});
+        if(!originalIntegrationEnabled())listWorksets().then(setWorksets).catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -231,7 +234,7 @@ export default function AdminItems() {
     const [pageError, setPageError] = useState('');
     useEffect(() => {setPageText(String(page + 1)); setPageError('');}, [page]);
     const confirmPage = () => {
-        const total = Math.max(1, data?.totalPages || 1);
+        const total = Math.min(originalIntegrationEnabled()?401:Infinity,Math.max(1, data?.totalPages || 1));
         if (!/^\d+$/.test(pageText) || Number(pageText) < 1 || Number(pageText) > total) {
             setPageError(`Zadejte číslo stránky od 1 do ${total}.`); return;
         }
@@ -244,8 +247,8 @@ export default function AdminItems() {
             value={pageText} onChange={e => {setPageText(e.target.value);setPageError('');}}
             onBlur={confirmPage} onKeyDown={e => {if(e.key==='Enter'){e.preventDefault();confirmPage();}}} /></label>
         {pageError && <span role="alert">{pageError}</span>}
-        <span>z {data?.totalPages || 1} · {data?.totalElements || 0} předmětů</span>
-        <button type="button" disabled={page + 1 >= (data?.totalPages || 1)} onClick={() => setPage(p => p + 1)}>Další</button>
+        <span>{`z ${data?.totalPages || 1} · ${data?.totalElements || 0} předmětů`}</span>
+        <button type="button" disabled={page + 1 >= (data?.totalPages || 1) || (originalIntegrationEnabled()&&page>=400)} onClick={() => setPage(p => p + 1)}>Další</button>
     </div>;
 
     if (!data && loadError) return <div role="alert">{loadError}<button type="button" onClick={loadData}>Načíst znovu</button></div>;
@@ -264,16 +267,16 @@ export default function AdminItems() {
                     <div className="flex flex-wrap gap-2">
                         <button
                             onClick={handlePrintList}
-                            disabled={isPrintLoading}
+                            disabled={originalIntegrationEnabled()||isPrintLoading}
                             className="genric-btn info-border radius px-3 py-2 text-[10px] font-bold uppercase flex items-center gap-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50"
                             title="Vytisknout úřední inventární soupis všech vyfiltrovaných položek"
                         >
                             <FaPrint /> {isPrintLoading ? 'Načítám tisk...' : 'Tisk soupisu (A4)'}
                         </button>
-                        <button disabled={exporting} aria-busy={exporting} onClick={handleExportExcel} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">
+                        <button disabled={originalIntegrationEnabled()||exporting} aria-busy={exporting} onClick={handleExportExcel} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">
                             <FaFileExcel /> {exporting ? 'Exportuji…' : 'Export .xlsx'}
                         </button>
-                        <button onClick={() => navigate('/admin/items/new', { state: { fromSearch: location.search } })} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
+                        <button disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => navigate('/admin/items/new', { state: { fromSearch: location.search } })} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
                             <FaPlus /> Nový předmět
                         </button>
                     </div>
@@ -283,7 +286,7 @@ export default function AdminItems() {
                     <div className="flex-grow relative min-w-[240px]">
                         <input
                             className="form-control pl-10 border-gray-200 focus:border-[#ffbc34] focus:ring-0 rounded-pill text-sm py-2 bg-gray-50"
-                            placeholder="Rychlé hledání: název, inv. číslo, popis, autor..."
+                            placeholder={originalIntegrationEnabled()?"Název, autor, datování, materiál, inventární nebo přírůstkové číslo":"Rychlé hledání: název, inv. číslo, popis, autor..."}
                             value={searchTerm}
                             onChange={e => { setPage(0); setSearchTerm(e.target.value); }}
                         />
@@ -306,7 +309,7 @@ export default function AdminItems() {
                         </select>
                     )}
                     <button
-                        onClick={() => setShowAdvancedBuilder(!showAdvancedBuilder)}
+                        disabled={originalIntegrationEnabled()} onClick={() => setShowAdvancedBuilder(!showAdvancedBuilder)}
                         className={`genric-btn ${showAdvancedBuilder || isAdvancedFilterActive ? 'warning' : 'default-border'} radius px-4 text-[10px] uppercase font-black transition-all flex items-center gap-2`}
                         title="Otevřít stavitel pokročilých podmínek (AND/OR/NOT)"
                     >
@@ -353,8 +356,8 @@ export default function AdminItems() {
                                 <label className={labelClass}>Autor / Původce</label>
                                 <input className={inputClass} value={filters.author} onChange={e => handleFilterChange('author', e.target.value)} />
                             </div>
-                            <label className="col-md-3">Původní DEMUS rok od<input type="number" aria-label="Původní DEMUS rok od" value={filters.sourceDatingFromYear} onChange={e=>handleFilterChange('sourceDatingFromYear',e.target.value)}/></label>
-                            <label className="col-md-3">Původní DEMUS rok do<input type="number" aria-label="Původní DEMUS rok do" value={filters.sourceDatingToYear} onChange={e=>handleFilterChange('sourceDatingToYear',e.target.value)}/></label>
+                            <label className="col-md-3">Původní DEMUS rok od<input type="number" aria-label="Původní DEMUS rok od" disabled={originalIntegrationEnabled()} title="Filtr není v existujícím scoped kontraktu" value={filters.sourceDatingFromYear} onChange={e=>handleFilterChange('sourceDatingFromYear',e.target.value)}/></label>
+                            <label className="col-md-3">Původní DEMUS rok do<input type="number" aria-label="Původní DEMUS rok do" disabled={originalIntegrationEnabled()} title="Filtr není v existujícím scoped kontraktu" value={filters.sourceDatingToYear} onChange={e=>handleFilterChange('sourceDatingToYear',e.target.value)}/></label>
                             <div className="col-md-3 flex flex-col justify-end">
                                 <button onClick={resetFilters} className="text-[10px] text-red-500 font-black uppercase hover:text-red-700 transition-colors mb-2 text-right">Resetovat vše</button>
                             </div>
@@ -364,6 +367,7 @@ export default function AdminItems() {
             </div>
 
             <div className="card-body p-0">
+                {originalIntegrationEnabled()&&<p role="status">Fond a podsbírka jsou původní zdrojové kódy; Předmět je původní Predmet_S, nikoli současné kurátorské tvrzení. Autor, datace, materiál a technika jsou současná kurátorská tvrzení, oddělená od zdroje. Prázdná buňka neprokazuje chybějící data v DEMUS.</p>}
                 {loadError && <p role="alert">{loadError}</p>}
                 {pagination}
                 <div className="table-responsive">
@@ -381,18 +385,18 @@ export default function AdminItems() {
                         <tbody>{data.content.map((item: any) => <tr key={item.id}>
                             <td><input type="checkbox" aria-label={`Vybrat ${item.inventoryNumber || item.id}`} checked={selectedIds.includes(item.id)}
                                 onChange={() => setSelectedIds(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev,item.id])}/></td>
-                            <td><button type="button" className="underline" onClick={() => navigate(`/admin/items/view/${item.id}`,{state:{fromSearch:location.search}})}>{item.inventoryNumber || '—'}</button></td>
+                            <td><button type="button" className="underline" onClick={() => navigate(originalIntegrationEnabled()?originalItemHref(item.id):`/admin/items/view/${item.id}`,{state:{fromSearch:location.search,catalogIds:(data?.content||[]).map((v:any)=>v.id),returnPath:'/admin/items'}})}>{item.inventoryNumber || '—'}</button></td>
                             <td>{item.accessionNumber || '—'}</td><td>{item.fundLegacyCode || item.fundName || '—'}</td>
-                            <td>{item.subCollection || '—'}</td><td>{item.objectType || '—'}</td><td>{item.title || '—'}</td>
+                            <td>{item.subCollection || '—'}</td><td title={originalIntegrationEnabled()?'Původní DEMUS Predmet_S; není současným kurátorským tvrzením':undefined}>{originalIntegrationEnabled()?(item.sourceInventory?.Predmet_S===null||item.sourceInventory?.Predmet_S===undefined?'—':item.sourceInventory.Predmet_S===''?'Prázdný řetězec':item.sourceInventory.Predmet_S):(item.objectType || '—')}</td><td>{item.title || '—'}</td>
                             <td>{item.author || item.authors?.join(', ') || '—'}</td><td>{item.datingText || '—'}</td>
                             <td>{item.material || item.materials?.join(', ') || '—'}</td><td>{item.technique || '—'}</td>
                             <td>{item.published ? 'Zveřejněno' : 'Neveřejné'}</td>
                             <td className="demus-row-actions">
-                                <button type="button" aria-label="Upravit předmět" title="Upravit předmět" onClick={() => navigate(`/admin/items/edit/${item.id}`,{state:{fromSearch:location.search}})}><FaEdit/></button>
-                                <button type="button" aria-label="Tisk štítku" title="Tisk štítku" onClick={() => handlePrint(item.id)}><FaPrint/></button>
+                                <button type="button" aria-label="Upravit předmět" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Současná odborná sekce podle oprávnění" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(item.id,'professional'):`/admin/items/edit/${item.id}`,{state:{fromSearch:location.search,catalogIds:(data?.content||[]).map((v:any)=>v.id),returnPath:'/admin/items'}})}><FaEdit/></button>
+                                <button type="button" aria-label="Tisk štítku" disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => handlePrint(item.id)}><FaPrint/></button>
                                 <button type="button" aria-label="Tisk muzejní karty" title="Tisk muzejní karty" onClick={() => setCardPrintModal({isOpen:true,item})}><FaIdCard/></button>
-                                <button type="button" aria-label="Klonovat předmět" title="Klonovat předmět" onClick={() => setCloneModal({isOpen:true,item})}><FaCopy/></button>
-                                <button type="button" aria-label="Vyřadit z evidence" title="Vyřadit z evidence" onClick={() => setDeaccessionModal({isOpen:true,item})}><FaTrash/></button>
+                                <button type="button" aria-label="Klonovat předmět" disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => setCloneModal({isOpen:true,item})}><FaCopy/></button>
+                                <button type="button" aria-label="Vyřadit z evidence" disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => setDeaccessionModal({isOpen:true,item})}><FaTrash/></button>
                             </td>
                         </tr>)}</tbody>
                     </table>
@@ -436,7 +440,7 @@ export default function AdminItems() {
                         </button>
 
                         <button
-                            onClick={() => setShowWorksetModal(true)}
+                            disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => setShowWorksetModal(true)}
                             className="px-3 py-1 bg-[#ffbc34] text-black font-extrabold text-xs uppercase rounded hover:bg-yellow-400 transition-colors shadow flex items-center gap-1.5"
                         >
                             <FaLayerGroup /> Uložit do sady

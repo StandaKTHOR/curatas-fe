@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GovButton, GovFormInput, GovFormLabel } from '@gov-design-system-ce/react';
+import {localAuthEnabled} from '../features/localAuth/localAuthClient';
 import { login } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 
@@ -11,7 +12,7 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
 
     const navigate = useNavigate();
-    const { setToken } = useAuth();
+    const { setToken, loginLocal } = useAuth();
 
     async function handleLogin(e: React.FormEvent) {
         e.preventDefault();
@@ -19,6 +20,7 @@ export default function Login() {
         setLoading(true);
 
         try {
+            if(localAuthEnabled()){await loginLocal(username,password);navigate('/admin/items');return;}
             const response = await login({ username, password });
 
             // Nastartujeme stopky pro 60 min limit

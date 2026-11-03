@@ -1,3 +1,9 @@
+import MaterialBindings from '../features/catalog/MaterialBindings';
+import {useOriginalMedia} from '../features/catalog/useOriginalMedia';
+import {useOriginalDimensions} from '../features/catalog/useOriginalDimensions';
+import {originalCanEdit,originalEditHref,saveOriginalCurrent,applyOriginalEditBoundary,type OriginalEditDomain} from '../features/catalog/originalEdit';
+import OriginalSourceBridge from '../features/catalog/OriginalSourceBridge';
+import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
 import { uncertainWrite, uncertainCreateMessage } from '../lib/writeOutcome';
 import PhotoPreview from '../components/PhotoPreview';
 import ThreeLevelDictionarySelect from '../components/ThreeLevelDictionarySelect';
@@ -175,6 +181,12 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     const navigate = useNavigate();
     const dataRouter = useContext(UNSAFE_DataRouterContext);
     const location = useLocation();
+    const pageIds: number[] = Array.isArray((location.state as any)?.catalogIds)?(location.state as any).catalogIds.filter((n:unknown)=>Number.isSafeInteger(n)&&Number(n)>0).slice(0,50):[];
+    const pagePosition=pageIds.indexOf(Number(id));
+    const openNeighbour=(offset:number)=>{
+        const next=pageIds[pagePosition+offset];if(!next)return;
+        navigate(`/items/${next}?catalog=${originalSession().catalog.id}`,{state:location.state});
+    };
     const isViewMode = readOnly || location.pathname.includes('/admin/items/view/');
     const persistedSnapshotRef = useRef<any>(null);
     const editSessionRef = useRef<ItemEditSession>();
@@ -198,7 +210,12 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         'documentation' | 'classification' | 'determination' | 'deaccession' | 'manipulation' | 'action' | 'iso' | 'demus' | 'attachments' | 'audit' | 'origin' | 'reference' | 'plus' | 'vocabularies'
     >('documentation');
 
+    const scopedMedia=useOriginalMedia(Number(id),activeTab==='photos'||activeTab==='museum'&&museumSubTab==='attachments');
+    const scopedDimensions=useOriginalDimensions(Number(id),activeTab==='dimensions');
     const [loading, setLoading] = useState(false);
+    const [scopedNeedsReload,setScopedNeedsReload]=useState(false);
+    const scopedDomain:OriginalEditDomain=new URLSearchParams(location.search).get('edit')==='inventory'?'inventory':'professional';
+    useLayoutEffect(()=>{if(originalIntegrationEnabled())applyOriginalEditBoundary(document.getElementById('item-editor'),scopedDomain,!isViewMode&&originalCanEdit(scopedDomain)&&Boolean((editSessionRef.current as any)?.scopedCurrent),loading||scopedNeedsReload);});
     const [uploading, setUploading] = useState(false);
     const [conflictError, setConflictError] = useState<string | null>(null);
     const [globalError, setGlobalError] = useState<string | null>(null);
@@ -336,6 +353,9 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
 
     // Přílohy
     const [attachments, setAttachments] = useState<any[]>([]);
+    const galleryImages:any[]=originalIntegrationEnabled()?scopedMedia.images:itemImages;
+    const galleryAttachments:any[]=originalIntegrationEnabled()?scopedMedia.attachments.map(entry=>({...entry,originalFilename:entry.name,fileSize:entry.byteSize,entry})):attachments;
+    const mediaStatus=originalIntegrationEnabled()?<>{scopedMedia.busy&&<p role="status">Načítání médií…</p>}{scopedMedia.error&&<p role="alert">{scopedMedia.error}</p>}{scopedMedia.next&&<button data-scoped-read="true" type="button" disabled={scopedMedia.busy} onClick={()=>void scopedMedia.loadMore()}>Další média</button>}</>:null;
     const [attFile, setAttFile] = useState<File | null>(null);
     const [attCaption, setAttCaption] = useState('');
     const [attUploading, setAttUploading] = useState(false);
@@ -556,8 +576,12 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     const getFormSnapshot = (f: any) => {
         if (!f) return '';
         // Compare editable input, including invalid/unfinished values, without running save validation.
-        const clone = Object.fromEntries(Object.keys(buildItemPayload({})).filter(key => key !== 'auditComment' && key !== 'clearFund')
-            .concat('authorRole').sort().map(key => [key, f[key] ?? '']));
+        // Scoped current fields use scalar control names, not legacy aggregate payload keys
+        // such as authors/materials. The original guard must see those actual edits too.
+        const keys=originalIntegrationEnabled()
+            ? ['objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']
+            : Object.keys(buildItemPayload({})).filter(key => key !== 'auditComment' && key !== 'clearFund').concat('authorRole');
+        const clone = Object.fromEntries(keys.sort().map(key => [key, f[key] ?? '']));
         return JSON.stringify(clone, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
             ? Object.fromEntries(Object.keys(value).sort().map(key => [key,value[key]])) : value);
     };
@@ -591,13 +615,19 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     });
 
+    useEffect(()=>{
+        if(!originalIntegrationEnabled())return;
+        const check=(event:Event)=>{if(mainSaveRef.current||auditSaving||editSessionRef.current?.busy){event.preventDefault();return;}if(hasUnsavedChanges()&&!window.confirm('Máte neuložené změny. Opravdu chcete změnit katalog a opustit původní kartu?'))event.preventDefault();};
+        window.addEventListener('curatas:catalog-discard',check);return()=>window.removeEventListener('curatas:catalog-discard',check);
+    });
     const handleBackToList = () => {
         if (mainSaveRef.current || auditSaving || editSessionRef.current?.busy) {
             setGlobalError('Probíhá ukládání. Vyčkejte na jeho dokončení.'); return;
         }
         if (!dataRouter && hasUnsavedChanges() && !window.confirm('Máte neuložené změny. Opravdu chcete odejít bez uložení?')) return;
-        const returnSearch = (location.state as any)?.fromSearch || sessionStorage.getItem('adminItemsSearch') || '';
-        navigate(`/admin/items${returnSearch}`);
+        const returnPath=(location.state as any)?.returnPath==='/'||location.pathname.startsWith('/items/')?'/':'/admin/items';
+        const returnSearch = (location.state as any)?.fromSearch ?? sessionStorage.getItem(returnPath==='/'?'catalogSearch':'adminItemsSearch') ?? '';
+        navigate(`${returnPath}${returnSearch}`);
     };
 
     const currentFundLabel = useMemo(() => {
@@ -630,7 +660,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
 
     useEffect(() => {
         let alive = true;
-        getDictionaries().then(data => {
+        if(!originalIntegrationEnabled()){getDictionaries().then(data => {
             setDicts(data);
         }).catch(console.error);
 
@@ -648,10 +678,10 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 };
                 setFundOptions(flatten(tree));
             }
-        }).catch(console.error);
+        }).catch(console.error);}
 
         if (id) {
-            loadImages(id);
+            if(!originalIntegrationEnabled())loadImages(id);
             setLoading(true);
             getAdminItem(id)
                 .then(data => {
@@ -742,7 +772,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 .catch((err: Error) => {if (alive) setGlobalError(!id && uncertainWrite(err) ? uncertainCreateMessage : err.message);})
                 .finally(() => {if (alive) setLoading(false);});
 
-            loadAttachments();
+            if(!originalIntegrationEnabled())loadAttachments();
         } else {
             Promise.resolve(getNextAvailableNumbers?.()).then((next: any) => {
                 if (!alive) return;
@@ -863,6 +893,24 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         setGlobalError(null);
         setSuccessMessage(null);
         setFieldErrors({});
+
+        if(originalIntegrationEnabled()){
+            if(!id||isViewMode)return;
+            mainSaveRef.current=true;setLoading(true);let accepted=false;
+            try{
+                const outcome=await saveOriginalCurrent(Number(id),scopedDomain,editSessionRef.current,form);
+                if(!outcome.saved){setSuccessMessage('Současné údaje jsou beze změn; žádný zápis nebyl proveden.');return;}
+                accepted=true;
+                const fresh=await getAdminItem(id);
+                const loaded={...form,...fresh};
+                for(const key of ['objectType','description','author','datingText','originPlace','material','technique','materialNote'])loaded[key]=fresh[key]??'';
+                editSessionRef.current=fresh._editSession;persistedSnapshotRef.current=fresh;
+                initialFormValuesRef.current=loaded;initialFormSnapshotRef.current=getFormSnapshot(loaded);setForm(loaded);
+                setSuccessMessage('Současná sekce byla uložena přes scoped API a znovu načtena. Historické údaje DEMUS nebyly změněny.');
+            }catch(error){if(accepted)setScopedNeedsReload(true);setGlobalError((accepted?'Zápis byl potvrzen, ale obnovení verze selhalo. Před dalším zápisem obnovte stránku. ':'Zápis nebyl potvrzen; draft zůstává zachován. ')+(error instanceof Error?error.message:'Požadavek selhal.'));}
+            finally{mainSaveRef.current=false;setLoading(false);}
+            return;
+        }
 
         if (!validity.accession || !validity.inventory) {
             setGlobalError('Nelze uložit: Evidenční čísla musí být unikátní!');
@@ -1092,6 +1140,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         );
     }
 
+    const dimensionRows=originalIntegrationEnabled()?scopedDimensions.rows.map(row=>({...row,dimensionType:row.type,note:''})):form.dimensions;
     return (
         <div className="space-y-3 animate-in fade-in duration-300">
                 {/* HLAVIČKA FORMULÁŘE */}
@@ -1102,7 +1151,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             type="outlined"
                             color="neutral"
                             size="s"
-                            onClick={handleBackToList}
+                            data-scoped-navigation="true" onClick={handleBackToList}
                             title="Zpět na seznam předmětů se zachováním filtrů a stránkování"
                         >
                             ← Zpět na seznam
@@ -1116,8 +1165,12 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                         </div>
                     </div>
                 <div className="flex items-center gap-2.5 flex-wrap">
+                    {originalIntegrationEnabled()&&isViewMode&&pagePosition>=0&&<>
+                        <GovButton nativeType="button" type="outlined" color="neutral" size="s" data-scoped-navigation="true" disabled={pagePosition===0} onClick={()=>openNeighbour(-1)} title="Předchozí předmět na načtené stránce seznamu">Předchozí předmět</GovButton>
+                        <GovButton nativeType="button" type="outlined" color="neutral" size="s" data-scoped-navigation="true" disabled={pagePosition===pageIds.length-1} onClick={()=>openNeighbour(1)} title="Následující předmět na načtené stránce seznamu">Následující předmět</GovButton>
+                    </>}
                     {!isViewMode && <button type="submit" form="item-editor" className="demus-save"
-                        disabled={loading || auditSaving || !validity.accession || !validity.inventory}>
+                        data-scoped-save="true" disabled={originalIntegrationEnabled()?loading||auditSaving||scopedNeedsReload||!originalCanEdit(scopedDomain)||!(editSessionRef.current as any)?.scopedCurrent:loading || auditSaving || !validity.accession || !validity.inventory}>
                         {loading ? 'Ukládám…' : 'Uložit'}
                     </button>}
                     {isViewMode && (
@@ -1131,7 +1184,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             type="solid"
                             color="primary"
                             size="s"
-                            onClick={() => navigate(`/admin/items/edit/${id}`, { state: location.state })}
+                            data-scoped-navigation="true" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Současná odborná sekce podle katalogového oprávnění" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(Number(id),'professional'):`/admin/items/edit/${id}`, { state: location.state })}
                         >
                             ✏️ Upravit předmět
                         </GovButton>
@@ -1143,7 +1196,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                         <input
                             type="checkbox"
                             aria-label="Zveřejněno"
-                            disabled={isViewMode || loading || auditSaving}
+                            disabled={isViewMode||loading||auditSaving||originalIntegrationEnabled()} title={originalIntegrationEnabled()?'Zveřejnění není součástí scoped zapisovatelného kontraktu':undefined}
                             checked={form.published || false}
                             onChange={e => setForm({ ...form, published: e.target.checked })}
                             className="cursor-pointer rounded border-gray-300 text-[#00204a] focus:ring-0"
@@ -1161,13 +1214,13 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             >
                                 🖨️ Tisk karty
                             </GovButton>
-                            <input type="file" id="photo-up" hidden onChange={handleFileChange} accept="image/*" />
+                            <input type="file" id="photo-up" disabled={originalIntegrationEnabled()||isViewMode} hidden onChange={handleFileChange} accept="image/*" />
                             <GovButton
                                 nativeType="button"
                                 type="outlined"
                                 color="neutral"
                                 size="s"
-                                disabled={uploading || isViewMode}
+                                disabled={uploading || isViewMode || originalIntegrationEnabled()}
                                 onClick={() => document.getElementById('photo-up')?.click()}
                             >
                                 {uploading ? 'Nahrávám...' : '📸 Nahrát foto'}
@@ -1177,7 +1230,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 type="outlined"
                                 color="primary"
                                 size="s"
-                                onClick={() => setCloneModalOpen(true)}
+                                disabled={originalIntegrationEnabled()} title="Klonování je vypnuté" onClick={() => setCloneModalOpen(true)}
                             >
                                 📋 Klonovat
                             </GovButton>
@@ -1201,7 +1254,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 isNew={!id}
             />
 
-            {id && <InventoryIdentityPanel itemId={Number(id)} inventoryNumber={form.inventoryNumber || ''}
+            {id && <InventoryIdentityPanel key={originalIntegrationEnabled()?editSessionRef.current?.etag:undefined} itemId={Number(id)} inventoryNumber={form.inventoryNumber || ''}
                 canEdit={!isViewMode && !loading && !auditSaving && form.inventoryNumber === initialNumbers.inventory} onSaved={async () => {
                     const fresh = await getAdminItem(id);
                     if (persistedSnapshotRef.current) persistedSnapshotRef.current = {...persistedSnapshotRef.current, inventoryNumber:fresh.inventoryNumber};
@@ -1223,9 +1276,11 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                     ['Plus','museum','plus'],['Vyřazení','museum','deaccession'],['Akvizice','provenance',''],
                     ['Číselníkové vazby','museum','vocabularies'],['Přílohy','museum','attachments'],['Umístění','storage',''],['Foto','photos',''],['Audit','museum','audit']].map(([label, main, sub]) =>
                     <button key={label} type="button" aria-pressed={activeTab === main && (!sub || museumSubTab === sub)}
-                        onClick={() => {setActiveTab(main); if (sub) setMuseumSubTab(sub as any);}}>{label === 'Přílohy' ? `Přílohy (${attachments.length})` : label}</button>)}
+                        onClick={() => {setActiveTab(main); if (sub) setMuseumSubTab(sub as any);}}>{label === 'Přílohy' ? `Přílohy (${originalIntegrationEnabled()&&!scopedMedia.loaded?'neověřeno':galleryAttachments.length})` : label}</button>)}
             </nav>
 
+
+            {originalIntegrationEnabled() && activeTab!=='identity' && id && <OriginalSourceBridge key={`${id}:${editSessionRef.current?.etag}`} itemId={Number(id)} section={activeTab === 'museum' ? museumSubTab : activeTab}/>}
             {/* CHYBOVÉ A ÚSPĚŠNÉ HLÁŠKY */}
             {successMessage && (
                 <div className="mx-6 mt-4 p-3 bg-green-50 border-l-4 border-green-600 text-xs text-green-800 font-bold rounded flex justify-between items-center animate-in fade-in duration-200">
@@ -1257,15 +1312,15 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
             {isViewMode && id && activeTab === 'museum' && museumSubTab === 'demus' && <DemusSourceIdentity itemId={Number(id)}/>}
             {isViewMode && id && activeTab === 'museum' && museumSubTab === 'vocabularies' && <VocabularyAssociations itemId={Number(id)} data={(editSessionRef.current?.museumSnapshot as any)?.vocabularies}/>}
             {isViewMode && id && activeTab === 'museum' && museumSubTab === 'attachments' && <section className="demus-source-panel" aria-label="Přílohy pro čtení">
-                <h3>Přílohy ({attachments.length})</h3>
-                {!attachments.length && <p>Žádné přílohy nebyly vráceny.</p>}
-                <ul>{attachments.map((att:any)=><li key={att.id} className="flex items-center justify-between gap-2">
+                <h3>Přílohy ({galleryAttachments.length})</h3>{mediaStatus}
+                {!galleryAttachments.length && <p>{originalIntegrationEnabled()?'Přílohy na načtené scoped stránce: žádné. Úplnost závisí na dokončeném čtení všech stran.':'Žádné přílohy nebyly vráceny.'}</p>}
+                <ul>{galleryAttachments.map((att:any)=><li key={att.id} className="flex items-center justify-between gap-2">
                     <span>{att.originalFilename||att.filename||att.fileName||'Příloha'} {att.caption}</span>
-                    <button type="button" onClick={async()=>{try{await downloadAttachmentFile(Number(id),att.id,att.originalFilename||att.filename||'priloha');}catch(e){setGlobalError('Stažení přílohy selhalo: '+(e as Error).message);}}}>Stáhnout</button>
+                    <button type="button" onClick={async()=>{try{if(originalIntegrationEnabled())await scopedMedia.download(att.entry);else await downloadAttachmentFile(Number(id),att.id,att.originalFilename||att.filename||'priloha');}catch(e){setGlobalError('Stažení přílohy selhalo: '+(e as Error).message);}}}>Stáhnout</button>
                 </li>)}</ul>
             </section>}
             <EditorNavigationGuard isDirty={hasUnsavedChanges} isSaving={() => mainSaveRef.current || auditSaving || !!editSessionRef.current?.busy}/>
-            <p className="px-6 text-sm">Uložit: hlavní údaje a základní příznaky včetně Archivu. Odborné záznamy a akvizice ukládejte v příslušné sekci.</p>
+            <p className="px-6 text-sm">{originalIntegrationEnabled()?`Ukládá se pouze současná ${scopedDomain==='inventory'?'inventární':'odborná'} sekce. Historie DEMUS a nepodporovaná pole jsou zamčené. Nezměněné NULL se zachovávají.`:'Uložit: hlavní údaje a základní příznaky včetně Archivu. Odborné záznamy a akvizice ukládejte v příslušné sekci.'}</p>
             <form id="item-editor" noValidate onSubmit={handleSubmit} className="p-6 space-y-4 demus-editor">
                 <fieldset disabled={loading || auditSaving || (isViewMode && activeTab !== 'photos')}>
                 {/* 1. ZÁKLADNÍ ÚDAJE & IDENTIFIKACE */}
@@ -1346,6 +1401,8 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 onChange={e=>setForm((prev:any)=>({...prev,quantity:e.target.value===''?null:Number(e.target.value)}))}/>
                             {fieldErrors.quantity&&<p role="alert">{fieldErrors.quantity}</p>}
                         </div>
+                        {originalIntegrationEnabled()&&<div className="space-y-1"><label htmlFor="current-other-number">Současné jiné číslo (kurátorský údaj)</label><input id="current-other-number" type="text" readOnly={isViewMode||scopedDomain!=='inventory'} value={form.otherNumber??''} onChange={e=>setForm((prev:any)=>({...prev,otherNumber:e.target.value}))}/>{form.otherNumber===null&&<span>NULL</span>}</div>}
+                        {originalIntegrationEnabled()&&!isViewMode&&scopedDomain==='professional'&&<label className="space-y-1">Současný typ — volný text<input id="current-object-type" type="text" value={form.objectType??''} onChange={e=>setForm((prev:any)=>({...prev,objectType:e.target.value}))}/></label>}
                         {/* FOND A PODSBÍRKA DLE CITEM – NEZÁVISLÁ POLA */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
@@ -1828,13 +1885,17 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 {activeTab === 'description' && (<div className="space-y-4">
                     <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode}
                         itemId={id?Number(id):undefined} section="materialTuples" onSave={handleSectionSave}/>
+                    {originalIntegrationEnabled()&&id&&<MaterialBindings itemId={Number(id)} readOnly={isViewMode||hasUnsavedChanges()||scopedNeedsReload||loading} onSave={etag=>{
+                        const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();
+                    }}/>}
                     <h3>Současná hlavní pole materiálu a techniky</h3>
+                    {originalIntegrationEnabled()&&!isViewMode&&scopedDomain==='professional'&&<div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><label className="space-y-1">Současný materiál — volný text<input id="current-material-text" value={form.material??''} onChange={e=>setForm((prev:any)=>({...prev,material:e.target.value}))}/></label><label className="space-y-1">Současná technika — volný text<input id="current-technique-text" value={form.technique??''} onChange={e=>setForm((prev:any)=>({...prev,technique:e.target.value}))}/></label></div>}
                         {/* Materiál a Technika */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál (Číselník)" readOnly={isViewMode} historicalValue={form.material} value={form.materialDictionaryId ?? null}
+                            <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál (Číselník)" scoped={originalIntegrationEnabled()} readOnly={isViewMode} historicalValue={form.material} value={form.materialDictionaryId ?? null}
                                 onChange={dictionaryId => setForm((prev: any) => ({ ...prev, materialDictionaryId: dictionaryId }))} />
 
-                            <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika (Číselník)" readOnly={isViewMode} historicalValue={form.technique} value={form.techniqueDictionaryId ?? null}
+                            <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika (Číselník)" scoped={originalIntegrationEnabled()} readOnly={isViewMode} historicalValue={form.technique} value={form.techniqueDictionaryId ?? null}
                                 onChange={dictionaryId => setForm((prev: any) => ({ ...prev, techniqueDictionaryId: dictionaryId }))} />
                         </div>
                         <p>Text materiálu: {form.material || '—'} · Text techniky: {form.technique || '—'}</p>
@@ -1864,7 +1925,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 </div>)}
 
                 {activeTab === 'dimensions' && (<div className="space-y-4">
-                        {/* FYZICKÉ ROZMĚRY & MÍRY */}
+                        {originalIntegrationEnabled()&&<>{scopedDimensions.busy&&<p role="status">Načítání současných opakovaných měr…</p>}{scopedDimensions.error&&<p role="alert">{scopedDimensions.error}</p>}{scopedDimensions.next&&<button data-scoped-read="true" type="button" disabled={scopedDimensions.busy} onClick={()=>void scopedDimensions.loadMore()}>Další současné míry</button>}<p>Scoped opakované míry jsou současné záznamy, oddělené od zdroje i přesného kurátorského měření. Zápis tohoto původního editoru včetně poznámky není napojen; hodnoty se nemění.</p></>}{/* FYZICKÉ ROZMĚRY & MÍRY */}
                         <div className="bg-gray-50 p-4 rounded border border-gray-200 space-y-3">
                             <div className="flex justify-between items-center">
                                 <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider">
@@ -1898,11 +1959,11 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 </div>
                             </div>
 
-                            {form.dimensions && form.dimensions.length > 0 && (
+                            {dimensionRows && dimensionRows.length > 0 && (
                                 <div className="space-y-2 pt-2 border-t border-gray-200">
                                     <p className="text-[11px] font-bold text-gray-600 uppercase">Opakovatelné rozměry (DEMUS Parita):</p>
-                                    {form.dimensions.map((dim: any, idx: number) => (
-                                        <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200 text-xs">
+                                    {dimensionRows.map((dim: any, idx: number) => (
+                                        <div key={originalIntegrationEnabled()?dim.id:idx} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200 text-xs">
                                             <select
                                                 value={dim.dimensionType}
                                                 onChange={e => updateDimensionRow(idx, 'dimensionType', e.target.value)}
@@ -1961,13 +2022,13 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
 
                 </div>)}
 
-                {activeTab === 'photos' && (<div className="space-y-4">
+                {activeTab === 'photos' && (<div className="space-y-4">{mediaStatus}
                         {/* Fotodokumentace */}
                         <div className="space-y-3 bg-slate-50 border border-slate-200 rounded p-4">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                 <div>
                                     <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider">
-                                        Fotodokumentace ({itemImages.length > 0 ? itemImages.length : (form.imageUrls?.length || 0)})
+                                        Fotodokumentace ({originalIntegrationEnabled()&&!scopedMedia.loaded?'neověřeno':galleryImages.length > 0 ? galleryImages.length : (form.imageUrls?.length || 0)})
                                     </h4>
                                     <p className="text-[11px] text-gray-500">
                                         Správa fotografií předmětu, nastavení hlavní fotografie, stahování a náhledy.
@@ -1987,9 +2048,9 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 )}
                             </div>
 
-                            {itemImages.length > 0 ? (
+                            {galleryImages.length > 0 ? (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 pt-2">
-                                    {itemImages.map((img) => (
+                                    {galleryImages.map((img) => (
                                         <div
                                             key={img.id}
                                             className={`relative bg-white border rounded shadow-xs overflow-hidden flex flex-col group ${
@@ -1998,7 +2059,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                         >
                                             <div className="relative h-32 w-full bg-gray-100 flex items-center justify-center overflow-hidden">
                                                 <SafeImage
-                                                    src={img.thumbUrl || img.url}
+                                                    load={img.thumbnail} src={img.thumbUrl || img.url}
                                                     alt={img.caption || form.title || 'Fotografie'}
                                                     className="w-full h-full object-contain"
                                                 />
@@ -2014,10 +2075,10 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                 </div>
                                             )}
                                             <div className="p-1.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-1 text-[11px]">
-                                                <PhotoPreview src={img.url} alt={img.caption || form.title || "Fotografie"} />
+                                                <PhotoPreview load={img.preview} src={img.url} alt={img.caption || form.title || "Fotografie"} />
                                                 <a
                                                     href="#"
-                                                    onClick={event => {event.preventDefault();handleDownloadPhoto(img.url, img.caption);}}
+                                                    onClick={event => {event.preventDefault();if(originalIntegrationEnabled())void scopedMedia.download(img.entry).catch(e=>setGlobalError(e.message));else handleDownloadPhoto(img.url, img.caption);}}
                                                     className="text-gray-700 hover:text-gray-900 font-bold px-1 py-0.5"
                                                     title="Stáhnout fotografii"
                                                 >
@@ -2026,7 +2087,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                 {!isViewMode && !img.primary && (
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleSetPrimaryPhoto(img.id)}
+                                                        onClick={() => {if(!originalIntegrationEnabled())handleSetPrimaryPhoto(img.id);}}
                                                         className="text-amber-700 hover:text-amber-900 font-bold px-1 py-0.5 text-[10px]"
                                                         title="Nastavit jako hlavní fotografii"
                                                     >
@@ -2036,7 +2097,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                 {!isViewMode && (
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleDeletePhoto(img.id)}
+                                                        onClick={() => {if(!originalIntegrationEnabled())handleDeletePhoto(img.id);}}
                                                         className="text-red-600 hover:text-red-800 font-bold px-1 py-0.5"
                                                         title="Smazat fotografii"
                                                         aria-label={`Smazat fotografii ${img.id}`}
@@ -2066,7 +2127,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 </div>
                             ) : (
                                 <p className="text-xs italic text-gray-500 py-2">
-                                    Zatím nebyly nahrány žádné fotografie sbírkového předmětu.
+                                    {originalIntegrationEnabled()?'Fotografie na načtené scoped stránce: žádné. Nejde o důkaz absence v původním DEMUS.':'Zatím nebyly nahrány žádné fotografie sbírkového předmětu.'}
                                 </p>
                             )}
                         </div>
@@ -2398,6 +2459,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             )}
                             {museumSubTab === 'attachments' && !isViewMode && (
                                 <div className="space-y-4">
+                                    {mediaStatus}{originalIntegrationEnabled()&&<p>Scoped přílohy lze číst a stáhnout. Upload, změna popisu a odstranění nemají ověřený scoped zápis a zůstávají zamčené.</p>}
                                     {!id ? (
                                         <div className="p-6 text-center bg-gray-50 border border-gray-200 rounded text-gray-500">
                                             <FaPaperclip className="mx-auto text-2xl text-gray-400 mb-2" />
@@ -2461,14 +2523,14 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                             <div className="bg-white rounded border border-gray-200 overflow-hidden">
                                                 <div className="bg-gray-50 border-b px-4 py-2 flex items-center justify-between">
                                                     <h5 className="text-xs font-black uppercase text-gray-600 flex items-center gap-1.5">
-                                                        <FaPaperclip /> Evidované přílohy ({attachments.length})
+                                                        <FaPaperclip /> Evidované přílohy ({galleryAttachments.length})
                                                     </h5>
                                                 </div>
-                                                {attachments.length === 0 ? (
-                                                    <p className="p-4 text-xs italic text-gray-400 text-center">Zatím nebyly nahrány žádné přílohy.</p>
+                                                {galleryAttachments.length === 0 ? (
+                                                    <p className="p-4 text-xs italic text-gray-400 text-center">{originalIntegrationEnabled()?(scopedMedia.loaded?'Na načtené scoped stránce nejsou přílohy.':'Přílohy zatím nejsou ověřeny.'):'Zatím nebyly nahrány žádné přílohy.'}</p>
                                                 ) : (
                                                     <div className="divide-y divide-gray-100">
-                                                        {attachments.map((att: any) => (
+                                                        {galleryAttachments.map((att: any) => (
                                                             <div key={att.id} className="p-3 flex items-center justify-between hover:bg-gray-50 text-xs">
                                                                 <div className="flex items-center gap-2.5 min-w-0">
                                                                     <FaFileAlt className="text-gray-400 text-base flex-shrink-0" />
@@ -2489,7 +2551,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                                         onClick={async event => {
                                                                             event.preventDefault();
                                                                             try {
-                                                                                await downloadAttachmentFile(Number(id), att.id, att.originalFilename || att.filename || 'priloha');
+                                                                                if(originalIntegrationEnabled())await scopedMedia.download(att.entry);else await downloadAttachmentFile(Number(id), att.id, att.originalFilename || att.filename || 'priloha');
                                                                             } catch (e: any) {
                                                                                 alert('Stažení přílohy selhalo: ' + e.message);
                                                                             }
@@ -2560,11 +2622,11 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                     <div className="bg-white rounded border border-gray-200 overflow-hidden">
                                         <div className="bg-gray-50 border-b px-4 py-2">
                                             <h5 className="text-xs font-black uppercase text-gray-600">
-                                                📝 Historie auditních záznamů ({form.events?.length || 0})
+                                                📝 Historie auditních záznamů ({originalIntegrationEnabled()?'globální historie nedostupná':form.events?.length || 0})
                                             </h5>
                                         </div>
                                         {!form.events || form.events.length === 0 ? (
-                                            <p className="p-4 text-xs italic text-gray-400 text-center">Zatím nebyly zaznamenány žádné auditní události.</p>
+                                            <p className="p-4 text-xs italic text-gray-400 text-center">{originalIntegrationEnabled()?'Původní globální události nejsou součástí scoped kontraktu. Forenzní audit katalogu je oddělený a vyžaduje vlastní oprávnění.':'Zatím nebyly zaznamenány žádné auditní události.'}</p>
                                         ) : (
                                             <div className="divide-y divide-gray-100">
                                                 {form.events.map((ev: any, idx: number) => (
@@ -2595,14 +2657,14 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 type="solid"
                                 color="primary"
                                 size="s"
-                                onClick={() => navigate(`/admin/items/edit/${id}`, { state: location.state })}
+                                data-scoped-navigation="true" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Současná odborná sekce podle katalogového oprávnění" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(Number(id),'professional'):`/admin/items/edit/${id}`, { state: location.state })}
                             >
                                 ✏️ Upravit tento předmět
                             </GovButton>
                         ) : (
                             <GovButton
                                 nativeType="submit"
-                                disabled={loading || !validity.accession || !validity.inventory}
+                                data-scoped-save="true" disabled={originalIntegrationEnabled()?loading||scopedNeedsReload||!originalCanEdit(scopedDomain)||!(editSessionRef.current as any)?.scopedCurrent:loading || !validity.accession || !validity.inventory}
                                 type="solid"
                                 color="primary"
                                 size="s"
@@ -2615,7 +2677,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             type="outlined"
                             color="neutral"
                             size="s"
-                            onClick={handleBackToList}
+                            data-scoped-navigation="true" onClick={handleBackToList}
                         >
                             Zpět na seznam
                         </GovButton>

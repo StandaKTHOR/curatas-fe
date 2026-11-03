@@ -1,3 +1,5 @@
+import {useAuth} from './AuthContext';
+import {localAuthEnabled} from '../features/localAuth/localAuthClient';
 import { Navigate, Outlet } from 'react-router-dom';
 
 export function getPayload(token: string | null) {
@@ -32,13 +34,15 @@ export function getUserRoles(token: string | null): string[] {
 }
 
 export default function ProtectedRoute({ allowedRoles }: { allowedRoles?: string[] }) {
-    const token = localStorage.getItem('token');
+    const auth=useAuth();
+    const token = localAuthEnabled()?auth?.token:localStorage.getItem('token');
+    if(auth?.restoring)return <p role="status">Obnovuji přihlášení…</p>;
 
     if (!token) {
         return <Navigate to="/login" replace />;
     }
 
-    if (allowedRoles && allowedRoles.length > 0) {
+    if (!localAuthEnabled() && allowedRoles && allowedRoles.length > 0) {
         const roles = getUserRoles(token);
         const hasAccess = roles.some(r =>
             allowedRoles.includes(r) ||

@@ -1,3 +1,5 @@
+import {curatorFields} from '../features/scoped/curatorContract';
+import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { GovButton } from '@gov-design-system-ce/react';
@@ -8,6 +10,7 @@ import WorksetModal from '../components/WorksetModal';
 import SafeImage from '../components/SafeImage';
 
 export default function Catalog() {
+    const native=originalIntegrationEnabled();
     const navigate = useNavigate();
     const location = useLocation();
     const auth = useAuth();
@@ -46,6 +49,7 @@ export default function Catalog() {
     const [items, setItems] = useState<any[]>([]);
     const [totalElements, setTotalElements] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
+
     const [loading, setLoading] = useState(false);
     const [loadError, setLoadError] = useState('');
 
@@ -69,7 +73,7 @@ export default function Catalog() {
 
     // Načtení pracovních sad uživatele (pokud je přihlášen)
     useEffect(() => {
-        if (token) {
+        if (token && !native) {
             listWorksets().then(setWorksets).catch(() => {});
         }
     }, [token]);
@@ -121,6 +125,7 @@ export default function Catalog() {
 
     // 3. Spuštění samotného dotazu na backend při jakékoli změně v URL (page, q, sort, filtry)
     useEffect(() => {
+        let active=true;
         setLoading(true);
         setLoadError('');
         if (typeof window !== 'undefined') {
@@ -143,12 +148,14 @@ export default function Catalog() {
 
         listPublicItems(queryParams)
             .then(data => {
+                if(!active)return;
                 setItems(data.content || []);
                 setTotalElements(data.totalElements || 0);
                 setTotalPages(data.totalPages || 1);
             })
-            .catch((err: Error) => setLoadError(err.message))
-            .finally(() => setLoading(false));
+            .catch((err: Error) => {if(active){setItems([]);setTotalElements(0);setTotalPages(1);setLoadError(err.message);}})
+            .finally(() => {if(active)setLoading(false);});
+        return()=>{active=false;};
     }, [searchParams, page, q, sort]);
 
     // Změna jednoho pokročilého filtru
@@ -170,11 +177,13 @@ export default function Catalog() {
         const newParams = new URLSearchParams();
         newParams.set('page', '0');
         newParams.set('sort', 'inventoryNumber,asc');
+        if(native)newParams.set('catalog',String(originalSession().catalog.id));
         setSearchParams(newParams, { replace: true });
     };
 
     // Změna řazení (kliknutím na hlavičku sloupce)
     const handleSort = (field: string) => {
+        if(native&&!curatorFields.includes(field as typeof curatorFields[number]))return;
         const nextParams = new URLSearchParams(searchParams);
         const [currentField, currentDir] = sort.split(',');
 
@@ -190,7 +199,7 @@ export default function Catalog() {
 
     // Navigace na konkrétní stránku
     const handlePageChange = (targetPage: number) => {
-        if (targetPage < 0 || targetPage >= totalPages) return;
+        if (targetPage < 0 || (targetPage>=totalPages||(native&&targetPage>400))) return;
         const nextParams = new URLSearchParams(searchParams);
         nextParams.set('page', targetPage.toString());
         setSearchParams(nextParams);
@@ -198,6 +207,7 @@ export default function Catalog() {
 
     // Pomocná funkce pro zobrazení ikonky řazení v hlavičce sloupce
     const renderSortIndicator = (field: string) => {
+        if(native&&!curatorFields.includes(field as typeof curatorFields[number]))return <span title="Řazení není dostupné v existujícím scoped API"> —</span>;
         const [currentField, currentDir] = sort.split(',');
         if (currentField !== field) return <span className="text-gray-300 ml-1">⇅</span>;
         return currentDir === 'asc' ? <span className="text-[#00204a] font-bold ml-1">▲</span> : <span className="text-[#00204a] font-bold ml-1">▼</span>;
@@ -234,6 +244,15 @@ export default function Catalog() {
         const c = columns.find(x => x.id === colId);
         return c ? c.visible : false;
     };
+    const openItem=(id:number)=>{
+        sessionStorage.setItem(`catalogScroll:${location.search}`,String(window.scrollY));
+        navigate(`/items/${id}${native?`?catalog=${originalSession().catalog.id}`:''}`,{state:{fromSearch:location.search,returnPath:'/',catalogIds:items.map(v=>v.id)}});
+    };
+    useEffect(()=>{
+        if(loading||!items.length)return;
+        const frame=requestAnimationFrame(()=>window.scrollTo(0,Number(sessionStorage.getItem(`catalogScroll:${location.search}`)||0)));
+        return()=>cancelAnimationFrame(frame);
+    },[loading,location.search,items]);
 
     return (
         <div className="space-y-2 pb-8 demus-public-catalog">
@@ -241,9 +260,9 @@ export default function Catalog() {
             {/* HLAVIČKA KATALOGU */}
             <div className="border-b border-gray-200 pb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                 <div>
-                    <h2 className="text-lg font-bold text-gray-900">Katalog sbírek (Host)</h2>
+                    <h2 className="text-lg font-bold text-gray-900">{native?'Katalog sbírek':'Katalog sbírek (Host)'}</h2>
                     <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mt-1">
-                        Moravské zemské muzeum • Badatelský přístup k databázi
+                        {native?`${originalSession().catalog.code} • ${originalSession().catalog.name}`:'Moravské zemské muzeum • Badatelský přístup k databázi'}
                     </p>
                 </div>
                 <p className="text-xs">Celkem nalezeno: <strong>{totalElements.toLocaleString('cs-CZ')}</strong></p>
@@ -253,10 +272,10 @@ export default function Catalog() {
             <div className="bg-white p-2 border border-gray-300 space-y-2">
                 <div className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="flex-1 space-y-1">
-                        <label htmlFor="q">Rychlé fulltextové vyhledávání</label>
+                        <label htmlFor="q">Rychlé vyhledávání</label>
                         <input
                             id="q"
-                            placeholder="Název, autor, inventární nebo přírůstkové číslo..."
+                            placeholder={'Název, autor, datování, materiál, inventární nebo přírůstkové číslo...'}
                             value={localSearch}
                             onChange={(e: any) => setLocalSearch(e.target.value)}
                         />
@@ -320,11 +339,11 @@ export default function Catalog() {
                         </div>
                         <div className="space-y-1">
                             <label htmlFor="datingFrom">Rok od</label>
-                            <input id="datingFrom" type="number" value={localFilters.datingFrom} onChange={(e: any) => handleFilterChange('datingFrom', e.target.value)} />
+                            <input disabled={native} title={native?'Filtr není dostupný v existujícím scoped API':undefined} id="datingFrom" type="number" value={localFilters.datingFrom} onChange={(e: any) => handleFilterChange('datingFrom', e.target.value)} />
                         </div>
                         <div className="space-y-1">
                             <label htmlFor="datingTo">Rok do</label>
-                            <input id="datingTo" type="number" value={localFilters.datingTo} onChange={(e: any) => handleFilterChange('datingTo', e.target.value)} />
+                            <input disabled={native} title={native?'Filtr není dostupný v existujícím scoped API':undefined} id="datingTo" type="number" value={localFilters.datingTo} onChange={(e: any) => handleFilterChange('datingTo', e.target.value)} />
                         </div>
                     </div>
                 )}
@@ -494,9 +513,9 @@ export default function Catalog() {
                                             className={`hover:bg-blue-50/50 cursor-pointer border-b last:border-0 transition-colors ${
                                                 isSelected ? 'bg-blue-50/70 font-semibold' : ''
                                             }`}
-                                            onClick={() => navigate(`/items/${it.id}`, { state: { fromSearch: location.search } })}
+                                            onClick={() => openItem(Number(it.id))}
                                             tabIndex={0}
-                                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/items/${it.id}`, { state: { fromSearch: location.search } }); } }}
+                                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openItem(Number(it.id)); } }}
                                             role="link"
                                             aria-label={`Otevřít předmět ${it.title}`}
                                         >
@@ -575,10 +594,12 @@ export default function Catalog() {
                 )}
             </div>
 
+            {native&&<p className="text-xs">Zdrojové kódy podsbírky nejsou nové autority. Autor, datování, materiál a technika jsou současná kurátorská tvrzení. Historické údaje zůstávají oddělené. Filtry a řazení používají pouze podporovaný scoped kontrakt.</p>}
+
             {/* STRÁNKOVÁNÍ (PAGINATION) - Kompatibilní s Spring Boot Pageable */}
             <div className="flex flex-col sm:flex-row justify-between items-center bg-gray-50 border border-gray-200 p-4 rounded shadow-sm gap-4">
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    Zobrazeno {(items.length).toLocaleString('cs-CZ')} z {(totalElements).toLocaleString('cs-CZ')} položek (strana {page + 1} z {totalPages})
+                    {`Zobrazeno ${items.length.toLocaleString('cs-CZ')} z ${totalElements.toLocaleString('cs-CZ')} položek (strana ${page+1} z ${totalPages})`}
                 </span>
                 <div className="flex gap-2">
                     <GovButton
@@ -599,7 +620,7 @@ export default function Catalog() {
                         type="outlined"
                         color="neutral"
                         size="s"
-                        disabled={page + 1 >= totalPages || loading}
+                        disabled={(page+1>=totalPages||(native&&page>=400))||loading}
                         onClick={() => handlePageChange(page + 1)}
                     >
                         Další
@@ -628,6 +649,7 @@ export default function Catalog() {
                         </button>
 
                         <button
+                            disabled={native} title={native?'Pracovní sady nemají scoped kontrakt':undefined}
                             onClick={() => {
                                 setAllFilteredSelected(true);
                                 setShowWorksetModal(true);
@@ -642,6 +664,7 @@ export default function Catalog() {
 
                     <div className="flex items-center gap-2">
                         <button
+                            disabled={native} title={native?'Pracovní sady nemají scoped kontrakt':undefined}
                             onClick={() => {
                                 setAllFilteredSelected(false);
                                 setShowWorksetModal(true);

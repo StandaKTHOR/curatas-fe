@@ -1,3 +1,4 @@
+import {originalIntegrationEnabled,originalList,originalCatalogList,originalDetail,unsupported} from '../features/catalog/originalAdapter';
 import { requireEditSession, type ItemEditSession } from './editSession';
 import {LabelDto} from "@/components/LabelPrinter";
 import {PrintItemRow} from "@/components/ItemListPrint";
@@ -9,6 +10,7 @@ export const API_BASE = (import.meta.env.VITE_API_BASE || '').trim().replace(/\/
  */
 export function resolveApiUrl(path: string): string {
     if (!path) return '';
+    if(originalIntegrationEnabled() && !/^\/api\/(v2\/catalogs(?:\/|\?|$)|v2\/workspaces(?:\/|\?|$)|auth\/)/.test(path)) unsupported();
     if (path.startsWith('http://') || path.startsWith('https://')) {
         return path;
     }
@@ -233,6 +235,7 @@ export async function listPublicItems(params: {
     size?: number,
     sort?: string
 }) {
+    if(originalIntegrationEnabled())return originalCatalogList(params);
     const u = buildApiUrl('/public/v1/catalog/items');
 
     // Projdeme všechny klíče v objektu params
@@ -267,6 +270,7 @@ export async function listAdminItems(params: {
     sourceDatingFromYear?: string, sourceDatingToYear?: string, advancedFilter?: string,
     sortField?: string, sortDirection?: string, worksetId?: string
 }) {
+    if(originalIntegrationEnabled())return originalList(params);
     const u = buildApiUrl('/api/v1/items');
 
     Object.entries(params).forEach(([key, value]) => {
@@ -378,6 +382,7 @@ export async function getItemVersion(id: number): Promise<string> {
 }
 
 export async function getAdminItem(id: string) {
+    if(originalIntegrationEnabled())return originalDetail(id);
     const itemId = Number(id);
     const before = await getItemVersion(itemId);
     const response = await fetch(resolveApiUrl(`/api/v1/items/${id}`), { headers: getAuthHeader() });
