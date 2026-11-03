@@ -14,7 +14,8 @@ const server=http.createServer((req,res)=>{
 let browser,page;const checks=[],errors=[],requests=[];
 try{
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(input.port,'127.0.0.1',resolve);});
- browser=await chromium.launch({headless:true});const context=await browser.newContext({viewport:{width:1366,height:900}});
+ const chrome=['C:/Program Files/Google/Chrome/Application/chrome.exe','C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(p=>fs.existsSync(p));
+ browser=await chromium.launch({...(chrome&&!fs.existsSync((process.env.LOCALAPPDATA||'')+'/ms-playwright')?{executablePath:chrome}:{}),headless:true});const context=await browser.newContext({viewport:{width:1366,height:900}});
  await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
  page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message));
  page.on('response',r=>{const url=new URL(r.url());if(url.pathname.startsWith('/api/'))requests.push({path:url.pathname,method:r.request().method(),status:r.status()});});
