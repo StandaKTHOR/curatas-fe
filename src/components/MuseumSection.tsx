@@ -1,5 +1,6 @@
 import ThreeLevelDictionarySelect from './ThreeLevelDictionarySelect';
 import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
+import {originalCanEdit} from '../features/catalog/originalEdit';
 import { uncertainWrite, uncertainCreateMessage } from '../lib/writeOutcome';
 import {professionalFields,professionalDraft,professionalValue,professionalDelta} from '../lib/professional';
 import type { ItemEditSession } from '../lib/editSession';
@@ -34,6 +35,9 @@ const recordKinds: Partial<Record<Section, MuseumRecordKind>> = {
     classification: 'CLASSIFICATION', determination: 'DETERMINATION',
     documentation: 'DOCUMENTATION', deaccession: 'DEACCESSION',
     manipulation: 'MANIPULATION', action: 'ACTION', iso: 'ISO', origin: 'ORIGIN', materialTuples:'MATERIAL_TECHNIQUE', bibliography:'BIBLIOGRAPHY'
+};
+const scopedSpecialistSections: Partial<Record<Section, 'reference' | 'manipulation' | 'action' | 'iso'>> = {
+    bibliography: 'reference', manipulation: 'manipulation', action: 'action', iso: 'iso'
 };
 const recordFields = professionalFields;
 const recordDictionary: Partial<Record<MuseumRecordKind, string>> = {
@@ -145,19 +149,41 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     const [partyMatches, setPartyMatches] = useState<{ id: number; firstName: string | null; lastName: string }[]>([]);
     const [message, setMessage] = useState('');
     const [deaccession, setDeaccession] = useState({ reason: '', deaccessionDate: '', documentNumber: '' });
+    const [scopedEtag, setScopedEtag] = useState('');
+    const [scopedValues, setScopedValues] = useState<Record<string, string | null> | null>(null);
     const editFormRef = useRef<HTMLDivElement>(null);
     const kind = recordKinds[section];
+    const curatorSection = scopedSpecialistSections[section];
+    const canScopedWrite = Boolean(curatorSection) && !readOnly && originalIntegrationEnabled() && originalCanEdit('professional');
     useEffect(() => {
+        const scopedDirty = originalIntegrationEnabled() && curatorSection && scopedValues
+            ? Object.keys(scopedValues).some(k => String(payload[k] ?? '') !== String(scopedValues[k] ?? ''))
+            : false;
         if (drafts) drafts.current[section] = {changes, record, payload, dictionaryId, partyId,
             materialId,techniqueId,clearParty,clearDictionary,uncertain,
-            dirty: uncertain || Object.keys(changes).length > 0 || (kind && Object.keys(professionalDelta(kind,payload,record)).length>0) || clearParty || clearDictionary ||
+            dirty: uncertain || Object.keys(changes).length > 0 || (originalIntegrationEnabled() && curatorSection ? scopedDirty : Boolean(kind && Object.keys(professionalDelta(kind,payload,record)).length>0)) || clearParty || clearDictionary ||
                 (record ? partyId!==record.partyId||dictionaryId!==record.dictionaryId||materialId!==(record.materialDictionaryId??null)||techniqueId!==(record.techniqueDictionaryId??null) : !!partyId||!!dictionaryId||!!materialId||!!techniqueId)};
-    }, [changes, record, payload, dictionaryId, partyId, section, drafts,kind,materialId,techniqueId,clearParty,clearDictionary,uncertain]);
+    }, [changes, record, payload, dictionaryId, partyId, section, drafts,kind,materialId,techniqueId,clearParty,clearDictionary,uncertain,curatorSection,scopedValues]);
 
     useEffect(() => {
         if (!itemId || (snapshotRequired && !editSession)) return;
         if(originalIntegrationEnabled()){
             let alive=true;setDetail(null);const {api,signal,catalog}=originalSession();
+            if(curatorSection && kind){
+                const loadOwned = catalog.professionalRecordsEnabled
+                    ? api.professionalRecords(itemId,signal).catch(()=>({items:[] as MuseumRecord[],etag:''}))
+                    : Promise.resolve({items:[] as MuseumRecord[],etag:''});
+                Promise.all([api.curatorRecord(itemId,curatorSection,signal),loadOwned]).then(([cur,owned])=>{
+                    if(!alive||signal.aborted)return;
+                    if((editSession as any)?.scopedCurrent&&cur.etag!==(editSession as any).scopedCurrent.etag)throw new Error('Verze odborné sekce se změnila. Obnovte kartu.');
+                    setScopedEtag(cur.etag);setScopedValues(cur.value);
+                    const currentRow:MuseumRecord|null=cur.present?{id:0,kind,dictionaryId:null,partyId:null,payload:cur.value,sourceTable:null,sourceKey:'CURRENT_CURATOR_STATEMENT',legacyData:null}:null;
+                    setDetail({itemId,markant:null,signature:null,legacyArchived:null,legacyCard:null,legacyCopied:null,legacyVerified:null,legacyMarked:null,localityLegacyCode:null,fundLegacyCode:null,groupLegacyCode:null,subjectLegacyCode:null,materialDictionaryId:null,techniqueDictionaryId:null,localityDictionaryId:null,fundDictionaryId:null,groupDictionaryId:null,subjectDictionaryId:null,legacyCreatedBy:null,legacyCreatedAt:null,legacyUpdatedBy:null,legacyUpdatedAt:null,records:[...(currentRow?[currentRow]:[]),...owned.items]});
+                    setPayload(cur.value);
+                    setMessage(cur.present?'Současné kurátorské tvrzení v této odborné sekci je načteno ze scoped API (odděleně od historického zdroje DEMUS).':'Současné kurátorské tvrzení v této odborné sekci zatím nebylo zadáno (NULL). Historické zdrojové záznamy nejsou vydávány za současná tvrzení.');
+                }).catch((e)=>{if(alive&&!signal.aborted)setMessage((e as Error).message||'Současnou odbornou sekci se nepodařilo načíst. Obnovte kartu.');});
+                return()=>{alive=false;};
+            }
             if(!kind||!catalog.professionalRecordsEnabled){setMessage(`Sekce ${section}: původní zdrojové záznamy ani nepodporované zápisy nejsou součástí tohoto scoped kontraktu. Chybějící přístup neznamená prázdnou evidenci.`);return;}
             api.professionalRecords(itemId,signal).then(result=>{
                 if(!alive||signal.aborted)return;
@@ -178,7 +204,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                 if (alive) setDetail(data);
             }).catch((e: Error) => {if (alive) setMessage(e.message);});
         return () => {alive = false;};
-    }, [itemId, editSession, snapshotRequired,kind]);
+    }, [itemId, editSession, snapshotRequired,kind,curatorSection,section]);
 
     if (!itemId) return <p className="rounded border bg-gray-50 p-4">Nejprve uložte předmět; pak lze vyplnit tuto sekci.</p>;
     if (snapshotRequired && !editSession) return <p role="status">Čekám na konzistentní verzi předmětu…</p>;
@@ -248,7 +274,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     const startRecord = (existing: MuseumRecord | null) => {
         if (uncertain) {setMessage(uncertainCreateMessage); return;}
         setRecord(existing);
-        setPayload(existing ? professionalDraft(existing) : {});
+        setPayload(existing ? professionalDraft(existing) : (originalIntegrationEnabled() && curatorSection && scopedValues ? scopedValues : {}));
         setDictionaryId(existing?.dictionaryId ?? null);
         setPartyId(existing?.partyId ?? null);
         setPartyQuery('');setClearParty(false);setClearDictionary(false);setReferenceError(false);setNativeCode(null);
@@ -264,6 +290,50 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     const saveRecord = async () => {
         if (!kind || saving || editSession?.busy) return;
         if (uncertain) {setMessage(uncertainCreateMessage); return;}
+        if (originalIntegrationEnabled() && curatorSection) {
+            if (!canScopedWrite) { setMessage('Chybí oprávnění item.professional.write pro zápis odborné sekce.'); return; }
+            const nextValues: Record<string, string | null> = {};
+            for (const [key] of recordFields[kind]) {
+                const raw = payload[key];
+                const before = scopedValues ? scopedValues[key] : null;
+                if (String(raw ?? '') === String(before ?? '')) nextValues[key] = before ?? null;
+                else nextValues[key] = raw === undefined || raw === null ? null : String(raw);
+            }
+            if (scopedValues && Object.keys(nextValues).every(k => String(nextValues[k] ?? '') === String(scopedValues[k] ?? ''))) {
+                setMessage('Záznam nemá žádné změny k uložení.'); return;
+            }
+            if (Object.values(nextValues).every(v => v === null || v === '') && (!scopedValues || Object.values(scopedValues).every(v => v === null || v === ''))) {
+                setMessage('Nelze uložit zcela prázdný záznam. Vyplňte alespoň jedno pole.'); return;
+            }
+            if (kind === 'ACTION' && nextValues.Poradi_AK !== null && nextValues.Poradi_AK !== '' && Number(nextValues.Poradi_AK) < 0) {
+                setMessage('Pořadí v akci nesmí být záporné.'); return;
+            }
+            setSaving(true); setReferenceError(false); setMessage('');
+            try {
+                const { api, signal } = originalSession();
+                const currentEtag = (editSession as any)?.scopedCurrent?.etag || editSession?.etag || scopedEtag;
+                await api.saveCuratorRecord(itemId, curatorSection, currentEtag, nextValues, signal);
+                const fresh = await api.curatorRecord(itemId, curatorSection, signal);
+                setScopedEtag(fresh.etag);
+                setScopedValues(fresh.value);
+                if (editSession) {
+                    editSession.etag = fresh.etag;
+                    if ((editSession as any).scopedCurrent) (editSession as any).scopedCurrent.etag = fresh.etag;
+                }
+                const currentRow: MuseumRecord = { id: 0, kind, dictionaryId: null, partyId: null, payload: fresh.value, sourceTable: null, sourceKey: 'CURRENT_CURATOR_STATEMENT', legacyData: null };
+                setDetail(old => old ? { ...old, records: [currentRow, ...old.records.filter(r => r.id !== 0)] } : old);
+                setPayload(fresh.value);
+                setRecord(null);
+                if (drafts?.current[section]) drafts.current[section] = { ...drafts.current[section], record: null, payload: fresh.value, dirty: false };
+                await onSave?.();
+                setMessage('Záznam uložen.');
+            } catch (e) {
+                setMessage((e as Error).message);
+            } finally {
+                setSaving(false);
+            }
+            return;
+        }
         if (record && Object.keys(professionalDelta(kind,payload,record)).length === 0
             && dictionaryId === record.dictionaryId && partyId === record.partyId
             && materialId === (record.materialDictionaryId ?? null) && techniqueId === (record.techniqueDictionaryId ?? null)
@@ -322,7 +392,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
         } catch (e) { setMessage((e as Error).message); }
     };
 
-    return <fieldset disabled={readOnly || saving || originalIntegrationEnabled()} className="space-y-5 demus-section">
+    return <fieldset data-scoped-reference-editor={originalIntegrationEnabled() && curatorSection ? '' : undefined} disabled={readOnly || saving || (originalIntegrationEnabled() && !canScopedWrite)} className="space-y-5 demus-section">
         {fields && <div className="grid grid-cols-1 gap-4 rounded border border-gray-200 p-5 md:grid-cols-2">{fields}
             {section !== 'history' && <div className="col-span-full">{saveButton}</div>}</div>}
         {kind && <div className="space-y-4">
@@ -330,7 +400,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
             <div className="overflow-x-auto"><table className="demus-datasheet" aria-label={`Evidence ${section}`}>
                 <thead><tr><th>Záznam / zdroj</th>{recordFields[kind].map(([key,label]) => <th key={key}>{label}</th>)}<th>Akce</th></tr></thead>
                 <tbody>{detail.records.filter(x => x.kind === kind).map(row => <tr key={row.id} className={record?.id === row.id ? 'bg-blue-50' : ''}>
-                    <td><strong>{row.sourceTable ? `DEMUS ${row.sourceTable}` : 'Nový záznam'} · #{row.id}</strong>
+                    <td><strong>{row.sourceKey === 'CURRENT_CURATOR_STATEMENT' ? 'Současné kurátorské tvrzení' : row.sourceTable ? `DEMUS ${row.sourceTable}` : 'Nový záznam'} · #{row.id}</strong>
                         {record?.id === row.id && <span className="block">✏️ Právě upravujete</span>}
                         {row.partyId && <p>Vazba na osobu/subjekt #{row.partyId}</p>}
                         {row.currentParty&&<p>Současná osoba: {row.currentParty.displayName} · #{row.currentParty.id} ({row.currentParty.type})</p>}
@@ -342,7 +412,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                     </td>
                     {recordFields[kind].map(([key]) => <td key={key}>{String(professionalValue(row,key) ?? '—')}</td>)}
                     <td>{kind !== 'DEACCESSION' && <button type="button" className="underline" onClick={() => startRecord(row)}>Upravit</button>}
-                        {kind !== 'DEACCESSION' && !row.sourceTable && <button type="button" className="ml-3 text-red-700 underline" onClick={() => removeRecord(row)}>Odebrat</button>}
+                        {kind !== 'DEACCESSION' && !row.sourceTable && !originalIntegrationEnabled() && <button type="button" className="ml-3 text-red-700 underline" onClick={() => removeRecord(row)}>Odebrat</button>}
                     </td>
                 </tr>)}</tbody>
             </table></div>
@@ -374,9 +444,9 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                         Zrušit úpravu
                     </button>}
                 </div>
-                {recordDictionary[kind] && <TreeChoice type={recordDictionary[kind]!} label="Číselník" invalid={referenceError}
+                {recordDictionary[kind] && !originalIntegrationEnabled() && <TreeChoice type={recordDictionary[kind]!} label="Číselník" invalid={referenceError}
                     value={dictionaryId} onChange={(id,choice)=>{setDictionaryId(id);setClearDictionary(id==null&&!!record?.dictionaryId);setNativeCode(choice?.code??null);}}/>}
-                {recordDictionary[kind]&&<p>Výběr ID nemění původní citaci ani nativní kód. {clearDictionary?'Současná vazba bude výslovně zrušena.':''}</p>}
+                {recordDictionary[kind]&&!originalIntegrationEnabled()&&<p>Výběr ID nemění původní citaci ani nativní kód. {clearDictionary?'Současná vazba bude výslovně zrušena.':''}</p>}
                 {nativeCode!=null&&['BIBLIOGRAPHY','CLASSIFICATION','DOCUMENTATION'].includes(kind)&&<button type="button" onClick={()=>{
                     const key=kind==='BIBLIOGRAPHY'?'Ref_RF':kind==='CLASSIFICATION'?'SysKat_ZS':'TypDok_DK';setPayload(old=>({...old,[key]:nativeCode}));
                 }}>Použít nativní kód vybrané položky: {nativeCode}</button>}
@@ -385,7 +455,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                     <ThreeLevelDictionarySelect unavailableReason={originalIntegrationEnabled()?'Tento opakovaný záznam používá původní číselníkové identity. Jejich převod na katalogové UUID není schválen; existující vazby zůstávají zachované.':undefined} type="TECHNIQUE" label="Technika" historicalValue={String(payload.Technika_MT ?? '')} readOnly={readOnly} value={techniqueId} allowEmpty={!record?.techniqueDictionaryId} onChange={id=>setTechniqueId(id)}/>
                     <p className="md:col-span-2 text-sm text-gray-600">Materiál a technika se vybírají nezávisle a ukládají společně až tlačítkem Uložit záznam. Uložený text se při výběru nemění; při uložení nové vazby se použije kód vybrané položky. Původní údaje DEMUS zůstávají zachované.</p>
                 </div>}
-                {['DETERMINATION','ORIGIN','MANIPULATION'].includes(kind) && <div className="space-y-2 text-sm">
+                {['DETERMINATION','ORIGIN','MANIPULATION'].includes(kind) && !originalIntegrationEnabled() && <div className="space-y-2 text-sm">
                     <label className="block font-semibold">Současná osoba — hledat existující osoby/subjekty
                         <input value={partyQuery} onChange={async e => {
                             const query = e.target.value;

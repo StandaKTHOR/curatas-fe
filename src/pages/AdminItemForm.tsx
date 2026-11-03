@@ -3,6 +3,7 @@ import CloneOrigin from '../features/catalog/CloneOrigin';
 import {originalItemHref} from '../features/catalog/originalAdapter';
 import {originalCanClone} from '../features/catalog/originalClone';
 import MaterialBindings from '../features/catalog/MaterialBindings';
+import AuthorityAndRangeBindings from '../features/catalog/AuthorityAndRangeBindings';
 import CreationOrigin from '../features/catalog/CreationOrigin';
 import {originalCanCreate,originalCreationFields,createOriginalItem,originalCreationOutcome,applyOriginalCreationBoundary,CreationValidationError} from '../features/catalog/originalCreate';
 import {useOriginalMedia} from '../features/catalog/useOriginalMedia';
@@ -220,6 +221,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     const scopedDimensions=useOriginalDimensions(Number(id),activeTab==='dimensions');
     const [loading, setLoading] = useState(false);
     const [scopedNeedsReload,setScopedNeedsReload]=useState(false);
+    const [showScopedAuthorities,setShowScopedAuthorities]=useState(false);
     const scopedDomain:OriginalEditDomain=new URLSearchParams(location.search).get('edit')==='inventory'?'inventory':'professional';
     useLayoutEffect(()=>{if(originalIntegrationEnabled()){if(!id)applyOriginalCreationBoundary(document.getElementById('item-editor'),originalCanCreate()&&!loading&&!createUncertain);else applyOriginalEditBoundary(document.getElementById('item-editor'),scopedDomain,!isViewMode&&originalCanEdit(scopedDomain)&&Boolean((editSessionRef.current as any)?.scopedCurrent),loading||scopedNeedsReload);}});
     const [uploading, setUploading] = useState(false);
@@ -1328,7 +1330,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
 
             {/* TĚLO FORMULÁŘE */}
             {isViewMode && id && activeTab === 'museum' && museumSubTab === 'demus' && <DemusSourceIdentity itemId={Number(id)}/>}
-            {isViewMode && id && activeTab === 'museum' && museumSubTab === 'vocabularies' && <VocabularyAssociations itemId={Number(id)} data={(editSessionRef.current?.museumSnapshot as any)?.vocabularies}/>}
+            {isViewMode && id && activeTab === 'museum' && museumSubTab === 'vocabularies' && <>{originalIntegrationEnabled()&&<AuthorityAndRangeBindings itemId={Number(id)} readOnly/>}<VocabularyAssociations itemId={Number(id)} data={(editSessionRef.current?.museumSnapshot as any)?.vocabularies}/></>}
             {isViewMode && id && activeTab === 'museum' && museumSubTab === 'attachments' && <section className="demus-source-panel" aria-label="Přílohy pro čtení">
                 <h3>Přílohy ({galleryAttachments.length})</h3>{mediaStatus}
                 {!galleryAttachments.length && <p>{originalIntegrationEnabled()?'Přílohy na načtené scoped stránce: žádné. Úplnost závisí na dokončeném čtení všech stran.':'Žádné přílohy nebyly vráceny.'}</p>}
@@ -1630,6 +1632,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 Číselníkové zařazení předmětu
                             </h4>
                             <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="basic" key={editSessionRef.current?.etag} onSave={handleSectionSave} />
+                            {originalIntegrationEnabled()&&id&&<div className="mt-2"><button type="button" data-scoped-navigation="true" onClick={()=>setShowScopedAuthorities(v=>!v)} className="text-xs font-semibold text-[#00204a] underline">{showScopedAuthorities?'Skrýt současné odborné vazby a rozsah inv. čísla':'Otevřít současné odborné vazby (Fond, Podsbírka, Skupina, Určil, Role autora) a rozsah inv. čísla'}</button>{showScopedAuthorities&&<div className="mt-2"><AuthorityAndRangeBindings itemId={Number(id)} readOnly={isViewMode||hasUnsavedChanges()||scopedNeedsReload||loading} onSave={etag=>{const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();}}/></div>}</div>}
                         </div>
                         {/* Autor / Původce & Role */}
                         <div className="space-y-1" ref={authorDropdownRef}>
@@ -2460,7 +2463,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             {museumSubTab === 'iso' && (
                                 <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="iso" onSave={handleSectionSave} />
                             )}
-                            {museumSubTab === 'vocabularies' && id && !isViewMode && <VocabularyAssociations itemId={Number(id)} data={(editSessionRef.current?.museumSnapshot as any)?.vocabularies}/>}
+                            {museumSubTab === 'vocabularies' && id && !isViewMode && <>{originalIntegrationEnabled()&&<AuthorityAndRangeBindings itemId={Number(id)} readOnly={isViewMode||hasUnsavedChanges()||scopedNeedsReload||loading} onSave={etag=>{const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();}}/>}<VocabularyAssociations itemId={Number(id)} data={(editSessionRef.current?.museumSnapshot as any)?.vocabularies}/></>}
                             {museumSubTab === 'demus' && (
                                 <div className="space-y-4">
                                     {id && !isViewMode && <DemusSourceIdentity itemId={Number(id)}/>}

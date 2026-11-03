@@ -4,7 +4,8 @@ import {curatorQuery,curatorCurrentFields,curatorCurrentInventoryFields} from '.
 
 export interface Item { id: number; catalogId: number; title: string | null; inventoryNumber: string | null; accessionNumber: string | null; version: string; sourceInventory?:Record<string,string|null> }
 export interface MuseumHistoryRow {id:number;eventType:'REVISION'|'RESTORATION'|'LOAN';eventDate:string|null;description:string|null}
-export type CuratorSection='inventory'|'professional'|'inventory-range';
+export type CuratorSection='inventory'|'professional'|'inventory-range'|'authorities'|'reference'|'manipulation'|'action'|'iso';
+export const curatorSectionFields:Record<CuratorSection,readonly string[]>={inventory:['quantity','otherNumber'],'inventory-range':['lowerNumber','upperNumber','seriesRecordId'],professional:['objectType','description','authorText','datingText','originPlace','materialText','techniqueText','materialNote'],authorities:['determinedByText','authorRoleText','groupRecordId','fundRecordId','collectionRecordId','departmentRecordId','objectTypeRecordId'],reference:['Ref_RF','Str_RF'],manipulation:['Typ_MN','DatMan_MN','Kdo_MN','Stav_MN','Osetreni_MN','InvRev_MN','PopisSt_MN'],action:['Poradi_AK','Prezentace_AK','Revers_AK','CKtlg_AK','Pozn_AK'],iso:['KodISO_SO','CharISO_SO','MatISO_SO','CenaISO_SO','MenaISO_SO','PovrchISO_SO','TvarISO_SO']};
 export const inventoryColumns={Predmet_S:'Předmět ve zdroji',Titul_S:'Titul ve zdroji',Rada_S:'Řada',PorC_S:'Poř. č.',Lomeni_S:'Lom',HPorC_S:'Až',StatSpr_S:'Stát',Spravce_S:'Správce',Odd_S:'Oddělení',Podsb_S:'Podsbírka',Pocet_S:'Počet ve zdroji',Ozn_S:'Označeno',JineC_S:'Jiné číslo',Karta_S:'Karta',Opsana_S:'Opsána',Overena_S:'Ověřena',Zapsal_S:'Zapsal',DatZap_S:'Datum zápisu',Skupina_S:'Skupina',Urcil_S:'Určil',DatZm_S:'Datum změny',Fond_S:'Fond'} as const;
 export interface SourceChoice {recordId:string;sourceSha256:string;rowHash:string;typedKey:Record<string,unknown>;code:string;label:string|null;groupingCode:string|null}
 export function inventoryDisplay(key:string,value:string|null|undefined){if(value===null||value===undefined)return 'Neuvedeno';return ['Ozn_S','Karta_S','Opsana_S','Overena_S'].includes(key)?value==='true'?'Ano':value==='false'?'Ne':value:value;}
@@ -225,7 +226,7 @@ export function scopedApi(catalogId: number, token: string) {
         curatorRecord:async(id:number,section:CuratorSection,signal:AbortSignal)=>{
             const {body,response}=await read(itemPath(id)+'/curator-record/'+section,signal);
             if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.section!==section||body.origin!=='CURRENT_CURATOR_STATEMENT_NOT_SOURCE')throw new Error('Foreign curator section');
-            const fields=section==='inventory'?['quantity','otherNumber']:section==='inventory-range'?['lowerNumber','upperNumber','seriesRecordId']:['objectType','description','authorText','datingText','originPlace','materialText','techniqueText','materialNote'];
+            const fields=curatorSectionFields[section];
             if(!body.values||Object.keys(body.values).length!==fields.length||Object.keys(body.values).some(k=>!fields.includes(k)))throw new Error('Invalid curator fields');
             const values:Record<string,string|null>={};for(const key of fields)values[key]=nullable(body.values[key]);
             if(typeof body.hasCurrentAssertion!=='boolean')throw new Error('Missing current assertion state');
@@ -235,7 +236,10 @@ export function scopedApi(catalogId: number, token: string) {
             const value:Record<string,string|number|null>={...input};
             if(section==='inventory-range'){const invalid=validateInventoryRange(input);if(invalid)throw new Error(invalid);value.lowerNumber=Number(input.lowerNumber);value.upperNumber=input.upperNumber===null?null:Number(input.upperNumber);}
             if(section==='inventory'&&value.quantity!==null){if(typeof value.quantity!=='string'||! /^(0|[1-9][0-9]*)$/.test(value.quantity)||BigInt(value.quantity)>2147483647n)throw new Error('Počet musí být celé nezáporné číslo nebo NULL.');value.quantity=Number(value.quantity);}
-            await read(itemPath(id)+'/curator-record/'+section,signal,{method:'PUT',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(value)});
+            if(section==='action'){for(const k of ['Poradi_AK','CKtlg_AK'] as const)if(value[k]!==null&&value[k]!==undefined){const s=String(value[k]);if(!/^-?(0|[1-9][0-9]*)$/.test(s)||BigInt(s)<(k==='Poradi_AK'?0n:-2147483648n)||BigInt(s)>2147483647n)throw new Error(k==='Poradi_AK'?'Pořadí musí být celé nezáporné číslo nebo NULL.':'Číslo katalogu musí být celé číslo nebo NULL.');value[k]=Number(s);}}
+            if(section==='iso'&&value.CenaISO_SO!==null&&value.CenaISO_SO!==undefined){const s=String(value.CenaISO_SO);if(!/^-?(0|[1-9][0-9]*)$/.test(s)||BigInt(s)<-2147483648n||BigInt(s)>2147483647n)throw new Error('Cena ISO musí být celé číslo nebo NULL.');value.CenaISO_SO=Number(s);}
+            const {body,response}=await read(itemPath(id)+'/curator-record/'+section,signal,{method:'PUT',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(value)});
+            return body?.itemVersion!==undefined?tag(response,body.itemVersion):response.headers.get('ETag')||'';
         },
         curatorMeasurement:async(id:number,signal:AbortSignal)=>{
             const {body,response}=await read(itemPath(id)+'/curator-measurement',signal);
