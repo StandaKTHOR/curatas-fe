@@ -1,4 +1,4 @@
-import {curatorFields} from '../features/scoped/curatorContract';
+import {curatorFields,demusTableColumns,formatDemusCell} from '../features/scoped/curatorContract';
 import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
@@ -28,7 +28,7 @@ export default function Catalog() {
     const filterKeys = [
         'accessionNumber', 'inventoryNumber', 'title', 'author', 'material',
         'datingFrom', 'datingTo', 'subCollection', 'objectType', 'originPlace',
-        'technique', 'spravce'
+        'technique', 'spravce', ...(native?[...demusTableColumns.map(c=>c.id),'Fond_S','Predmet_S','datingText','currentQuantity','currentOtherNumber']:[])
     ];
 
     // Načteme filtry z URL
@@ -57,7 +57,7 @@ export default function Catalog() {
     const [columns, setColumns] = useState<ColumnConfig[]>(() => {
         try {
             const saved = localStorage.getItem('curatas_catalog_columns');
-            if (saved) return JSON.parse(saved);
+            if (saved) { const parsed = JSON.parse(saved); return [...parsed, ...DEFAULT_COLUMNS.filter(d => !parsed.some((p: ColumnConfig) => p.id === d.id))]; }
         } catch (e) { /* ignore */ }
         return DEFAULT_COLUMNS;
     });
@@ -345,6 +345,35 @@ export default function Catalog() {
                             <label htmlFor="datingTo">Rok do</label>
                             <input disabled={native} title={native?'Filtr není dostupný v existujícím scoped API':undefined} id="datingTo" type="number" value={localFilters.datingTo} onChange={(e: any) => handleFilterChange('datingTo', e.target.value)} />
                         </div>
+                        {native && demusTableColumns.map(col => (
+                            <div key={col.id} className="space-y-1">
+                                <label htmlFor={`filter-${col.id}`}>{col.label} ({col.id})</label>
+                                {col.kind === 'boolean' ? (
+                                    <select id={`filter-${col.id}`} aria-label={`Filtr ${col.label}`} value={localFilters[col.id] || ''} onChange={e => handleFilterChange(col.id, e.target.value)}>
+                                        <option value="">— Vše —</option>
+                                        <option value="true">Ano</option>
+                                        <option value="false">Ne</option>
+                                        <option value="__NULL__">NULL (Neuvedeno)</option>
+                                    </select>
+                                ) : (
+                                    <input id={`filter-${col.id}`} aria-label={`Filtr ${col.label}`} placeholder="Hodnota, __NULL__ nebo __EMPTY__" value={localFilters[col.id] || ''} onChange={(e: any) => handleFilterChange(col.id, e.target.value)} />
+                                )}
+                            </div>
+                        ))}
+                        {native && (
+                            <div className="space-y-1">
+                                <label htmlFor="filter-currentQuantity">Současný počet (kurátor)</label>
+                                <input id="filter-currentQuantity" aria-label="Filtr Současný počet" value={localFilters.currentQuantity || ''} onChange={(e: any) => handleFilterChange('currentQuantity', e.target.value)} />
+                            </div>
+                        )}
+                        {native && (
+                            <div className="space-y-1">
+                                <label htmlFor="filter-currentOtherNumber">Současné jiné č. (kurátor)</label>
+                                <input id="filter-currentOtherNumber" aria-label="Filtr Současné jiné číslo" value={localFilters.currentOtherNumber || ''} onChange={(e: any) => handleFilterChange('currentOtherNumber', e.target.value)} />
+                            </div>
+                        )}
+                        <div>
+                        </div>
                     </div>
                 )}
             </div>
@@ -497,7 +526,13 @@ export default function Catalog() {
                                             Stav {renderSortIndicator('objectCondition')}
                                         </th>
                                     )}
-                                    {isColVisible('weight') && (
+                                    {isColVisible('weight') && (<th scope="col" className="p-3">Hmotnost</th>)}
+                                    {demusTableColumns.map(col => isColVisible(col.id) && (
+                                        <th key={col.id} scope="col" className="p-3 cursor-pointer hover:bg-gray-200" onClick={() => handleSort(col.id)}>
+                                            {col.label} {renderSortIndicator(col.id)}
+                                        </th>
+                                    ))}
+                                    {false && (
                                         <th scope="col" className="p-3">Hmotnost</th>
                                     )}
                                 </tr>
@@ -575,7 +610,13 @@ export default function Catalog() {
                                                     </span>
                                                 </td>
                                             )}
-                                            {isColVisible('weight') && (
+                                            {isColVisible('weight') && (<td className={`${rowPad} text-gray-500`}>{it.weight ? `${it.weight} kg` : '—'}</td>)}
+                                            {demusTableColumns.map(col => {
+                                                if (!isColVisible(col.id)) return null;
+                                                const cell = formatDemusCell(it, col);
+                                                return <td key={col.id} className={`${rowPad} text-gray-600`} title={cell.title} data-source-field={col.id} data-value-state={cell.state} data-current-assertion={cell.hasCurrent ? 'present' : 'absent'}>{cell.text}</td>;
+                                            })}
+                                            {false && (
                                                 <td className={`${rowPad} text-gray-500`}>{it.weight ? `${it.weight} kg` : '—'}</td>
                                             )}
                                         </tr>

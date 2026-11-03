@@ -44,3 +44,10 @@ it('rejects foreign detail identity',async()=>{vi.stubGlobal('fetch',vi.fn().moc
 it('preserves independent quick and title filters',async()=>{const f=vi.fn().mockResolvedValue(reply(page({sort:'title,asc'})));vi.stubGlobal('fetch',f);await originalCatalogList({sort:'title,asc',q:'one',title:'two'});expect(f.mock.calls[0][0]).toContain('q=one');expect(f.mock.calls[0][0]).toContain('title=two');});
 it('blocks legacy/public and absolute fallback paths',()=>{expect(()=>resolveApiUrl('/api/v1/items/101')).toThrow('scoped');expect(()=>resolveApiUrl('/public/v1/catalog/items')).toThrow('scoped');expect(()=>resolveApiUrl('https://example.invalid/api/v2/catalogs/71/items')).toThrow('scoped');});
 it('requires no-store response',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(page()))));await expect(originalList({})).rejects.toThrow();});
+it.each(['Rada_S','PorC_S','Lomeni_S','HPorC_S','StatSpr_S','Spravce_S','Odd_S','Podsb_S','Pocet_S','Ozn_S','JineC_S','Karta_S','Opsana_S','Overena_S','Zapsal_S','DatZap_S','Skupina_S','Urcil_S','currentQuantity','currentOtherNumber'])('supports DEMUS list column sort and filter %s',async col=>{
+ const val=['Ozn_S','Karta_S','Opsana_S','Overena_S'].includes(col)?'true':'GEN';
+ const f=vi.fn().mockResolvedValue(reply(page({sort:col+',asc',items:[{...row(),currentInventory:{quantity:'7',otherNumber:'CUR-1'}}]})));vi.stubGlobal('fetch',f);
+ const r=await originalList({sortField:col,sortDirection:'asc',[col]:val});
+ const u=new URL(f.mock.calls[0][0],'http://local');expect(u.searchParams.get('sort')).toBe(col+',asc');expect(u.searchParams.get(col)).toBe(val);
+ expect(r.content[0].quantity).toBe(7);expect(r.content[0].otherNumber).toBe('CUR-1');expect(r.content[0].sourceInventory.Pocet_S).toBeNull();expect(r.content[0].sourceInventory.JineC_S).toBe('');
+});

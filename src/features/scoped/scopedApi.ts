@@ -1,6 +1,6 @@
 import { effectiveToken, localAuthEnabled } from '../localAuth/localAuthClient';
 import { resolveApiUrl } from '../../lib/api';
-import {curatorQuery,curatorCurrentFields} from './curatorContract';
+import {curatorQuery,curatorCurrentFields,curatorCurrentInventoryFields} from './curatorContract';
 
 export interface Item { id: number; catalogId: number; title: string | null; inventoryNumber: string | null; accessionNumber: string | null; version: string; sourceInventory?:Record<string,string|null> }
 export interface MuseumHistoryRow {id:number;eventType:'REVISION'|'RESTORATION'|'LOAN';eventDate:string|null;description:string|null}
@@ -188,13 +188,13 @@ export function scopedApi(catalogId: number, token: string) {
             if(integer(body.catalogId)!==catalogId||integer(body.page,true)!==page||integer(body.pageSize)!==size||body.sort!==sort||body.semantics!=='CURRENT_ASSERTIONS_AND_SEPARATELY_LABELLED_SOURCE_INVENTORY'||response.headers.get('Cache-Control')!=='no-store'||!Array.isArray(body.items))throw new Error('Invalid curator page');
             const totalElements=integer(body.totalElements,true),totalPages=integer(body.totalPages,true);
             if(totalPages!==Math.ceil(totalElements/size)||body.items.length!==Math.min(size,Math.max(0,totalElements-page*size)))throw new Error('Invalid curator totals');
-            const items:{item:Item;current:Record<string,string|null>;currentPresent:boolean;source:Record<string,string|null>;hasPhoto:boolean|null;hasAttachment:boolean|null}[]=body.items.map((row:any)=>{
+            const items:{item:Item;current:Record<string,string|null>;currentPresent:boolean;currentInventory:Record<string,string|null>;source:Record<string,string|null>;hasPhoto:boolean|null;hasAttachment:boolean|null}[]=body.items.map((row:any)=>{
                 const current:Record<string,string|null>={};
                 if(!row.current||Object.keys(row.current).length!==curatorCurrentFields.length||Object.keys(row.current).some(k=>!curatorCurrentFields.includes(k as typeof curatorCurrentFields[number]))||typeof row.currentPresent!=='boolean')throw new Error('Invalid current projection');
                 for(const key of curatorCurrentFields)current[key]=nullable(row.current[key]);
                 if(!row.currentPresent&&Object.values(current).some(v=>v!==null))throw new Error('Invalid current assertion state');
                 if(![true,false,null].includes(row.hasPhoto)||![true,false,null].includes(row.hasAttachment))throw new Error('Invalid media presence');
-                return {item:item(row.item),current,currentPresent:row.currentPresent,source:sourceInventory(row.source),hasPhoto:row.hasPhoto as boolean|null,hasAttachment:row.hasAttachment as boolean|null};
+                const currentInventory:Record<string,string|null>={quantity:null,otherNumber:null};if(row.currentInventory!==undefined&&row.currentInventory!==null){if(typeof row.currentInventory!=='object'||Array.isArray(row.currentInventory)||Object.keys(row.currentInventory).length!==curatorCurrentInventoryFields.length||Object.keys(row.currentInventory).some(k=>!curatorCurrentInventoryFields.includes(k as typeof curatorCurrentInventoryFields[number])))throw new Error('Invalid current inventory projection');for(const key of curatorCurrentInventoryFields)currentInventory[key]=nullable(row.currentInventory[key]);}return {item:item(row.item),current,currentPresent:row.currentPresent,currentInventory,source:sourceInventory(row.source),hasPhoto:row.hasPhoto as boolean|null,hasAttachment:row.hasAttachment as boolean|null};
             });
             if(new Set(items.map(row=>row.item.id)).size!==items.length)throw new Error('Duplicate curator identity');
             return {items,totalElements,totalPages,page,pageSize:size,hasMore:page+1<totalPages};

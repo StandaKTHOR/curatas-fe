@@ -61,7 +61,7 @@ export async function originalList(params:Record<string,unknown>){
  if(signal.aborted)throw new DOMException('Cancelled','AbortError');
  return {content:result.items.map(row=>({...row.item,author:row.current.authorText,datingText:row.current.datingText,
   material:row.current.materialText,technique:row.current.techniqueText,objectType:row.current.objectType,originPlace:row.current.originPlace,
-  currentAssertionState:row.currentPresent?'PRESENT':'ABSENT',sourceInventory:row.source,
+  currentAssertionState:row.currentPresent?'PRESENT':'ABSENT',quantity:row.currentInventory?.quantity===null||row.currentInventory?.quantity===undefined?null:Number(row.currentInventory.quantity),otherNumber:row.currentInventory?.otherNumber??null,sourceInventory:row.source,
   subCollection:row.source.Podsb_S,fundLegacyCode:row.source.Fond_S,hasPhoto:row.hasPhoto,hasAttachment:row.hasAttachment})),
   hasMore:result.hasMore,totalElements:result.totalElements,totalPages:result.totalPages};
 }

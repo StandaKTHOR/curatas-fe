@@ -2,6 +2,7 @@ import {originalCanClone} from '../features/catalog/originalClone';
 import {originalCanEdit,originalEditHref} from '../features/catalog/originalEdit';
 import {originalCanCreate} from '../features/catalog/originalCreate';
 import {originalIntegrationEnabled,originalItemHref,originalSession} from '../features/catalog/originalAdapter';
+import {demusTableColumns,formatDemusCell} from '../features/scoped/curatorContract';
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import {
@@ -96,7 +97,8 @@ export default function AdminItems() {
         technique: searchParams.get('technique') || '',
         location: searchParams.get('location') || '',
         spravce: searchParams.get('spravce') || '',
-        sourceDatingFromYear:searchParams.get('sourceDatingFromYear')||'',sourceDatingToYear:searchParams.get('sourceDatingToYear')||''
+        sourceDatingFromYear:searchParams.get('sourceDatingFromYear')||'',sourceDatingToYear:searchParams.get('sourceDatingToYear')||'',
+        ...(originalIntegrationEnabled()?Object.fromEntries([...demusTableColumns.map(c=>c.id),'Fond_S','Predmet_S','datingText','currentQuantity','currentOtherNumber'].map(k=>[k,searchParams.get(k)||''])):{})
     }));
 
     const loadData = () => {
@@ -167,7 +169,8 @@ export default function AdminItems() {
         setFilters({
             accessionNumber: '', inventoryNumber: '', subCollection: '',
             objectType: '', author: '', datingFrom: '', datingTo: '',
-            originPlace: '', material: '', technique: '', location: '', spravce: '',sourceDatingFromYear:'',sourceDatingToYear:''
+            originPlace: '', material: '', technique: '', location: '', spravce: '',sourceDatingFromYear:'',sourceDatingToYear:'',
+            ...(originalIntegrationEnabled()?Object.fromEntries([...demusTableColumns.map(c=>c.id),'Fond_S','Predmet_S','datingText','currentQuantity','currentOtherNumber'].map(k=>[k,''])):{})
         });
         setAdvancedFilterGroup(createEmptyGroup('AND'));
         setIsAdvancedFilterActive(false);
@@ -360,6 +363,33 @@ export default function AdminItems() {
                             </div>
                             <label className="col-md-3">Původní DEMUS rok od<input type="number" aria-label="Původní DEMUS rok od" disabled={originalIntegrationEnabled()} title="Filtr není v existujícím scoped kontraktu" value={filters.sourceDatingFromYear} onChange={e=>handleFilterChange('sourceDatingFromYear',e.target.value)}/></label>
                             <label className="col-md-3">Původní DEMUS rok do<input type="number" aria-label="Původní DEMUS rok do" disabled={originalIntegrationEnabled()} title="Filtr není v existujícím scoped kontraktu" value={filters.sourceDatingToYear} onChange={e=>handleFilterChange('sourceDatingToYear',e.target.value)}/></label>
+                            {originalIntegrationEnabled() && demusTableColumns.map(col => (
+                                <div key={col.id} className="col-md-3">
+                                    <label className={labelClass} htmlFor={`admin-filter-${col.id}`}>{col.label} ({col.id})</label>
+                                    {col.kind === 'boolean' ? (
+                                        <select id={`admin-filter-${col.id}`} aria-label={`Filtr ${col.label}`} className={inputClass} value={(filters as any)[col.id] || ''} onChange={e => handleFilterChange(col.id, e.target.value)}>
+                                            <option value="">— Vše —</option>
+                                            <option value="true">Ano</option>
+                                            <option value="false">Ne</option>
+                                            <option value="__NULL__">NULL (Neuvedeno)</option>
+                                        </select>
+                                    ) : (
+                                        <input id={`admin-filter-${col.id}`} aria-label={`Filtr ${col.label}`} className={inputClass} placeholder="Hodnota, __NULL__ nebo __EMPTY__" value={(filters as any)[col.id] || ''} onChange={e => handleFilterChange(col.id, e.target.value)} />
+                                    )}
+                                </div>
+                            ))}
+                            {originalIntegrationEnabled() && (
+                                <div className="col-md-3">
+                                    <label className={labelClass} htmlFor="admin-filter-currentQuantity">Současný počet (kurátor)</label>
+                                    <input id="admin-filter-currentQuantity" aria-label="Filtr Současný počet" className={inputClass} value={(filters as any).currentQuantity || ''} onChange={e => handleFilterChange('currentQuantity', e.target.value)} />
+                                </div>
+                            )}
+                            {originalIntegrationEnabled() && (
+                                <div className="col-md-3">
+                                    <label className={labelClass} htmlFor="admin-filter-currentOtherNumber">Současné jiné č. (kurátor)</label>
+                                    <input id="admin-filter-currentOtherNumber" aria-label="Filtr Současné jiné číslo" className={inputClass} value={(filters as any).currentOtherNumber || ''} onChange={e => handleFilterChange('currentOtherNumber', e.target.value)} />
+                                </div>
+                            )}
                             <div className="col-md-3 flex flex-col justify-end">
                                 <button onClick={resetFilters} className="text-[10px] text-red-500 font-black uppercase hover:text-red-700 transition-colors mb-2 text-right">Resetovat vše</button>
                             </div>
@@ -382,7 +412,7 @@ export default function AdminItems() {
                             <th>Fond</th><th>Podsbírka</th><th>Předmět</th>
                             <th><button type="button" onClick={() => handleSort('title')}>Titul</button></th>
                             <th><button type="button" onClick={() => handleSort('author')}>Autor</button></th>
-                            <th>Datace</th><th>Materiál</th><th>Technika</th><th>Stav</th><th>Akce</th>
+                            <th>Datace</th><th>Materiál</th><th>Technika</th>{demusTableColumns.map(col => <th key={col.id}><button type="button" onClick={() => handleSort(col.id)}>{col.label}</button></th>)}<th>Stav</th><th>Akce</th>
                         </tr></thead>
                         <tbody>{data.content.map((item: any) => <tr key={item.id}>
                             <td><input type="checkbox" aria-label={`Vybrat ${item.inventoryNumber || item.id}`} checked={selectedIds.includes(item.id)}
@@ -392,6 +422,7 @@ export default function AdminItems() {
                             <td>{item.subCollection || '—'}</td><td title={originalIntegrationEnabled()?'Původní DEMUS Predmet_S; není současným kurátorským tvrzením':undefined}>{originalIntegrationEnabled()?(item.sourceInventory?.Predmet_S===null||item.sourceInventory?.Predmet_S===undefined?'—':item.sourceInventory.Predmet_S===''?'Prázdný řetězec':item.sourceInventory.Predmet_S):(item.objectType || '—')}</td><td>{item.title || '—'}</td>
                             <td>{item.author || item.authors?.join(', ') || '—'}</td><td>{item.datingText || '—'}</td>
                             <td>{item.material || item.materials?.join(', ') || '—'}</td><td>{item.technique || '—'}</td>
+                            {demusTableColumns.map(col => { const cell = formatDemusCell(item, col); return <td key={col.id} title={cell.title} data-source-field={col.id} data-value-state={cell.state} data-current-assertion={cell.hasCurrent ? 'present' : 'absent'}>{cell.text}</td>; })}
                             <td>{item.published ? 'Zveřejněno' : 'Neveřejné'}</td>
                             <td className="demus-row-actions">
                                 <button type="button" aria-label="Upravit předmět" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Současná odborná sekce podle oprávnění" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(item.id,'professional'):`/admin/items/edit/${item.id}`,{state:{fromSearch:location.search,catalogIds:(data?.content||[]).map((v:any)=>v.id),returnPath:'/admin/items'}})}><FaEdit/></button>
