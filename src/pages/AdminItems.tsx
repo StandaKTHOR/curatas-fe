@@ -1,4 +1,5 @@
 import {originalCanEdit,originalEditHref} from '../features/catalog/originalEdit';
+import {originalCanCreate} from '../features/catalog/originalCreate';
 import {originalIntegrationEnabled,originalItemHref,originalSession} from '../features/catalog/originalAdapter';
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
@@ -276,7 +277,7 @@ export default function AdminItems() {
                         <button disabled={originalIntegrationEnabled()||exporting} aria-busy={exporting} onClick={handleExportExcel} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">
                             <FaFileExcel /> {exporting ? 'Exportuji…' : 'Export .xlsx'}
                         </button>
-                        <button disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => navigate('/admin/items/new', { state: { fromSearch: location.search } })} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
+                        <button disabled={originalIntegrationEnabled()&&!originalCanCreate()} title="Založení podle katalogového oprávnění item.create a explicitního přepínače" onClick={() => navigate(`/admin/items/new${originalIntegrationEnabled()?'?catalog='+originalSession().catalog.id:''}`, { state: { fromSearch: location.search } })} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
                             <FaPlus /> Nový předmět
                         </button>
                     </div>

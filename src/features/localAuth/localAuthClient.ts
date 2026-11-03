@@ -9,6 +9,8 @@ export async function localRequest(path:string,body?:unknown,token?:string,metho
  if(!r.ok)throw new LocalAuthError(r.status);const text=await r.text();return text?JSON.parse(text):null;
 }
 let restore:Promise<{token:string;expiresIn:number}>|null=null;
+/** Finish an already-started refresh before a new login can set the shared session cookie. Never starts a refresh. */
+export async function settleLocalRestore(){if(restore)try{await restore;}catch{/* Anonymous/expired initial refresh is expected; login is a new authentication request. */}}
 export function restoreLocal(){
  if(!restore){const request=()=>localRequest('/api/auth/local/refresh',{});restore=(navigator.locks?navigator.locks.request('curatas-local-refresh',request):request()).finally(()=>{restore=null;});}return restore;
 }

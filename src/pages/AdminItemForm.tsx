@@ -1,4 +1,6 @@
 import MaterialBindings from '../features/catalog/MaterialBindings';
+import CreationOrigin from '../features/catalog/CreationOrigin';
+import {originalCanCreate,originalCreationFields,createOriginalItem,originalCreationOutcome,applyOriginalCreationBoundary,CreationValidationError} from '../features/catalog/originalCreate';
 import {useOriginalMedia} from '../features/catalog/useOriginalMedia';
 import {useOriginalDimensions} from '../features/catalog/useOriginalDimensions';
 import {originalCanEdit,originalEditHref,saveOriginalCurrent,applyOriginalEditBoundary,type OriginalEditDomain} from '../features/catalog/originalEdit';
@@ -215,7 +217,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     const [loading, setLoading] = useState(false);
     const [scopedNeedsReload,setScopedNeedsReload]=useState(false);
     const scopedDomain:OriginalEditDomain=new URLSearchParams(location.search).get('edit')==='inventory'?'inventory':'professional';
-    useLayoutEffect(()=>{if(originalIntegrationEnabled())applyOriginalEditBoundary(document.getElementById('item-editor'),scopedDomain,!isViewMode&&originalCanEdit(scopedDomain)&&Boolean((editSessionRef.current as any)?.scopedCurrent),loading||scopedNeedsReload);});
+    useLayoutEffect(()=>{if(originalIntegrationEnabled()){if(!id)applyOriginalCreationBoundary(document.getElementById('item-editor'),originalCanCreate()&&!loading&&!createUncertain);else applyOriginalEditBoundary(document.getElementById('item-editor'),scopedDomain,!isViewMode&&originalCanEdit(scopedDomain)&&Boolean((editSessionRef.current as any)?.scopedCurrent),loading||scopedNeedsReload);}});
     const [uploading, setUploading] = useState(false);
     const [conflictError, setConflictError] = useState<string | null>(null);
     const [globalError, setGlobalError] = useState<string | null>(null);
@@ -579,7 +581,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         // Scoped current fields use scalar control names, not legacy aggregate payload keys
         // such as authors/materials. The original guard must see those actual edits too.
         const keys=originalIntegrationEnabled()
-            ? ['objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']
+            ? (!id?['title','inventoryNumber','accessionNumber']:['objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber'])
             : Object.keys(buildItemPayload({})).filter(key => key !== 'auditComment' && key !== 'clearFund').concat('authorRole');
         const clone = Object.fromEntries(keys.sort().map(key => [key, f[key] ?? '']));
         return JSON.stringify(clone, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
@@ -591,6 +593,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     const formRef = useRef(form);
     formRef.current = form;
     const mainSaveRef = useRef(false);
+    const creationKeyRef=useRef<string|null>(null);
     // Omit untouched values: display defaults must never become historical museum evidence.
     const preserveUnchangedEvidence = (payload: any) => {
         if (!id || !initialFormSnapshotRef.current) return;
@@ -773,6 +776,8 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 .finally(() => {if (alive) setLoading(false);});
 
             if(!originalIntegrationEnabled())loadAttachments();
+        } else if(originalIntegrationEnabled()){
+            initialFormSnapshotRef.current=getFormSnapshot(form);
         } else {
             Promise.resolve(getNextAvailableNumbers?.()).then((next: any) => {
                 if (!alive) return;
@@ -812,6 +817,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     }, []);
 
     const handleNumberBlur = async (type: 'accession' | 'inventory', value: string) => {
+        if(originalIntegrationEnabled())return; // Scoped creation validates atomically; never ask the legacy endpoint.
         if (!value || id) return;
         try {
             const res = await checkUniqueness(type, value);
@@ -895,7 +901,14 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         setFieldErrors({});
 
         if(originalIntegrationEnabled()){
-            if(!id||isViewMode)return;
+            if(!id){
+                try{originalCreationFields(form);}catch(error){if(error instanceof CreationValidationError){setFieldErrors({[error.field]:error.message});setActiveTab('identity');}setGlobalError((error as Error).message);return;}
+                mainSaveRef.current=true;setLoading(true);creationKeyRef.current??=crypto.randomUUID();
+                try{const result=await createOriginalItem(creationKeyRef.current,form);initialFormSnapshotRef.current='';mainSaveRef.current=false;navigate(`/admin/items/view/${result.value.item.id}?catalog=${result.value.item.catalogId}`,{replace:true,state:{...location.state,creationNotice:'Předmět byl založen a znovu načten ze scoped katalogu.'}});}
+                catch(error){const status=(error as {status?:number}).status;if(!status||status>=500)setCreateUncertain(true);setGlobalError(status===409?'Založení koliduje s existující identitou nebo číselnou řadou. Zkontrolujte inventární a přírůstkové číslo; jsou-li nová, správce musí ověřit sekvenci. Původní záznam nebyl přepsán.':(error as Error).message);}
+                finally{mainSaveRef.current=false;setLoading(false);}return;
+            }
+            if(isViewMode)return;
             mainSaveRef.current=true;setLoading(true);let accepted=false;
             try{
                 const outcome=await saveOriginalCurrent(Number(id),scopedDomain,editSessionRef.current,form);
@@ -1170,7 +1183,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                         <GovButton nativeType="button" type="outlined" color="neutral" size="s" data-scoped-navigation="true" disabled={pagePosition===pageIds.length-1} onClick={()=>openNeighbour(1)} title="Následující předmět na načtené stránce seznamu">Následující předmět</GovButton>
                     </>}
                     {!isViewMode && <button type="submit" form="item-editor" className="demus-save"
-                        data-scoped-save="true" disabled={originalIntegrationEnabled()?loading||auditSaving||scopedNeedsReload||!originalCanEdit(scopedDomain)||!(editSessionRef.current as any)?.scopedCurrent:loading || auditSaving || !validity.accession || !validity.inventory}>
+                        data-scoped-save="true" disabled={originalIntegrationEnabled()?loading||auditSaving||scopedNeedsReload||(id?(!originalCanEdit(scopedDomain)||!(editSessionRef.current as any)?.scopedCurrent):!originalCanCreate()||createUncertain):loading || auditSaving || !validity.accession || !validity.inventory}>
                         {loading ? 'Ukládám…' : 'Uložit'}
                     </button>}
                     {isViewMode && (
@@ -1254,6 +1267,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 isNew={!id}
             />
 
+            {id&&originalIntegrationEnabled()&&<CreationOrigin itemId={Number(id)}/>}
             {id && <InventoryIdentityPanel key={originalIntegrationEnabled()?editSessionRef.current?.etag:undefined} itemId={Number(id)} inventoryNumber={form.inventoryNumber || ''}
                 canEdit={!isViewMode && !loading && !auditSaving && form.inventoryNumber === initialNumbers.inventory} onSaved={async () => {
                     const fresh = await getAdminItem(id);
@@ -1320,7 +1334,9 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 </li>)}</ul>
             </section>}
             <EditorNavigationGuard isDirty={hasUnsavedChanges} isSaving={() => mainSaveRef.current || auditSaving || !!editSessionRef.current?.busy}/>
-            <p className="px-6 text-sm">{originalIntegrationEnabled()?`Ukládá se pouze současná ${scopedDomain==='inventory'?'inventární':'odborná'} sekce. Historie DEMUS a nepodporovaná pole jsou zamčené. Nezměněné NULL se zachovávají.`:'Uložit: hlavní údaje a základní příznaky včetně Archivu. Odborné záznamy a akvizice ukládejte v příslušné sekci.'}</p>
+            {!id&&originalIntegrationEnabled()&&createUncertain&&<p role="alert">Výsledek založení nebyl potvrzen. Nevytvářejte další požadavek. <button type="button" disabled={loading} onClick={async()=>{if(!creationKeyRef.current)return;setLoading(true);try{const result=await originalCreationOutcome(creationKeyRef.current);initialFormSnapshotRef.current='';navigate(`/admin/items/view/${result.value.item.id}?catalog=${result.value.item.catalogId}`,{replace:true});}catch{setGlobalError('Založení zatím nebylo potvrzeno. Uchovejte draft a ověřte výsledek znovu; další záznam nebyl automaticky odeslán.');}finally{setLoading(false);}}}>Ověřit výsledek založení</button></p>}
+            {(location.state as any)?.creationNotice&&<p role="status">{(location.state as any).creationNotice}</p>}
+            <p className="px-6 text-sm">{originalIntegrationEnabled()?(!id?'Nový předmět: vyplňte název (nebo typ) a inventární číslo. Přírůstkové číslo je nepovinné. Další odborné údaje doplňte po založení podle oprávnění.':`Ukládá se pouze současná ${scopedDomain==='inventory'?'inventární':'odborná'} sekce. Historie DEMUS a nepodporovaná pole jsou zamčené. Nezměněné NULL se zachovávají.`):'Uložit: hlavní údaje a základní příznaky včetně Archivu. Odborné záznamy a akvizice ukládejte v příslušné sekci.'}</p>
             <form id="item-editor" noValidate onSubmit={handleSubmit} className="p-6 space-y-4 demus-editor">
                 <fieldset disabled={loading || auditSaving || (isViewMode && activeTab !== 'photos')}>
                 {/* 1. ZÁKLADNÍ ÚDAJE & IDENTIFIKACE */}
