@@ -16,6 +16,7 @@ import {
 } from '../lib/api'
 import { FaEdit, FaTrash, FaPrint, FaCopy, FaFileExcel, FaPlus, FaSearch, FaFilter, FaIdCard, FaLayerGroup } from 'react-icons/fa'
 import { printLabels } from "@/components/LabelPrinter";
+import { printItemLabel } from "@/lib/LabelService";
 import DeaccessionModal from '@/components/DeaccessionModal';
 import SelectiveCloneModal from '@/components/SelectiveCloneModal';
 import WorksetModal from '@/components/WorksetModal';
@@ -74,6 +75,7 @@ export default function AdminItems() {
     const [isCopying, setIsCopying] = useState(false);
 
     const handlePrint = async (id: number) => {
+        if (originalIntegrationEnabled()) { const target = data?.content?.find((it: any) => it.id === id); if (target) printItemLabel(target); return; }
         try {
             const data = await fetchLabelData(id); // Volání BE endpointu
             printLabels(data);
@@ -179,6 +181,7 @@ export default function AdminItems() {
     };
 
     const handlePrintList = async () => {
+        if (originalIntegrationEnabled()) { const items = Array.isArray(data?.content) ? data.content : []; setListPrintModal({ isOpen: true, mode: 'list', items, totalCount: data?.totalElements ?? items.length }); return; }
         setIsPrintLoading(true);
         try {
             const queryParams: any = { q: searchTerm, ...filters };
@@ -272,7 +275,7 @@ export default function AdminItems() {
                     <div className="flex flex-wrap gap-2">
                         <button
                             onClick={handlePrintList}
-                            disabled={originalIntegrationEnabled()||isPrintLoading}
+                            disabled={isPrintLoading}
                             className="genric-btn info-border radius px-3 py-2 text-[10px] font-bold uppercase flex items-center gap-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50"
                             title="Vytisknout úřední inventární soupis všech vyfiltrovaných položek"
                         >
@@ -426,7 +429,7 @@ export default function AdminItems() {
                             <td>{item.published ? 'Zveřejněno' : 'Neveřejné'}</td>
                             <td className="demus-row-actions">
                                 <button type="button" aria-label="Upravit předmět" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Současná odborná sekce podle oprávnění" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(item.id,'professional'):`/admin/items/edit/${item.id}`,{state:{fromSearch:location.search,catalogIds:(data?.content||[]).map((v:any)=>v.id),returnPath:'/admin/items'}})}><FaEdit/></button>
-                                <button type="button" aria-label="Tisk štítku" disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => handlePrint(item.id)}><FaPrint/></button>
+                                <button type="button" aria-label="Tisk štítku" title="Tisk štítku" onClick={() => handlePrint(item.id)}><FaPrint/></button>
                                 <button type="button" aria-label="Tisk muzejní karty" title="Tisk muzejní karty" onClick={() => setCardPrintModal({isOpen:true,item})}><FaIdCard/></button>
                                 <button type="button" aria-label="Klonovat předmět" disabled={originalIntegrationEnabled()&&!originalCanClone()} title="Nezávislé klonování podle katalogového oprávnění" onClick={() => setCloneModal({isOpen:true,item})}><FaCopy/></button>
                                 <button type="button" aria-label="Vyřadit z evidence" disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => setDeaccessionModal({isOpen:true,item})}><FaTrash/></button>

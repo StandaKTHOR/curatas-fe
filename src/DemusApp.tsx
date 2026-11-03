@@ -4,6 +4,7 @@ import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'reac
 import { AuthProvider, useAuth } from './components/AuthContext';
 import Catalog from './pages/Catalog';
 import Feedback from './pages/Feedback';
+import Admin from './pages/Admin';
 import AdminItems from './pages/AdminItems';
 import Login from './pages/Login';
 import ProtectedRoute, { getUserRoles } from './components/ProtectedRoute';
@@ -43,6 +44,7 @@ function AppContent() {
             <nav aria-label="Hlavní menu" className="demus-menubar">
                 <NavLink end to="/">Katalog sbírek</NavLink>
                 {token && <NavLink to="/admin/items">Sbírky — evidence předmětů</NavLink>}
+                {token && selectedCatalog?.capabilities?.some(c => ['catalog.grant.manage', 'catalog.access.delegate', 'catalog.audit.read'].includes(c)) && <NavLink to="/admin">Správa uživatelů a přístupů</NavLink>}
                 {admin && <NavLink to="/admin/import">{importTexts.title}</NavLink>}
                 <NavLink to="/feedback">Připomínky</NavLink>
                 {token && <label>Katalog <select aria-label="Katalog" disabled={catalogLoading} value={selectedCatalog?.id??''}
@@ -65,6 +67,8 @@ function AppContent() {
                 <Route path="/detail/:id" element={selectedCatalog?<AdminItemForm readOnly />:<Navigate to="/login" replace />} />
                 <Route path="/feedback" element={<Feedback />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/admin" element={!token?<Navigate to="/login" replace />:selectedCatalog?<Admin />:<p role="status">Vyberte katalog.</p>} />
+                <Route path="/scoped/users" element={!token?<Navigate to="/login" replace />:selectedCatalog?<Admin />:<p role="status">Vyberte katalog.</p>} />
                 <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
                     <Route path="/admin/import" element={<DataImport />} />
                 </Route>

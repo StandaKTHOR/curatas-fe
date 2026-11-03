@@ -532,9 +532,6 @@ export default function Catalog() {
                                             {col.label} {renderSortIndicator(col.id)}
                                         </th>
                                     ))}
-                                    {false && (
-                                        <th scope="col" className="p-3">Hmotnost</th>
-                                    )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-gray-700">
@@ -616,9 +613,6 @@ export default function Catalog() {
                                                 const cell = formatDemusCell(it, col);
                                                 return <td key={col.id} className={`${rowPad} text-gray-600`} title={cell.title} data-source-field={col.id} data-value-state={cell.state} data-current-assertion={cell.hasCurrent ? 'present' : 'absent'}>{cell.text}</td>;
                                             })}
-                                            {false && (
-                                                <td className={`${rowPad} text-gray-500`}>{it.weight ? `${it.weight} kg` : '—'}</td>
-                                            )}
                                         </tr>
                                     );
                                 }) : (
