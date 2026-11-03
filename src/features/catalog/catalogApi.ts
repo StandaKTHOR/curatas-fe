@@ -11,6 +11,9 @@ export interface AvailableCatalog {
     accessType?: 'OWN' | 'SHARED' | 'UNCLASSIFIED';
     capabilities?: string[];
     creationEnabled?: boolean;
+    cloneEnabled?: boolean;
+    cloneReadEnabled?: boolean;
+    professionalRecordsEnabled?: boolean;
     inventoryWriteEnabled?: boolean;
     professionalWriteEnabled?: boolean;
 }
@@ -37,7 +40,7 @@ function workspace(value: AvailableCatalog): AvailableCatalog {
         || !['OWN','SHARED','UNCLASSIFIED'].includes(value.accessType ?? '') || !Array.isArray(value.capabilities)
         || !value.capabilities.includes('catalog.read') || value.capabilities.some(c => !capabilities.has(c))
         || (value.creationEnabled !== undefined && typeof value.creationEnabled !== 'boolean')) throw new CatalogApiError(502);
-    for(const flag of [value.inventoryWriteEnabled,value.professionalWriteEnabled])if(flag!==undefined&&typeof flag!=='boolean')throw new CatalogApiError(502);
+    for(const flag of [value.inventoryWriteEnabled,value.professionalWriteEnabled,value.cloneEnabled,value.cloneReadEnabled,value.professionalRecordsEnabled])if(flag!==undefined&&typeof flag!=='boolean')throw new CatalogApiError(502);
     return value;
 }
 const prefix = () => workspaceMode() ? '/api/v2/workspaces' : '/api/v2/catalogs';

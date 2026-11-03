@@ -1,5 +1,5 @@
 import ThreeLevelDictionarySelect from './ThreeLevelDictionarySelect';
-import {originalIntegrationEnabled} from '../features/catalog/originalAdapter';
+import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
 import { uncertainWrite, uncertainCreateMessage } from '../lib/writeOutcome';
 import {professionalFields,professionalDraft,professionalValue,professionalDelta} from '../lib/professional';
 import type { ItemEditSession } from '../lib/editSession';
@@ -74,6 +74,7 @@ export function TreeChoice({ type, value, onChange, label, allowEmpty=true, inva
     };
 
     useEffect(() => {
+        if(originalIntegrationEnabled())return;
         reloadTree();
     }, [type]);
 
@@ -156,8 +157,14 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     useEffect(() => {
         if (!itemId || (snapshotRequired && !editSession)) return;
         if(originalIntegrationEnabled()){
-            setMessage(`Sekce ${section}: BLOCKED — původní opakovaný odborný záznam nemá ověřený scoped kontrakt. Čtení ani zápis nejsou nahrazeny skalárním textem; původní údaje tím nejsou označeny jako prázdné.`);
-            return;
+            let alive=true;setDetail(null);const {api,signal,catalog}=originalSession();
+            if(!kind||!catalog.professionalRecordsEnabled){setMessage(`Sekce ${section}: původní zdrojové záznamy ani nepodporované zápisy nejsou součástí tohoto scoped kontraktu. Chybějící přístup neznamená prázdnou evidenci.`);return;}
+            api.professionalRecords(itemId,signal).then(result=>{
+                if(!alive||signal.aborted)return;
+                if((editSession as any)?.scopedCurrent&&result.etag!==(editSession as any).scopedCurrent.etag)throw new Error('Verze podzáznamů se změnila. Obnovte kartu.');
+                setDetail({itemId,markant:null,signature:null,legacyArchived:null,legacyCard:null,legacyCopied:null,legacyVerified:null,legacyMarked:null,localityLegacyCode:null,fundLegacyCode:null,groupLegacyCode:null,subjectLegacyCode:null,materialDictionaryId:null,techniqueDictionaryId:null,localityDictionaryId:null,fundDictionaryId:null,groupDictionaryId:null,subjectDictionaryId:null,legacyCreatedBy:null,legacyCreatedAt:null,legacyUpdatedBy:null,legacyUpdatedAt:null,records:result.items});
+                setMessage('Současné vlastní odborné podzáznamy. Historické raw údaje zde nejsou přepsány ani vydávány za současná tvrzení. Editace této opakované sekce zatím není povolena.');
+            }).catch(()=>{if(alive&&!signal.aborted)setMessage('Současné podzáznamy se nepodařilo ověřit. Obnovte kartu.');});return()=>{alive=false;};
         }
         let alive = true;
         Promise.resolve(editSession?.museumSnapshot as MuseumItemDetail | undefined)
@@ -221,8 +228,8 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
             {bool('legacyCopied', 'Opsáno')}{bool('legacyVerified', 'Ověřeno')}{bool('legacyMarked', 'Označeno')}</div>
     </>;
     else if (section === 'materials') fields = <>
-        <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál" readOnly={readOnly} value={value('materialDictionaryId') as number | null} onChange={id => change('materialDictionaryId', id)}/>
-        <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika" readOnly={readOnly} value={value('techniqueDictionaryId') as number | null} onChange={id => change('techniqueDictionaryId', id)}/>
+        <ThreeLevelDictionarySelect unavailableReason={originalIntegrationEnabled()?'Tento opakovaný záznam používá původní číselníkové identity. Jejich převod na katalogové UUID není schválen; existující vazby zůstávají zachované.':undefined} type="MATERIAL" label="Materiál" readOnly={readOnly} value={value('materialDictionaryId') as number | null} onChange={id => change('materialDictionaryId', id)}/>
+        <ThreeLevelDictionarySelect unavailableReason={originalIntegrationEnabled()?'Tento opakovaný záznam používá původní číselníkové identity. Jejich převod na katalogové UUID není schválen; existující vazby zůstávají zachované.':undefined} type="TECHNIQUE" label="Technika" readOnly={readOnly} value={value('techniqueDictionaryId') as number | null} onChange={id => change('techniqueDictionaryId', id)}/>
         <p className="col-span-full text-sm text-gray-600">Původní text materiálu a techniky zůstává zachován v základním záznamu.</p>
     </>;
     else if (section === 'locality') fields = <>
@@ -315,7 +322,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
         } catch (e) { setMessage((e as Error).message); }
     };
 
-    return <fieldset disabled={readOnly || saving} className="space-y-5 demus-section">
+    return <fieldset disabled={readOnly || saving || originalIntegrationEnabled()} className="space-y-5 demus-section">
         {fields && <div className="grid grid-cols-1 gap-4 rounded border border-gray-200 p-5 md:grid-cols-2">{fields}
             {section !== 'history' && <div className="col-span-full">{saveButton}</div>}</div>}
         {kind && <div className="space-y-4">
@@ -374,8 +381,8 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                     const key=kind==='BIBLIOGRAPHY'?'Ref_RF':kind==='CLASSIFICATION'?'SysKat_ZS':'TypDok_DK';setPayload(old=>({...old,[key]:nativeCode}));
                 }}>Použít nativní kód vybrané položky: {nativeCode}</button>}
                 {kind==='MATERIAL_TECHNIQUE'&&<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál" historicalValue={String(payload.Material_MT ?? '')} readOnly={readOnly} value={materialId} allowEmpty={!record?.materialDictionaryId} onChange={id=>setMaterialId(id)}/>
-                    <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika" historicalValue={String(payload.Technika_MT ?? '')} readOnly={readOnly} value={techniqueId} allowEmpty={!record?.techniqueDictionaryId} onChange={id=>setTechniqueId(id)}/>
+                    <ThreeLevelDictionarySelect unavailableReason={originalIntegrationEnabled()?'Tento opakovaný záznam používá původní číselníkové identity. Jejich převod na katalogové UUID není schválen; existující vazby zůstávají zachované.':undefined} type="MATERIAL" label="Materiál" historicalValue={String(payload.Material_MT ?? '')} readOnly={readOnly} value={materialId} allowEmpty={!record?.materialDictionaryId} onChange={id=>setMaterialId(id)}/>
+                    <ThreeLevelDictionarySelect unavailableReason={originalIntegrationEnabled()?'Tento opakovaný záznam používá původní číselníkové identity. Jejich převod na katalogové UUID není schválen; existující vazby zůstávají zachované.':undefined} type="TECHNIQUE" label="Technika" historicalValue={String(payload.Technika_MT ?? '')} readOnly={readOnly} value={techniqueId} allowEmpty={!record?.techniqueDictionaryId} onChange={id=>setTechniqueId(id)}/>
                     <p className="md:col-span-2 text-sm text-gray-600">Materiál a technika se vybírají nezávisle a ukládají společně až tlačítkem Uložit záznam. Uložený text se při výběru nemění; při uložení nové vazby se použije kód vybrané položky. Původní údaje DEMUS zůstávají zachované.</p>
                 </div>}
                 {['DETERMINATION','ORIGIN','MANIPULATION'].includes(kind) && <div className="space-y-2 text-sm">

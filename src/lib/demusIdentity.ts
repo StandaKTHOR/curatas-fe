@@ -1,4 +1,5 @@
 import { resolveApiUrl } from './api';
+import {originalIntegrationEnabled,originalDemusIdentity} from '../features/catalog/originalAdapter';
 
 export interface DemusIdentity {
     itemId: number;
@@ -35,6 +36,7 @@ const textFields = ['inventoryNumber', 'sourceInventoryNumber', 'series', 'ordin
 /** Read source evidence without constructing or replacing historical identifiers. */
 export async function getDemusIdentity(itemId: number): Promise<DemusIdentity> {
     if (!Number.isSafeInteger(itemId) || itemId <= 0) throw new Error('Invalid item ID');
+    if(originalIntegrationEnabled())return originalDemusIdentity(itemId);
     const token = localStorage.getItem('token');
     const response = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/demus-identity`), {
         headers: token ? { Authorization: `Bearer ${token}` } : {},

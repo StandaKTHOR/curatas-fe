@@ -70,9 +70,9 @@ function AppContent() {
                 </Route>
                 <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'CURATOR']} />}>
                     <Route path="/admin/items" element={selectedCatalog?<AdminItems />:<p role="status">Vyberte katalog.</p>} />
-                    <Route path="/admin/items/new" element={<AdminItemForm />} />
+                    <Route path="/admin/items/new" element={selectedCatalog?<AdminItemForm />:<p role="status">Vyberte katalog.</p>} />
                     <Route path="/admin/items/view/:id" element={selectedCatalog?<AdminItemForm readOnly />:<p role="status">Vyberte katalog.</p>} />
-                    <Route path="/admin/items/edit/:id" element={<AdminItemForm />} />
+                    <Route path="/admin/items/edit/:id" element={selectedCatalog?<AdminItemForm />:<p role="status">Vyberte katalog.</p>} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

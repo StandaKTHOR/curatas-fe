@@ -26,6 +26,9 @@ async function selectLeaf(){
  await screen.findByRole('option',{name:'Root'});
  for(let n=0;n<3;n++)await userEvent.selectOptions(screen.getByLabelText(`Materiál — úroveň ${n+1}`),ids[n]);
 }
+it('keeps a reader without dictionary.read in the item context without an unauthorized association request',async()=>{
+ bindOriginalCatalog({...catalog,capabilities:['catalog.read','item.read']},'GENERATED_READER');const f=vi.fn();vi.stubGlobal('fetch',f);render(<MaterialBindings itemId={101}/>);await screen.findByText(/Čtení číselníkových vazeb vyžaduje dictionary.read/);expect(f).not.toHaveBeenCalled();expect(screen.getByRole('button',{name:'Přidat vazbu'})).toBeDisabled();
+});
 it('saves a UUID leaf, reloads its actual association, propagates ETag and removes with the next version',async()=>{
  const f=transport(),onSave=vi.fn();render(<MaterialBindings itemId={101} onSave={onSave}/>);await selectLeaf();
  await userEvent.click(screen.getByRole('button',{name:'Přidat vazbu'}));

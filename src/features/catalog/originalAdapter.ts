@@ -43,6 +43,17 @@ export async function originalInventorySource(id:number,expectedVersion:string,e
  if(result.itemVersion!==expectedVersion)throw new Error('Verze zdrojového pohledu se změnila. Obnovte kartu.');
  return {fields:result.fields,state:'VERIFIED_ITEM_PROJECTION' as const};
 }
+/** Existing identity panel, populated only from scoped, whitelisted reads at one item version. */
+export async function originalDemusIdentity(id:number):Promise<import('../../lib/demusIdentity').DemusIdentity>{
+ const {api,signal}=originalSession();const [evidence,source,summary,current]=await Promise.all([api.inventoryEvidence(id,signal),api.sourceInventory(id,signal),api.sourceSummary(id,signal),api.curatorRecord(id,'inventory',signal)]);
+ if(signal.aborted||new Set([evidence.itemVersion,source.itemVersion,summary.itemVersion,current.etag.slice(1,-1)]).size!==1)throw new Error('Verze zdrojové identity se změnila. Obnovte kartu.');
+ const c=evidence.sourceComponents,s=source.fields;
+ const count=(v:string|null)=>{if(v===null)return null;if(!/^-?(0|[1-9][0-9]*)$/.test(v)||!Number.isSafeInteger(Number(v)))throw new Error('Neplatný počet evidence.');return Number(v);};
+ return {itemId:id,inventoryNumber:evidence.inventoryNumber,sourceInventoryNumber:evidence.sourceInventoryNumber,originalInventoryNumber:evidence.sourceInventoryNumber,sourceLocalId:evidence.sourceLocalId,
+  series:c.series,ordinal:c.ordinal,division:c.division,hierarchyOrdinal:c.hierarchyOrdinal,hierarchyDivision:c.hierarchyDivision,stateCode:c.stateCode,custodianCode:c.custodianCode,departmentCode:c.departmentCode,
+  fundCode:s.Fond_S,groupCode:s.Skupina_S,determinedBy:s.Urcil_S,otherNumber:s.JineC_S,materialNote:null,sourceDatingFromYear:null,sourceDatingToYear:null,determinedAtRaw:null,
+  sourceQuantity:count(summary.sourceQuantity),quantity:count(current.value.quantity)};
+}
 export async function originalList(params:Record<string,unknown>){
  const {api,signal}=originalSession();
  const {page=0,size=50,sortField='inventoryNumber',sortDirection='asc',...filters}=params;

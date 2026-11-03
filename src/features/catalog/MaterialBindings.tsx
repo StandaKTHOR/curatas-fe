@@ -5,16 +5,17 @@ import {originalCanEdit} from './originalEdit';
 
 /** Current UUID associations; never reinterpret historical text as an authority ID. */
 export default function MaterialBindings({itemId,onSave,readOnly=false}:{itemId:number;onSave?:(etag:string)=>void;readOnly?:boolean}){
- const {api,signal}=originalSession();
+ const {api,signal,catalog}=originalSession();const dictionaryReadable=catalog.capabilities?.includes('dictionary.read')===true;
  type Snapshot=Awaited<ReturnType<typeof api.references>>;
  const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[revision,setRevision]=useState(0);
  const [type,setType]=useState<'MATERIAL'|'TECHNIQUE'>('MATERIAL'),[selected,setSelected]=useState<string|null>(null);
- const enabled=!readOnly&&originalCanEdit('professional');
+ const enabled=dictionaryReadable&&!readOnly&&originalCanEdit('professional');
  useEffect(()=>{
   let alive=true;setSnapshot(null);setSelected(null);setError('');
+  if(!dictionaryReadable){setError('Čtení číselníkových vazeb vyžaduje dictionary.read. Současné texty a zdrojové údaje jsou dostupné odděleně.');return;}
   api.references(itemId,signal).then(value=>{if(alive&&!signal.aborted)setSnapshot(value);}).catch(e=>{if(alive&&!signal.aborted)setError(e.message);});
   return()=>{alive=false;};
- },[itemId,signal,revision]);
+ },[itemId,signal,revision,dictionaryReadable]);
  async function save(id:string,kind:'MATERIAL'|'TECHNIQUE',remove=false){
   if(!snapshot||busy||!enabled)return;
   setBusy(true);setError('');

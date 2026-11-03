@@ -3,6 +3,7 @@ import { resolveApiUrl } from '../../lib/api';
 import {curatorQuery,curatorCurrentFields} from './curatorContract';
 
 export interface Item { id: number; catalogId: number; title: string | null; inventoryNumber: string | null; accessionNumber: string | null; version: string; sourceInventory?:Record<string,string|null> }
+export interface MuseumHistoryRow {id:number;eventType:'REVISION'|'RESTORATION'|'LOAN';eventDate:string|null;description:string|null}
 export type CuratorSection='inventory'|'professional'|'inventory-range';
 export const inventoryColumns={Predmet_S:'Předmět ve zdroji',Titul_S:'Titul ve zdroji',Rada_S:'Řada',PorC_S:'Poř. č.',Lomeni_S:'Lom',HPorC_S:'Až',StatSpr_S:'Stát',Spravce_S:'Správce',Odd_S:'Oddělení',Podsb_S:'Podsbírka',Pocet_S:'Počet ve zdroji',Ozn_S:'Označeno',JineC_S:'Jiné číslo',Karta_S:'Karta',Opsana_S:'Opsána',Overena_S:'Ověřena',Zapsal_S:'Zapsal',DatZap_S:'Datum zápisu',Skupina_S:'Skupina',Urcil_S:'Určil',DatZm_S:'Datum změny',Fond_S:'Fond'} as const;
 export interface SourceChoice {recordId:string;sourceSha256:string;rowHash:string;typedKey:Record<string,unknown>;code:string;label:string|null;groupingCode:string|null}
@@ -136,7 +137,38 @@ export function scopedApi(catalogId: number, token: string) {
             ||response.headers.get('Location')!==itemPath(created.id))throw new Error('Invalid creation receipt');
         return {value:{item:created,origin:'MES_CREATED',requestId:body.requestId,replayed:body.replayed},etag:tag(response,created.version)};
     }
+    async function cloneResult(path:string,requestId:string,signal:AbortSignal,init?:RequestInit){
+        const {body,response}=await read(path,signal,init);const created=item(body.item);
+        if(body.requestId!==uuid(requestId).toLowerCase()||typeof body.replayed!=='boolean'||!body.copied||typeof body.copied!=='object'
+            ||response.headers.get('Cache-Control')!=='no-store'||(init&&response.headers.get('Location')!==itemPath(created.id)))throw new Error('Invalid clone receipt');
+        return {value:{item:created,clonedFromItemId:integer(body.clonedFromItemId),requestId:body.requestId,replayed:body.replayed,copied:body.copied},etag:tag(response,created.version)};
+    }
     return {
+        professionalHistory:async(id:number,signal:AbortSignal)=>{
+            const {body,response}=await read(`${itemPath(id)}/professional-records/history`,signal);
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_OWNED_MUSEUM_HISTORY_NOT_USER_AUDIT'||!Array.isArray(body.items)||body.items.length>1000||response.headers.get('Cache-Control')!=='no-store')throw new Error('Invalid museum history contract');
+            const items:MuseumHistoryRow[]=body.items.map((v:any)=>{if(!['REVISION','RESTORATION','LOAN'].includes(v.eventType)||(v.eventDate!==null&&!/^\d{4}-\d{2}-\d{2}$/.test(v.eventDate)))throw new Error('Unclassified museum event');return {id:integer(v.id),eventType:v.eventType,eventDate:nullable(v.eventDate),description:nullable(v.description)};});
+            if(new Set(items.map((v:{id:number})=>v.id)).size!==items.length)throw new Error('Duplicate history identity');return {items,etag:tag(response,body.itemVersion)};
+        },
+        cloneItem:async(id:number,requestId:string,etag:string,input:{title:string;inventoryNumber:string},signal:AbortSignal)=>{
+            if(Object.keys(input).length!==2||Object.keys(input).some(k=>!['title','inventoryNumber'].includes(k)))throw new Error('Invalid clone fields');
+            for(const key of ['title','inventoryNumber'] as const)if(typeof input[key]!=='string'||!input[key].trim()||input[key].includes('\0')||input[key].length>(key==='title'?4096:255))throw new Error('Vyplňte název a nové inventární číslo.');
+            return cloneResult(`${itemPath(id)}/clone`,requestId,signal,{method:'POST',headers:{'If-Match':strongTag(etag),'Idempotency-Key':uuid(requestId)},body:JSON.stringify(input)});
+        },
+        cloneOutcome:(requestId:string,signal:AbortSignal)=>cloneResult(`${root}/clone-requests/${uuid(requestId)}`,requestId,signal),
+        cloneOrigin:async(id:number,signal:AbortSignal)=>{
+            const response=await request(`${itemPath(id)}/clone-origin`,signal);
+            if(response.headers.get('Cache-Control')!=='no-store')throw new Error('Invalid cache policy');if(response.status===204)return null;
+            const b=exactJson(await response.text());if(integer(b.catalogId)!==catalogId||integer(b.itemId)!==id||typeof b.createdAt!=='string'||Number.isNaN(Date.parse(b.createdAt))||!b.copied||b.sourceEvidence?.semantics!=='CLONED_READ_ONLY_SOURCE_EVIDENCE_NOT_CURRENT_ASSERTIONS')throw new Error('Invalid clone origin');
+            return {catalogId,itemId:id,itemVersion:version(b.itemVersion),clonedFromItemId:integer(b.clonedFromItemId),createdBy:integer(b.createdBy),createdAt:b.createdAt,copied:b.copied,etag:tag(response,b.itemVersion)};
+        },
+        professionalRecords:async(id:number,signal:AbortSignal)=>{
+            const {body,response}=await read(`${itemPath(id)}/professional-records`,signal);
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_OWNED_RECORDS_NOT_SOURCE'||!Array.isArray(body.items)||body.items.length>1000||response.headers.get('Cache-Control')!=='no-store')throw new Error('Invalid current record contract');
+            const items=body.items.map((r:any)=>{if(!['DOCUMENTATION','CLASSIFICATION','DETERMINATION','DEACCESSION','MANIPULATION','ACTION','ISO','ORIGIN','MATERIAL_TECHNIQUE','BIBLIOGRAPHY'].includes(r.kind)||!r.payload||typeof r.payload!=='object'||Array.isArray(r.payload))throw new Error('Invalid professional record');
+                return {id:integer(r.id),kind:r.kind as import('../../lib/api').MuseumRecordKind,dictionaryId:r.dictionaryId===null?null:integer(r.dictionaryId),partyId:r.partyId===null?null:integer(r.partyId),payload:r.payload,materialDictionaryId:r.materialDictionaryId===null?null:integer(r.materialDictionaryId),techniqueDictionaryId:r.techniqueDictionaryId===null?null:integer(r.techniqueDictionaryId),sourceTable:null,sourceKey:null,legacyData:null};});
+            if(new Set(items.map((r:{id:number})=>r.id)).size!==items.length)throw new Error('Duplicate professional identity');return {items,etag:tag(response,body.itemVersion)};
+        },
         dictionaryMetadata:async(type:'MATERIAL'|'TECHNIQUE',signal:AbortSignal)=>{
             const {body,response}=await read(`${base}/dictionaries/${type}`,signal);
             if(body.type!==type||body.ownership!=='CATALOG_CREATED_ONLY'||body.parentSupport!=='EXPLICIT_SAME_TYPE'||!Array.isArray(body.operations)||!body.operations.includes('read')||response.headers.get('Cache-Control')!=='no-store')throw new Error('Unsupported dictionary contract');

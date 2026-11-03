@@ -1,3 +1,7 @@
+import OwnedHistory from '../features/catalog/OwnedHistory';
+import CloneOrigin from '../features/catalog/CloneOrigin';
+import {originalItemHref} from '../features/catalog/originalAdapter';
+import {originalCanClone} from '../features/catalog/originalClone';
 import MaterialBindings from '../features/catalog/MaterialBindings';
 import CreationOrigin from '../features/catalog/CreationOrigin';
 import {originalCanCreate,originalCreationFields,createOriginalItem,originalCreationOutcome,applyOriginalCreationBoundary,CreationValidationError} from '../features/catalog/originalCreate';
@@ -1243,7 +1247,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 type="outlined"
                                 color="primary"
                                 size="s"
-                                disabled={originalIntegrationEnabled()} title="Klonování je vypnuté" onClick={() => setCloneModalOpen(true)}
+                                data-scoped-navigation="true" disabled={originalIntegrationEnabled()&&!originalCanClone()} title="Nezávislé klonování podle katalogového oprávnění" onClick={() => setCloneModalOpen(true)}
                             >
                                 📋 Klonovat
                             </GovButton>
@@ -2452,7 +2456,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     <p>Změnil v DEMUS: {form.legacyData._cloneSourceHistory.legacyUpdatedBy || '—'}</p>
     <p>Datum změny: {form.legacyData._cloneSourceHistory.legacyUpdatedAt || '—'}</p>
 </div>}
-<DemusLegacyDataView legacyData={form.legacyData} /></div>}
+<DemusLegacyDataView unavailableMessage={originalIntegrationEnabled()?'Soukromý raw archiv není součástí tohoto pohledu. Dostupné zdrojové hodnoty a lineage jsou v příslušných oddělených sekcích; nejde o tvrzení, že historie neexistuje.':undefined} legacyData={form.legacyData} /></div>}
                             {museumSubTab === 'iso' && (
                                 <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="iso" onSave={handleSectionSave} />
                             )}
@@ -2460,7 +2464,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             {museumSubTab === 'demus' && (
                                 <div className="space-y-4">
                                     {id && !isViewMode && <DemusSourceIdentity itemId={Number(id)}/>}
-                                    <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="history" onSave={handleSectionSave} />
+                                    {originalIntegrationEnabled()&&id&&<><CloneOrigin itemId={Number(id)}/><OwnedHistory itemId={Number(id)}/></>}<MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="history" onSave={handleSectionSave} />
                                     <div className="p-4 bg-gray-50 border border-gray-200 rounded space-y-4">
                                         {form.legacyData?._cloneSourceHistory && <div className="text-sm" aria-label="Historické údaje originálu">
     <p>Historické údaje originálu (současný klon má vlastní audit):</p>
@@ -2469,7 +2473,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     <p>Změnil v DEMUS: {form.legacyData._cloneSourceHistory.legacyUpdatedBy || '—'}</p>
     <p>Datum změny: {form.legacyData._cloneSourceHistory.legacyUpdatedAt || '—'}</p>
 </div>}
-<DemusLegacyDataView legacyData={form.legacyData} />
+<DemusLegacyDataView unavailableMessage={originalIntegrationEnabled()?'Soukromý raw archiv není součástí tohoto pohledu. Dostupné zdrojové hodnoty a lineage jsou v příslušných oddělených sekcích; nejde o tvrzení, že historie neexistuje.':undefined} legacyData={form.legacyData} />
                                     </div>
                                 </div>
                             )}
@@ -2723,7 +2727,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                     onSuccess={(cloned: any) => {
                         setCloneModalOpen(false);
                         if (cloned?.id) {
-                            navigate(`/admin/items/edit/${cloned.id}`, { state: { fromSearch: location.state?.fromSearch } });
+                            navigate(originalIntegrationEnabled()?originalItemHref(cloned.id):`/admin/items/edit/${cloned.id}`, { state: { fromSearch: location.state?.fromSearch } });
                         }
                     }}
                 />

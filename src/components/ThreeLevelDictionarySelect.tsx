@@ -26,9 +26,10 @@ function findPath(nodes: Node[], id: number|string | null, path: Node[] = []): N
     }
     return [];
 }
-export default function ThreeLevelDictionarySelect({ type, label, value, historicalValue, onChange, readOnly = false, allowEmpty = true, scoped = false, scopedValue, onScopedChange }: {
+export default function ThreeLevelDictionarySelect({ type, label, value, historicalValue, onChange, readOnly = false, allowEmpty = true, scoped = false, scopedValue, onScopedChange, unavailableReason }: {
     type: 'MATERIAL' | 'TECHNIQUE'; label: string; value: number | null; scoped?:boolean; scopedValue?:string|null; onScopedChange?:(id:string|null)=>void;
     historicalValue?: string | null; readOnly?: boolean; allowEmpty?: boolean;
+    unavailableReason?:string;
     onChange: (id: number | null, choice?: Choice) => void;
 }) {
     const [preview,setPreview]=useState<string|null>(null);
@@ -40,6 +41,7 @@ export default function ThreeLevelDictionarySelect({ type, label, value, histori
     const [revision, setRevision] = useState(0);
     const [query, setQuery] = useState('');
     useEffect(() => {
+        if(unavailableReason){setNodes([]);setLoading(false);setError('');return;}
         let alive = true;const cancel=new AbortController();setPreview(null);
         const clear=()=>{setNodes([]);setPreview(null);setError('Katalog nebo přihlášení se změnily. Zdrojový výběr byl uzavřen.');};
         scopedSignal?.addEventListener('abort',clear,{once:true});
@@ -48,7 +50,7 @@ export default function ThreeLevelDictionarySelect({ type, label, value, histori
             .catch(e => { if (alive) setError(e instanceof Error ? e.message : 'Načtení číselníku selhalo'); })
             .finally(() => { if (alive) setLoading(false); });
         return () => { alive = false;cancel.abort();scopedSignal?.removeEventListener('abort',clear); };
-    }, [type, revision,scoped,scopedSignal]);
+    }, [type, revision,scoped,scopedSignal,unavailableReason]);
     useEffect(() => { setQuery(''); }, [type, value]);
     const path = useMemo(() => findPath(nodes, selectedValue), [nodes, selectedValue]);
     const unknown = selectedValue != null && (!path.length || path.length > 3);
@@ -61,7 +63,7 @@ export default function ThreeLevelDictionarySelect({ type, label, value, histori
         if(scoped){const id=node?String(node.id):null;if(onScopedChange)onScopedChange(id);else setPreview(id);return;}
         onChange(node?.id as number ?? null, node ? { id: node.id as number, label: node.label, rawLabel: node.label, code: node.code } : undefined);
     };
-    return <fieldset className="space-y-2" disabled={readOnly}>
+    return <fieldset className="space-y-2" disabled={readOnly||!!unavailableReason}>
         <legend className="text-sm font-semibold text-gray-700">{label}</legend>
         {!loading && !error && !unknown && path.length > 0 && <p aria-label={`Vybraná cesta: ${label}`} className="text-sm font-medium text-[#00204a]">{path.map(node => node.label).join(' › ')}</p>}
         {!loading && !error && !unknown && path.length > 0 && path.length < 3 && !path[path.length - 1].children?.length && <p className="text-xs text-gray-600">Tato položka nemá další úroveň v dostupném číselníku. Chybějící zařazení se nedoplňuje automaticky.</p>}
@@ -69,7 +71,8 @@ export default function ThreeLevelDictionarySelect({ type, label, value, histori
         {error && <div role="alert">{error} <button type="button" onClick={() => {
             invalidateHierarchy(type); setRevision(current => current + 1);
         }}>Zkusit znovu</button></div>}
-        {!loading && !error && !nodes.length && <p className="text-xs">Číselník zatím nemá položky. Uložené údaje zůstávají zachované.</p>}
+        {unavailableReason&&<p role="status">{unavailableReason}</p>}
+        {!unavailableReason && !loading && !error && !nodes.length && <p className="text-xs">Číselník zatím nemá položky. Uložené údaje zůstávají zachované.</p>}
         {historicalValue && <p className="text-xs">{scoped?'Současný kurátorský text':'Původní text'}: {historicalValue}{!scoped&&value == null ? ' (zatím nepřiřazeno v číselníku)' : ''}</p>}
         {!historicalValue && value == null && <p className="text-xs">{scoped?'Současný text není vyplněn; vazba předmětu není ověřena.':'Nevyplněno'}</p>}
         {!loading && !error && unknown && <p role="status">Stávající vazba #{value} nemá dostupnou tříúrovňovou cestu. Zůstává zachována.</p>}

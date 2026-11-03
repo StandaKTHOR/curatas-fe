@@ -1,3 +1,4 @@
+import {originalCanClone} from '../features/catalog/originalClone';
 import {originalCanEdit,originalEditHref} from '../features/catalog/originalEdit';
 import {originalCanCreate} from '../features/catalog/originalCreate';
 import {originalIntegrationEnabled,originalItemHref,originalSession} from '../features/catalog/originalAdapter';
@@ -396,7 +397,7 @@ export default function AdminItems() {
                                 <button type="button" aria-label="Upravit předmět" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Současná odborná sekce podle oprávnění" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(item.id,'professional'):`/admin/items/edit/${item.id}`,{state:{fromSearch:location.search,catalogIds:(data?.content||[]).map((v:any)=>v.id),returnPath:'/admin/items'}})}><FaEdit/></button>
                                 <button type="button" aria-label="Tisk štítku" disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => handlePrint(item.id)}><FaPrint/></button>
                                 <button type="button" aria-label="Tisk muzejní karty" title="Tisk muzejní karty" onClick={() => setCardPrintModal({isOpen:true,item})}><FaIdCard/></button>
-                                <button type="button" aria-label="Klonovat předmět" disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => setCloneModal({isOpen:true,item})}><FaCopy/></button>
+                                <button type="button" aria-label="Klonovat předmět" disabled={originalIntegrationEnabled()&&!originalCanClone()} title="Nezávislé klonování podle katalogového oprávnění" onClick={() => setCloneModal({isOpen:true,item})}><FaCopy/></button>
                                 <button type="button" aria-label="Vyřadit z evidence" disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => setDeaccessionModal({isOpen:true,item})}><FaTrash/></button>
                             </td>
                         </tr>)}</tbody>
@@ -493,7 +494,7 @@ export default function AdminItems() {
                         setCloneModal({ isOpen: false, item: null });
                         loadData();
                         if (cloned?.id) {
-                            navigate(`/admin/items/edit/${cloned.id}`, { state: { fromSearch: location.search } });
+                            navigate(originalIntegrationEnabled()?originalItemHref(cloned.id):`/admin/items/edit/${cloned.id}`, { state: { fromSearch: location.search } });
                         }
                     }}
                 />

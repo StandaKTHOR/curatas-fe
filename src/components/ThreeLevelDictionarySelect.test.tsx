@@ -11,6 +11,10 @@ const tree = [
     { id: 4, code: null, label: 'Test root B', children: [] },
 ];
 beforeEach(() => { vi.resetAllMocks(); invalidateHierarchy(); vi.mocked(getDictionaryTree).mockResolvedValue(tree); });
+it('retains the original control but makes no legacy lookup for an unsupported identity namespace',()=>{
+ render(<ThreeLevelDictionarySelect type="MATERIAL" label="Materiál" value={7} readOnly unavailableReason="Původní vazba není katalogové UUID." onChange={vi.fn()}/>);
+ expect(screen.getByText('Původní vazba není katalogové UUID.')).toHaveAttribute('role','status');expect(getDictionaryTree).not.toHaveBeenCalled();expect(screen.queryByText('Číselník zatím nemá položky. Uložené údaje zůstávají zachované.')).toBeNull();expect(screen.getByLabelText('Materiál — úroveň 1')).toBeDisabled();
+});
 function Editor({ initial = 3 }: { initial?: number | null }) {
     const [id, setId] = useState<number | null>(initial);
     return <><ThreeLevelDictionarySelect type="MATERIAL" label="Materiál" value={id} historicalValue="Neznámý původní text" onChange={setId}/>
