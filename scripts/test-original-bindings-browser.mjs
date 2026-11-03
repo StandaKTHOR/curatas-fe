@@ -52,7 +52,8 @@ async function rasterDifference(page,a,b){return page.evaluate(async([left,right
 },[a.toString('base64'),b.toString('base64')]);}
 try{
  modern=await server(input.frontend,input.port,true);old=await server(input.baseline,0);
- browser=await chromium.launch({headless:true,args:['--disable-gpu']});
+ const installedBrowser=['C:/Program Files/Google/Chrome/Application/chrome.exe','C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(p=>fs.existsSync(p));
+ browser=await chromium.launch({...(installedBrowser?{executablePath:installedBrowser}:{}),headless:true,args:['--disable-gpu']});
  const context=await browser.newContext({viewport:{width:1366,height:900},reducedMotion:'reduce'});
  await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
  p=await context.newPage();p.setDefaultTimeout(12000);p.on('pageerror',e=>errors.push(e.message));
