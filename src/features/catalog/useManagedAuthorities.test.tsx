@@ -9,7 +9,7 @@ beforeEach(()=>{refs=[];writes=[];vi.stubEnv('VITE_MANAGED_AUTHORITIES_ENABLED',
  if(init.method==='POST'&&url.includes('/dictionaries/')){const v=JSON.parse(init.body);writes.push({path:url,value:v});return reply({id,catalogId:71,type:'FUND',version:0,...v});}
  if(init.method==='PUT'){writes.push({path:url,tag:init.headers['If-Match']});refs=[{id,type:'FUND',parentId:null,code:'N',label:'Český nový fond'}];return reply({id:3,catalogId:71,version:1,title:null,inventoryNumber:'G',accessionNumber:null},'"1"');}
  if(url.includes('/references'))return reply({catalogId:71,itemId:Number(url.split('/items/')[1].split('/')[0]),itemVersion:0,items:refs});
- if(url.includes('/values'))return reply({items:refs.map(v=>({...v,catalogId:71,version:0})),nextAfterId:null});
+ if(url.includes('/values'))return reply({items:refs.filter(v=>v.type===url.split('/dictionaries/')[1].split('/')[0]).map(v=>({...v,catalogId:71,version:0})),nextAfterId:null});
  const type=url.split('/dictionaries/')[1];return reply({type,ownership:'CATALOG_CREATED_ONLY',parentSupport:'EXPLICIT_SAME_TYPE',operations:['read','create','update']});
 }));});
 afterEach(()=>{cleanup();bindOriginalCatalog(null,null);vi.unstubAllGlobals();vi.unstubAllEnvs();});

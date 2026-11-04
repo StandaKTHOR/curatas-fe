@@ -9,7 +9,7 @@ export function useHistoricalRows(itemId:number|undefined,table:HistoricalTable|
  const [state,setState]=useState<State|null>(null);
  const life=useRef<{key:string;controller:AbortController;pending:boolean}|null>(null);
  async function load(after=''){
-  const owned=life.current;if(!scope||!key||!table||!itemId||!owned||owned.key!==key||owned.pending||signal?.aborted)return;
+  const owned=life.current;if(!scope||!key||! table||!itemId||!owned||owned.key!==key||owned.pending||signal?.aborted)return;
   owned.pending=true;setState(old=>old?.key===key?{...old,pending:true}:old);
   try{
    const requestSignal=AbortSignal.any([scope.signal,owned.controller.signal]);

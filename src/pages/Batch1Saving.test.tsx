@@ -13,7 +13,7 @@ vi.mock('../lib/api', async original => ({...await original<typeof import('../li
 const historical=vi.hoisted(()=>({data:null as any}));
 vi.mock('../features/catalog/useOriginalHistoricalData',async original=>({...await original<typeof import('../features/catalog/useOriginalHistoricalData')>(),useOriginalHistoricalData:()=>historical.data}));
 const fullHistory=vi.hoisted(()=>({data:null as any}));
-vi.mock('../features/catalog/useHistoricalRows',async original=>({...await original<typeof import('../features/catalog/useHistoricalRows')>(),useHistoricalRows:(_id:number,table:string)=>({enabled:table==='Sbirky'&&!!fullHistory.data,page:table==='Sbirky'?fullHistory.data:null,more:()=>{}})}));
+vi.mock('../features/catalog/useHistoricalRows',async original=>({...await original<typeof import('../features/catalog/useHistoricalRows')>(),useHistoricalRows:(_id:number,table:string)=>({enabled: table==='Sbirky'&&!!fullHistory.data,page:table==='Sbirky'?fullHistory.data:null,more:()=>{}})}));
 let saved: any;
 let version: number;
 const museum = () => ({itemId:7,records:[],legacyArchived:saved.legacyArchived});
