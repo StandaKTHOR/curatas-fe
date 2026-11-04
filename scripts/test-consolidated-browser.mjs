@@ -127,6 +127,11 @@ try{
   checks.push({name:'original-dialog-independent-clone-detail-reload-source-tabs-lineage',pass:true,cloneId});
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:input.output+'/generated-clone-mobile.png',fullPage:true});
  }
+ await page.setViewportSize({width:1366,height:900});
+ await page.goto(base+'/admin/items?catalog=1&q='+encodeURIComponent('GEN-00042/Ž')+'&sortField=inventoryNumber&sortDirection=asc&page=0');
+ const filtered=page.getByRole('table',{name:'Sbírky — tabulkové zobrazení'});await filtered.getByRole('button',{name:'GEN-00042/Ž',exact:true}).waitFor();await expect(filtered.locator('tbody tr')).toHaveCount(1);
+ await filtered.getByRole('button',{name:'GEN-00042/Ž',exact:true}).click();await page.waitForURL('**/admin/items/view/'+id+'?catalog=1');await page.getByRole('button',{name:'← Zpět na seznam',exact:true}).click();await filtered.waitFor();
+ const returned=new URL(page.url()).searchParams;if(returned.get('q')!=='GEN-00042/Ž'||returned.get('sortField')!=='inventoryNumber'||returned.get('sortDirection')!=='asc'||returned.get('page')!=='0')throw Error('Filtered list return lost search/sort/page');await expect(filtered.locator('tbody tr')).toHaveCount(1);checks.push({name:'actual-filter-sort-single-row-detail-and-return-preserves-query-page',pass:true});
  await page.getByRole('button',{name:'Odhlásit se',exact:true}).click();await login('gen-manager');
  if(await page.getByRole('button',{name:'Nový předmět',exact:true}).isEnabled())throw Error('Reader can create');
  await page.goto(base+'/admin/items/new?catalog=1');if(await page.getByRole('button',{name:'Uložit',exact:true}).isEnabled())throw Error('Direct route bypasses create permission');checks.push({name:'reader-and-direct-route-read-only',pass:true});
