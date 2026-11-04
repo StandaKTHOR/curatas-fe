@@ -62,6 +62,7 @@ def main():
     for name in ['foundation-proof.json', 'public-assets.json', 'native-test-summary.json', 'frontend-tests-final.json', 'lint.log', 'typecheck.log', 'frontend-release-helper-tests.log']:
         shutil.copyfile(EVIDENCE/name, output/'verification'/name)
     shutil.copyfile(ROOT/'artifacts/uat-design-guard.json', output/'verification/uat-design-guard.json')
+    shutil.copyfile(ROOT.parent.parent/'batch23-verification/release/artifact-receipt.json', output/'verification/original-public-UAT-release-receipt.json')
     image_output = output/'verification/generated-browser'
     image_output.mkdir()
     for path in candidates[0].parent.iterdir():

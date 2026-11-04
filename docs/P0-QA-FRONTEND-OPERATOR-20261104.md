@@ -8,6 +8,7 @@ Read-only existing-platform checks (AlmaLinux; no service restart):
 
 ```bash
 cat /etc/os-release
+python3 -c 'import hashlib,ctypes; assert hasattr(hashlib,"file_digest"); assert hasattr(ctypes.CDLL(None),"renameat2")'
 systemctl --version
 httpd -V
 httpd -S
@@ -21,11 +22,11 @@ curl --fail --silent --show-error http://127.0.0.1:8085/actuator/health
 
 No apachectl wrapper, a2ensite or Debian paths. Health alone is not acceptance. No PostgreSQL command, migration or credential is required. A symlink live root, unexpected ownership/labels, changed content or different filesystem makes the helper STOP; review rather than improvise an overwrite.
 
-After copying ZIP and its .sha256 file manually to the QA app server, become root and use a **new** root-owned directory under /opt/mes-qa/frontend-candidates (never /tmp). Substitute the exact versioned ZIP filename from the delivery. Requirements: existing Python3 (hashlib.file_digest available), unzip, coreutils, restorecon; the server is already installed. No Node/Maven/application rebuild is needed.
+Have the human operator copy the ZIP and its .sha256 file to /root/mes-qa-incoming on the QA app server. Become root and use a **new** root-owned directory under /opt/mes-qa/frontend-candidates (never /tmp). Requirements: existing Python3 (hashlib.file_digest available), unzip, coreutils, restorecon; the server is already installed. No Node/Maven/application rebuild is needed.
 
 ```bash
 sudo -i
-cd /path/where/operator/copied/package
+cd /root/mes-qa-incoming
 sha256sum -c mes-qa-original-uat-20261104-REPLACE.zip.sha256
 install -d -m 0755 /opt/mes-qa/frontend-candidates
 # Set this to the literal releaseId in the supplied BUILD.json/ZIP filename.
