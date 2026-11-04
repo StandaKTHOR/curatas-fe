@@ -109,6 +109,10 @@ def main():
     source_root = FE.parent.parent/'demus-history-20261104/evidence'
     for name in ['source-schema-audit.json','source-coverage.json']:
         copy(source_root/name,output/'verification'/name)
+    for name in ['archived-reference-result.json','archived-n1-result.json']:
+        proofs=sorted(EVIDENCE.glob('auth-generated-*/'+name),key=lambda p:p.stat().st_mtime,reverse=True)
+        require(proofs and read(proofs[0]).get('liveQaVerified') is False,'Current bounded archive proof required: '+name)
+        copy(proofs[0],output/'verification'/name)
     coverage = read(source_root/'source-coverage.json')
     with (output/'verification/DEMUS-FIELD-MATRIX.csv').open('x',encoding='utf-8-sig',newline='') as f:
         writer=csv.writer(f);writer.writerow(['table','field','type','tab','coverageStatus','proofLimit'])
@@ -133,7 +137,7 @@ def main():
     for path in browsers[0].parent.iterdir():
         if path.name=='browser-result.json' or path.name.startswith('generated-') and path.suffix=='.png':
             copy(path,output/'verification/generated-browser'/path.name)
-    write(output/'BUILD.json',{'kind':'MES_QA_CONSOLIDATED_V58_CANDIDATE','releaseId':release,'frontendCommit':fc,'backendCommit':bc,'originalUatCommit':prior.BASELINE,'schemaBefore':48,'schemaAfter':58,'operationalContract':'QA_V58_INTEGRATED','modules':['DEMUS_HISTORY_V1','CURRENT_FLAGS_AND_AUDIT_NOTE','SCOPED_FEEDBACK'],'frontendTests':tests['numPassedTests'],'nativeTestGroups':groups,'testNote':'Native groups may overlap; skips are not passes. Browser uses actual HTTP and isolated generated PG fixtures. Archival excerpts are not live QA proof.','designChecks':75,'cssSha256':CSS,'liveQaVerified':False,'remoteDeploymentPerformed':False,'requiresSeparateMigrationGrantDeploymentApproval':True,'rollback':'Atomic FE restore; V48 backend requires separately approved DB recovery after V58. See OPERATOR.md.','migrations':migration_receipt})
+    write(output/'BUILD.json',{'kind':'MES_QA_CONSOLIDATED_V58_CANDIDATE','releaseId':release,'frontendCommit':fc,'backendCommit':bc,'originalUatCommit':prior.BASELINE,'schemaBefore':48,'schemaAfter':58,'operationalContract':'QA_V58_INTEGRATED','modules':['DEMUS_HISTORY_V1','CURRENT_FLAGS_AND_AUDIT_NOTE','SCOPED_FEEDBACK'],'frontendTests':tests['numPassedTests'],'nativeTestGroups':groups,'testNote':'Native groups may overlap; skips are not passes. Browser uses actual HTTP and isolated generated PG fixtures. Archival excerpts are not live QA proof.','designChecks':75,'cssSha256':CSS,'liveQaVerified':False,'remoteDeploymentPerformed':False,'requiresSeparateMigrationGrantDeploymentApproval':True,'rollback':'Atomic FE restore; V48 backend requires separately approved DB recovery after V58. See OPERATOR.md.','migrations':migration_receipt,'changedFilesFrontend':git(FE,'diff','--name-only',prior.BASELINE,fc).splitlines(),'changedFilesBackend':git(BE,'diff','--name-only','8c1f976729a7a0371b7e0a0447f26912221142e3',bc).splitlines()})
     manifest(output,[p for p in output.rglob('*') if p.is_file()],output/'SHA256SUMS')
     full=archive(output,output.with_suffix('.zip'))
     frontend=archive(sub,output.parent/(release+'-frontend.zip'))
@@ -145,6 +149,7 @@ def main():
         shutil.copytree(output/name,be_output/name)
     for name in ['BUILD.json','OPERATOR.md']:
         copy(output/name,be_output/name)
+    (be_output/'STANDALONE.txt').write_text('Prefer the coordinated ZIP. This backend artifact requires the exact paired frontend ZIP from the release receipt. On the operator machine, unpack that frontend ZIP into frontend-update/ under this release directory before following OPERATOR.md. Never activate the frontend against an unchanged V48 backend. No operation is automatic.\n',encoding='utf-8')
     manifest(be_output,[p for p in be_output.rglob('*') if p.is_file()],be_output/'SHA256SUMS')
     backend=archive(be_output,be_output.with_suffix('.zip'))
     receipt={'releaseId':release,'coordinated':full,'frontend':frontend,'backend':backend,'jar':{'path':str(output/'backend/mes-qa.jar'),'sha256':sha(output/'backend/mes-qa.jar')},'frontendCommit':fc,'backendCommit':bc,'qaVerified':False}
