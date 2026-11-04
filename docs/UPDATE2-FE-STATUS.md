@@ -55,3 +55,8 @@ Follow-up: P0-QA-HEADER-CORRECTION-20261104.md records the operator-confirmed HT
 Final delivery decision: no Apache patch/reload is required or shipped. Installer does not call restorecon or any relabel/policy command; label checks are read-only and fail closed. Native application evidence remains the prior9/9 generated tests because production application files are unchanged; this follow-up reruns frontend492 tests and the8 Linux installer regressions.
 
 Source-preservation audit: all94 production source files from prior QA FE f7311d6 are retained; production source has zero changes relative to60265 (test files excluded). Final packaging also enforces byte-identical112 compiled/public frontend files excluding qa-build.json. This preserves existing developed functionality; it does not change the explicitly incomplete scoped contracts listed in the acceptance matrix.
+
+
+## 4 November 2026 — DEMUS presentation carry-forward
+
+The sealed B9 payload and its historical test counts above are unchanged archives, not descriptions of this completion working tree. The operator-deployed8759528d34b3 header fix and subsequent read-only historical form correction are carried forward here without removing completion functionality. See QA-DEMUS-FORM-20261104.md for exact field/source semantics, all20-tab availability, and the separate B9-line frontend-only hotfix delivery. This branch retains its typed sourcePlus reader and current write authorization. No CSS or migrations changed. Current test/build logs are under evidence/demus-continuation-*; live QA and real8,155-record acceptance remain operator-only.
