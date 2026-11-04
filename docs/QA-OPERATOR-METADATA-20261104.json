@@ -1,0 +1,13 @@
+{
+  "provenance": "Human operator report in this conversation; authenticated Brave over existing HTTPS/local SSH forwarding. Raw body/DTO and Headers.get screenshot not supplied.",
+  "path": "/api/v2/catalogs/1/items/curator-page",
+  "request": {"catalogId": 1, "page": 0, "size": 50, "sort": "inventoryNumber,asc"},
+  "httpStatus": 200,
+  "bodyMetadata": {"catalogId": 1, "page": 0, "pageSize": 50, "sort": "inventoryNumber,asc", "semantics": "CURRENT_ASSERTIONS_AND_SEPARATELY_LABELLED_SOURCE_INVENTORY", "totalElements": 8155, "totalPages": 164, "itemsLength": 50},
+  "cacheControlFields": ["no-store", "no-store"],
+  "metadataComparison": "All supplied identity/paging/sort/semantics/count values match; full body array/DTO checks pending.",
+  "browserCombinationEvidence": "Existing local real Chromium+HTTP/native-PG regression observed Headers.get= no-store, no-store; actual QA Headers.get can be captured with the diagnostic helper.",
+  "actualDtoAudit": "MISSING",
+  "realDataWorkflowAcceptance": "NOT VERIFIED",
+  "remoteDeploymentPerformed": false
+}

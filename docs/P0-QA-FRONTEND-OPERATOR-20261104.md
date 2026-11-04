@@ -2,7 +2,7 @@
 
 Codex performs no server operation. This release contains only frontend static assets, evidence and operator helpers. Existing /opt/mes-qa/current, backend8085, DB, V1–V48, credentials, tunnel, TLS, SELinux policy and all vhosts remain unchanged. Public UAT443/8082 and experimental8443/8084 are outside the installer. The new static tree receives only the existing default file labels via restorecon; no policy/fcontext change is made.
 
-Release is a candidate: exact failing QA operand and real Poláková/visual acceptance are NOT VERIFIED. First collect the current failing response with operator/capture-curator-response.js in already authenticated browser DevTools. Click existing Načíst znovu; save only printed metadata. Do not share HAR, cookies, Authorization or passwords. If a body/DTO/catalog/sort discrepancy is found beyond the covered contract, stop activation and resolve it; do not weaken validation.
+Release is a candidate: duplicate no-store fields and matching8155-item metadata are operator-confirmed; actual DTO/Poláková rendering/visual acceptance are NOT VERIFIED. First collect the current failing response with operator/capture-curator-response.js in already authenticated browser DevTools. Click existing Načíst znovu; save only printed metadata and dtoAudit results. Never paste actual item values. See P0-QA-HEADER-CORRECTION-20261104.md for the optional QA-only Apache normalization; the frontend deployment helper never applies it. Do not share HAR, cookies, Authorization or passwords. If a body/DTO/catalog/sort discrepancy is found beyond the covered contract, stop activation and resolve it; do not weaken validation.
 
 Read-only existing-platform checks (AlmaLinux; no service restart):
 

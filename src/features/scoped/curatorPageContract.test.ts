@@ -27,6 +27,15 @@ const row=()=>({item,current:Object.fromEntries(['authorText','datingText','mate
 beforeEach(()=>{vi.stubEnv('VITE_LOCAL_AUTH_ENABLED','false');});
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
 describe('API transport and item schema',()=>{
+ it('accepts the operator-reported QA metadata and duplicate headers with 50 distinct GENERATED DTOs',async()=>{
+  const items=Array.from({length:50},(_,index)=>({...row(),item:{...item,id:1000+index,catalogId:1}}));
+  const fetch=vi.fn().mockResolvedValue(response({catalogId:1,page:0,pageSize:50,sort:'inventoryNumber,asc',semantics:curatorPageSemantics,totalElements:8155,totalPages:164,items},'no-store, no-store'));
+  vi.stubGlobal('fetch',fetch);
+  const page=await scopedApi(1,'generated-test-session').curatorPage(0,50,'inventoryNumber,asc',{},new AbortController().signal);
+  expect(page).toMatchObject({page:0,pageSize:50,totalElements:8155,totalPages:164,hasMore:true});
+  expect(page.items).toHaveLength(50);
+  expect(fetch.mock.calls[0][0]).toContain('catalogs/1/items/curator-page?page=0&size=50&sort=inventoryNumber%2Casc');
+ });
  const load=()=>scopedApi(71,'generated-test-session').curatorPage(0,50,'inventoryNumber,asc',{},new AbortController().signal);
  const response=(body:unknown,cache='no-store')=>new Response(JSON.stringify(body),{headers:headers(cache)});
  it('validates actual DTOs through numeric-token parsing and combined cache fields',async()=>{

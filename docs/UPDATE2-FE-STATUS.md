@@ -1,6 +1,6 @@
 # Original public UAT → QA frontend status — 4 November 2026
 
-PARTIALLY DONE locally. Actual failed QA operand, real8155-item evidence and populated visual/runtime acceptance remain NOT VERIFIED. No remote deployment was performed.
+PARTIALLY DONE locally. QA metadata now report8155 items and duplicate no-store fields; the old header incompatibility is identified. Actual DTOs, real item rendering and populated visual/runtime acceptance remain NOT VERIFIED. No remote deployment was performed.
 
 Implemented from original public UAT db026f32cf3d0f9cf28ea6271e29c9d0443febc3 in branch codex/uat-public-integration-20261104, separate FE worktree under curatas-be/scratch/uat-public-integration-20261104/fe. Public certificate-verified assets match the preserved BATCH23 receipt for this commit. Eight existing QA feature commits were ported from original UAT, preserving histories and prior checkouts. Current build/source commit is recorded in the release BUILD.json and frontend/qa-build.json, avoiding a self-referential commit ID in this document.
 
@@ -8,13 +8,13 @@ Original React frame, red header, navigation, catalog selector, evidence toolbar
 
 Corrected strict private-response handling for valid combined no-store directives; preserved all DTO/identity/metadata/totals/authorization checks; added field-specific contract errors. Original evidence/search frame now survives errors with explicit retry and unknown count rather than a blank page or false empty result. Header presentation derives from existing catalog-admin capabilities without global role/account changes. QA dictionary removal is explicitly disabled and blocked before transport because existing runtime grants prohibit DELETE.
 
-Confirmed locally: the old validator rejects no-store, no-store; actual native HTTP/PG response through a test-only header-combining proxy loads the original table after correction. This is a reproduction, not the missing actual QA response. Exact request/response metadata collection helper is included. Public createdAt sort is unsupported by the existing scoped whitelist and remains explicitly reported, not silently mapped.
+Confirmed locally: the old validator rejects no-store, no-store; actual native HTTP/PG response through a test-only header-combining proxy loads the original table after correction. The operator has since confirmed the same duplicate fields on real HTTP200 QA and supplied matching metadata. Actual item DTOs remain missing. Exact request/response metadata collection helper is included. Public createdAt sort is unsupported by the existing scoped whitelist and remains explicitly reported, not silently mapped.
 
 Validation evidence in verification/ and the integration evidence directory:
 
 - TypeScript check: PASS.
 - Repository lint command: PASS, zero errors,23 existing warnings. An exploratory eslint-dot command included files outside repository lint scope and failed; the required repository command was then run successfully. No rules were disabled.
-- Final full frontend tests:483/483 PASS, zero failures; report frontend-tests-final.json is authoritative.
+- Full frontend tests:489/489 PASS, zero failures (frontend-tests-final.json); prior sealed60265 release had483/483 PASS. Follow-up adds actual-reported metadata and private DTO-diagnostic regressions without changing production React/CSS.
 - Original design protection:75/75 build checks,74/74 source-only checks; exact compiled CSS hash plus component literal-class and20-tab-order regression. This is not a claim of full visual parity.
 - Native isolated PostgreSQL17/actual HTTP + browser run:9/9 passed (7 curator contract tests, original local-auth/restricted-runtime create/browser, generated three-level reference/media browser).
 - Enhanced all20/proxy browser exposed a missing SELECT in the older v9 local test fixture. The pinned actual QA runtime.sql already includes this exact SELECT. Only that disposable fixture was aligned; no backend production source/JAR or QA grant changed. Browser assertions now fail on any unexpected HTTP error rather than accepting a merely navigable tab.
@@ -28,4 +28,6 @@ No backend application change or new JAR is required for the reproduced contract
 
 The new versioned ZIP is frontend-only and requires manual operator verification/activation. Its helper prepares a separate static directory, validates checksums/ownership/labels, retains old immutable assets and atomically exchanges directories with complete rollback. /opt/mes-qa/current and backend8085 stay intact. Read P0-QA-FRONTEND-OPERATOR-20261104.md for exact release-substituted commands and acceptance checklist. Original releases are retained; nothing is overwritten in place or deleted.
 
-Outstanding: actual failing QA response/operand; actual qa.admin capabilities; real Poláková load/search/sort/filter/page/detail/edit acceptance; populated equal-state visual comparison; unsupported approved-contract gaps (advanced AST, legacy export/worksets/lifecycle/deletion/media writes, unestablished historical authorities, full museum templates/help), and actual deployed server branch label. No claim of DONE until applicable operator/museum acceptance closes these items.
+Outstanding: actual item DTO audit after the identified header incompatibility; actual qa.admin capabilities; real Poláková load/search/sort/filter/page/detail/edit acceptance; populated equal-state visual comparison; unsupported approved-contract gaps (advanced AST, legacy export/worksets/lifecycle/deletion/media writes, unestablished historical authorities, full museum templates/help), and actual deployed server branch label. No claim of DONE until applicable operator/museum acceptance closes these items.
+
+Follow-up: P0-QA-HEADER-CORRECTION-20261104.md records the operator-confirmed HTTP metadata, exact metadata comparisons, optional one-line QA Apache normalization and remaining real-data acceptance. The release packager enforces production frontend payload identity with60265, excluding source/build metadata. Enhanced capture audits all DTO rows on a captured page without logging their values.
