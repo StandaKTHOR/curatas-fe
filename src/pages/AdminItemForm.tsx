@@ -396,6 +396,8 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         type: string;
         title: string;
         targetField: string;
+        scopeSignal?:AbortSignal;
+        itemKey?:string;
     }>({
         isOpen: false,
         type: '',
@@ -404,7 +406,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     });
 
     const openDictModal = (type: string, title: string, targetField: string) => {
-        setDictModal({ isOpen: true, type, title, targetField });
+        setDictModal({ isOpen: true, type, title, targetField, scopeSignal:originalIntegrationEnabled()?originalSession().signal:undefined,itemKey:id??'new' });
     };
 
     const handleDictCreated = (newItem: { id?: number; code: string; label: string; type: string }) => {
@@ -608,7 +610,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         // Scoped current fields use scalar control names, not legacy aggregate payload keys
         // such as authors/materials. The original guard must see those actual edits too.
         const keys=originalIntegrationEnabled()
-            ? (!id?['title','inventoryNumber','accessionNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']:['title','inventoryNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']).concat('locationBuilding','locationRoom','permanentLocation','dimensions',...additionalFields)
+            ? (!id?['title','inventoryNumber','accessionNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']:['title','inventoryNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']).concat('locationBuilding','locationRoom','permanentLocation','dimensions',...additionalFields,...(!id?['_managedAuthorities']:[]))
             : Object.keys(buildItemPayload({})).filter(key => key !== 'auditComment' && key !== 'clearFund').concat('authorRole');
         const clone = Object.fromEntries(keys.sort().map(key => [key, f[key] ?? '']));
         return JSON.stringify(clone, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
@@ -660,8 +662,13 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         navigate(`${returnPath}${returnSearch}`);
     };
 
-    const managed=useManagedAuthorities(id?Number(id):undefined,editSessionRef.current?.etag,isViewMode||loading||scopedNeedsReload||hasUnsavedChanges(),etag=>{const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();});
-    const managedSelect=(type:import('../features/scoped/scopedApi').ManagedDictionaryType,controlId:string,fallback='— bez současné autority —')=><select id={controlId} data-scoped-reference-editor aria-label={`Současná autorita ${type}`} className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]" disabled={isViewMode||loading||scopedNeedsReload||hasUnsavedChanges()||managed.busy||!managed.ready||!originalCanEdit('professional')} value={managed.value(type)} onChange={e=>managed.select(type,e.target.value)}><option value="" disabled={!!managed.value(type)}>{fallback}</option>{managed.choices(type).map(v=><option key={v.id} value={v.id}>{v.label}</option>)}</select>;
+    const managed=useManagedAuthorities(id?Number(id):undefined,editSessionRef.current?.etag,isViewMode||loading||scopedNeedsReload||!!id&&hasUnsavedChanges()||!id&&!originalCanCreate(),etag=>{const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();},!id?{values:form._managedAuthorities??{},onChange:values=>setForm((previous:any)=>({...previous,_managedAuthorities:values}))}:undefined);
+    const managedSelect=(type:import('../features/scoped/scopedApi').ManagedDictionaryType,controlId:string,fallback='— bez současné autority —')=><div data-scoped-reference-editor>
+        <input aria-label={`Hledat současnou autoritu ${type}`} maxLength={100} value={managed.query(type)} onChange={e=>managed.search(type,e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();}}}/>
+        <select id={controlId} aria-label={`Současná autorita ${type}`} className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]" disabled={isViewMode||loading||scopedNeedsReload||!!id&&hasUnsavedChanges()||managed.busy||!managed.ready||!originalCanEdit('professional')||!id&&!originalCanCreate()} value={managed.value(type)} onChange={e=>managed.select(type,e.target.value)}><option value="" disabled={!!managed.value(type)}>{fallback}</option>{managed.value(type)&&!managed.choices(type).some(v=>v.id===managed.value(type))&&<option value={managed.value(type)}>{managed.label(type)}</option>}{managed.choices(type).map(v=><option key={v.id} value={v.id}>{v.label}</option>)}</select>
+        {managed.hasPrevious(type)&&<button type="button" onClick={()=>managed.previous(type)}>Předchozí autority {type}</button>}{managed.hasNext(type)&&<button type="button" onClick={()=>managed.next(type)}>Další autority {type}</button>}
+    </div>;
+    const managedField=(type:import('../features/scoped/scopedApi').ManagedDictionaryType,label:string)=><div className="space-y-1"><label htmlFor={'current-'+type}>{label} — současná autorita</label><button type="button" data-scoped-reference-editor disabled={isViewMode||!managed.canCreate(type)} onClick={()=>openDictModal(type,label,'current-'+type)}>+ Nová autorita {label}</button>{managedSelect(type,'current-'+type)}</div>;
     const historical = useOriginalHistoricalData(id?Number(id):undefined,editSessionRef.current,originalIntegrationEnabled());
     const historicalFields=historical?.fields;
     const historicalFund=currentBinding(historical?.authorities.fundRecordId)||historicalControl(null,historicalFields?.Fond_S,true).value;
@@ -1476,6 +1483,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                         </div>
                         {originalIntegrationEnabled()&&<div className="space-y-1"><label htmlFor="current-other-number">Současné jiné číslo (kurátorský údaj)</label><input id="current-other-number" type="text" readOnly={isViewMode||!originalCanEdit('inventory')} value={form.otherNumber??''} onChange={e=>setForm((prev:any)=>({...prev,otherNumber:e.target.value}))}/>{form.otherNumber===null&&<span>NULL</span>}</div>}
                         {originalIntegrationEnabled()&&!isViewMode&&scopedDomain==='professional'&&<label className="space-y-1">Současný typ — volný text<input id="current-object-type" type="text" value={form.objectType??''} placeholder={historicalType||undefined} onChange={e=>setForm((prev:any)=>({...prev,objectType:e.target.value}))}/></label>}
+                        {!id&&managed.enabled&&managedField('SUBJECT','Námět')}
                         {/* FOND A PODSBÍRKA DLE CITEM – NEZÁVISLÁ POLA */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
@@ -2268,7 +2276,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                     <div className="flex items-center gap-2">
                                         <button
                                             type="button"
-                                            onClick={() => setForm({ ...form, countryOfOrigin: 'Česká republika' })}
+                                            onClick={() => managed.enabled?managed.search('COUNTRY','Česká republika'):setForm({ ...form, countryOfOrigin: 'Česká republika' })}
                                             className="text-[10px] font-bold text-[#00204a] bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 transition-colors"
                                             title="Rychlý výběr: Česká republika"
                                         >
@@ -2334,6 +2342,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             </div>
                         </div>
 
+                        {managed.enabled&&managedField('COUNTRY','Země původu')}
                         {/* Nálezová lokalita (DEMUS: Nalez) */}
                         <div className="space-y-1">
                             <label htmlFor="findingLocality">Místo nálezu / nálezová lokalita (Nalez)</label>
@@ -2345,6 +2354,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             />
                         </div>
 
+                        {managed.enabled&&managedField('LOCALITY','Lokalita')}
                         {/* Lokalita a fond */}
                         <div className="pt-2 border-t border-gray-200">
                             <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider mb-2">
@@ -2487,6 +2497,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             {museumSubTab === 'documentation' && (
                                 <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="documentation" onSave={handleSectionSave} />
                             )}
+                            {museumSubTab === 'classification' && <>{managed.enabled&&<>{managedField('CLASSIFICATION','Klasifikace')}{managedField('GROUP','Skupina')}</>}</>}
                             {museumSubTab === 'classification' && (
                                 <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="classification" onSave={handleSectionSave} />
                             )}
@@ -2795,7 +2806,8 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
 
             {/* INLINE MODÁL PRO ČÍSELNÍK (+ Nová země, + Nový materiál...) */}
             <AddDictionaryModal
-                onCreate={managed.enabled?managed.create:undefined}
+                key={`${dictModal.type}:${dictModal.itemKey??''}`}
+                onCreate={managed.enabled?async input=>{if(input.type!==dictModal.type||dictModal.scopeSignal!==originalSession().signal||dictModal.scopeSignal?.aborted||dictModal.itemKey!==(id??'new'))throw new Error('Kontext dialogu se změnil. Zavřete jej a otevřete u správného předmětu a číselníku.');await managed.create(input);}:undefined}
                 isOpen={dictModal.isOpen}
                 dictionaryType={dictModal.type}
                 dictionaryTitle={dictModal.title}

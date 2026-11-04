@@ -46,7 +46,7 @@ export interface Versioned<T> { value: T; etag: string }
 export interface CurrentDimensionWrite {id:number|null;type:string;value:string;unit:string|null;note:string|null}
 export type CurrentSectionWrites=Partial<Record<'inventory'|'professional'|'storage'|'additional'|'item',Record<string,string|null>>> & {dimensions?:{rows:CurrentDimensionWrite[]}};
 export interface LifecycleState {active:boolean|null;published:boolean|null;status:string|null;deaccession:{reason:string;deaccessionDate:string;documentNumber:string|null}|null}
-export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string|null;professional?:Record<string,string|null>;inventory?:{quantity:number|null;otherNumber:string|null};storage?:Record<string,string|null>;additional?:Record<string,string|null>}
+export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string|null;professional?:Record<string,string|null>;inventory?:{quantity:number|null;otherNumber:string|null};storage?:Record<string,string|null>;additional?:Record<string,string|null>;references?:Partial<Record<ManagedDictionaryType,string>>}
 export interface Creation {item:Item;origin:'MES_CREATED';requestId:string;replayed:boolean}
 export interface ItemOrigin {catalogId:number;itemId:number;itemVersion:string;origin:'MES_CREATED'|'UNRECORDED';createdAt:string|null;createdBy?:string|null;createdBySubject?:string|null}
 export interface SourceSummary {itemVersion:string;sourceQuantity:string|null;sourceAccessionFlag:boolean|null;sourceSeries?:string|null;sourceDepartmentCode?:string|null;sourceCollectionCode?:string|null;sourceRecordedBy?:string|null;sourceDeterminedBy?:string|null}
@@ -280,8 +280,9 @@ export function scopedApi(catalogId: number, token: string) {
             if(body.type!==type||body.ownership!=='CATALOG_CREATED_ONLY'||body.parentSupport!=='EXPLICIT_SAME_TYPE'||!Array.isArray(body.operations)||!body.operations.includes('read')||!hasPrivateNoStore(response.headers))throw new Error('Unsupported dictionary contract');
             return body;
         },
-        dictionaryValues:async(type:ManagedDictionaryType,signal:AbortSignal,after?:string):Promise<Page<DictionaryValue,string>>=>{
-            const {body,response}=await read(`${base}/dictionaries/${type}/values?limit=100${after?'&afterId='+uuid(after):''}`,signal);
+        dictionaryValues:async(type:ManagedDictionaryType,signal:AbortSignal,after?:string,q='',branch?:{parentId?:string;rootsOnly?:boolean}):Promise<Page<DictionaryValue,string>>=>{
+            if(q.length>100||q.includes('\0'))throw new Error('Vyhledávání číselníku má nejvýše100 znaků.');
+            const {body,response}=await read(`${base}/dictionaries/${type}/values?limit=100${after?'&afterId='+uuid(after):''}${q?'&q='+encodeURIComponent(q):''}${branch?.parentId?'&parentId='+uuid(branch.parentId):branch?.rootsOnly?'&rootsOnly=true':''}`,signal);
             if(!Array.isArray(body.items)||body.items.length>100||!hasPrivateNoStore(response.headers))throw new Error('Invalid dictionary page');
             const items:DictionaryValue[]=body.items.map((v:any)=>{if(integer(v.catalogId)!==catalogId||v.type!==type)throw new Error('Foreign dictionary value');return {id:uuid(v.id),catalogId,type,label:text(v.label),code:nullable(v.code),parentId:v.parentId===null?null:uuid(v.parentId),version:version(v.version)};});
             if(items.some((v,i)=>v.id<=(after??'')||i>0&&v.id<=items[i-1].id))throw new Error('Unordered dictionary page');
@@ -463,7 +464,8 @@ export function scopedApi(catalogId: number, token: string) {
                 sourceSeries:nullable(body.sourceSeries??null),sourceDepartmentCode:nullable(body.sourceDepartmentCode??null),sourceCollectionCode:nullable(body.sourceCollectionCode??null),sourceRecordedBy:nullable(body.sourceRecordedBy??null),sourceDeterminedBy:nullable(body.sourceDeterminedBy??null)};
         },
         createItem:async(requestId:string,input:NewItemFields,signal:AbortSignal)=>{
-            if(Object.keys(input).length<3||Object.keys(input).some(k=>!['title','inventoryNumber','accessionNumber','professional','inventory','storage','additional'].includes(k)))throw new Error('Invalid creation fields');
+            if(Object.keys(input).length<3||Object.keys(input).some(k=>!['title','inventoryNumber','accessionNumber','professional','inventory','storage','additional','references'].includes(k)))throw new Error('Invalid creation fields');
+            if(input.references)for(const [type,id] of Object.entries(input.references)){if(!managedDictionaryTypes.includes(type as ManagedDictionaryType)||['MATERIAL','TECHNIQUE'].includes(type))throw new Error('Invalid creation authority type');uuid(id);}
             for(const key of ['title','inventoryNumber','accessionNumber'] as const){const value=input[key];if(key==='accessionNumber'&&value===null)continue;if(typeof value!=='string'||!value.trim()||value.length>(key==='title'?4096:255)||value.includes('\0'))throw new Error('Invalid creation field');}
             if(input.professional){const keys=curatorSectionFields.professional;if(Object.keys(input.professional).length!==keys.length||keys.some(k=>!Object.hasOwn(input.professional!,k))||Object.values(input.professional).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid creation professional fields');}
             if(input.additional){const keys=curatorSectionFields.additional;if(Object.keys(input.additional).length!==keys.length||keys.some(k=>!Object.hasOwn(input.additional!,k))||Object.values(input.additional).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid additional fields');}

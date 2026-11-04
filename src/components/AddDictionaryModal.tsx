@@ -37,7 +37,7 @@ export default function AddDictionaryModal({
             setLoading(false);
             setParentId(initialValue?.parentId??'');
         }
-    }, [isOpen]);
+    }, [isOpen,dictionaryType]);
 
     if (!isOpen) return null;
 

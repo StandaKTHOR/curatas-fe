@@ -1,3 +1,4 @@
+import PagedThreeLevelDictionarySelect from './PagedThreeLevelDictionarySelect';
 import AddDictionaryModal from './AddDictionaryModal';
 import {managedAuthoritiesEnabled} from '../features/catalog/useManagedAuthorities';
 import {originalDictionaryTree} from '../features/catalog/originalDictionary';
@@ -28,7 +29,7 @@ function findPath(nodes: Node[], id: number|string | null, path: Node[] = []): N
     }
     return [];
 }
-export default function ThreeLevelDictionarySelect({ type, label, value, historicalValue, onChange, readOnly = false, allowEmpty = true, scoped = false, scopedValue, onScopedChange, unavailableReason,historicalSource=false }: {
+function OriginalThreeLevelDictionarySelect({ type, label, value, historicalValue, onChange, readOnly = false, allowEmpty = true, scoped = false, scopedValue, onScopedChange, unavailableReason,historicalSource=false }: {
     type: 'MATERIAL' | 'TECHNIQUE'; label: string; value: number | null; scoped?:boolean; scopedValue?:string|null; onScopedChange?:(id:string|null)=>void;
     historicalValue?: string | null;historicalSource?:boolean; readOnly?: boolean; allowEmpty?: boolean;
     unavailableReason?:string;
@@ -106,3 +107,5 @@ export default function ThreeLevelDictionarySelect({ type, label, value, histori
         {!allowEmpty && <p className="text-xs text-gray-600">Stávající vazbu lze změnit. Její úplné odebrání tento záznam zatím nepodporuje; úprava jiných polí ji zachová.</p>}
     </fieldset>;
 }
+
+export default function ThreeLevelDictionarySelect(props:Parameters<typeof OriginalThreeLevelDictionarySelect>[0]){return props.scoped&&managedAuthoritiesEnabled()?<PagedThreeLevelDictionarySelect {...props}/>:<OriginalThreeLevelDictionarySelect {...props}/>;}

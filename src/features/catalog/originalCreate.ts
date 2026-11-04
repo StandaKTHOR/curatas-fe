@@ -25,6 +25,7 @@ export function originalCreationFields(form:Record<string,unknown>):NewItemField
   const entered=additionalFields.filter(k=>k!=='coordinateSystem'&&form[k]!==null&&form[k]!==undefined&&form[k]!=='');
   if(entered.length)fields.additional=Object.fromEntries(additionalFields.map(k=>[k,k==='coordinateSystem'&&form[k]==='WGS-84'&&!entered.some(v=>v==='latitude'||v==='longitude')?null:form[k]===null||form[k]===undefined||form[k]===''?null:String(form[k])]));
  }
+ if(originalCanEdit('professional')&&form._managedAuthorities&&typeof form._managedAuthorities==='object')fields.references={...form._managedAuthorities as NewItemFields['references']};
  return fields;
 }
 export async function createOriginalItem(requestId:string,form:Record<string,unknown>){
@@ -40,6 +41,7 @@ export function applyOriginalCreationBoundary(root:HTMLElement|null,enabled:bool
   if(node.hasAttribute('data-scoped-navigation'))return;
   const approvedProfessional=originalCanEdit('professional')&&[...additionalFields,'current-object-type','description','author','datingText','originPlace','current-material-text','current-technique-text','materialNote'].includes(node.id);
   const approvedInventory=originalCanEdit('inventory')&&['quantity','current-other-number','locationBuilding','locationRoom','permanentLocation'].includes(node.id);
+  if(node.closest('[data-scoped-reference-editor]')&&originalCanEdit('professional'))return;
   const active=enabled&&(['title','accessionNumber'].includes(node.id)||node.getAttribute('aria-label')?.startsWith('Inventární číslo:')||node.hasAttribute('data-scoped-save')||approvedProfessional||approvedInventory);
   (node as HTMLInputElement).disabled=!active;if(active)node.removeAttribute('disabled');else node.setAttribute('disabled','');
  });
