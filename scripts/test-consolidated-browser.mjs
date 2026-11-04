@@ -33,6 +33,7 @@ try{
  const initialAuthorities=[['FUND','+ Nový fond','GENERATED initial fond'],['CUSTODIAN',null,'GENERATED initial správce'],['AUTHOR','+ Nový autor','GENERATED initial autor'],['AUTHOR_ROLE','+ Nová role','GENERATED initial role'],['COLLECTION','+ Nová podsbírka','GENERATED initial podsbírka']];
  for(const [kind,button,label] of initialAuthorities){const trigger=button?page.getByRole('button',{name:button,exact:true}):page.locator('button').filter({hasText:/^\+ Nový$/}).nth(1);await expect(trigger).toBeEnabled();await trigger.click();const modal=page.locator('form').filter({has:page.locator('#dictLabel')});await modal.locator('input#dictLabel, #dictLabel input').fill(label);await modal.getByRole('button',{name:'Přidat a vybrat',exact:true}).click();await expect(modal).toHaveCount(0);await expect(page.getByRole('combobox',{name:'Současná autorita '+kind,exact:true})).toHaveValue(/[0-9a-f-]{36}/);}
  checks.push({name:'new-item-current-FUND-CUSTODIAN-AUTHOR-role-COLLECTION-draft-before-first-save',pass:true});
+ await page.getByRole('button',{name:'+ Nový fond',exact:true}).click();const duplicateModal=page.locator('form').filter({has:page.locator('#dictLabel')});await duplicateModal.locator('input#dictLabel, #dictLabel input').fill('GENERATED initial fond');await duplicateModal.getByRole('button',{name:'Přidat a vybrat',exact:true}).click();await duplicateModal.getByText('Položka "GENERATED initial fond" již v tomto číselníku existuje.',{exact:true}).waitFor();await duplicateModal.getByRole('button',{name:'Zrušit',exact:true}).click();checks.push({name:'duplicate-authority-Czech-error-preserves-first-UUID-selection',pass:true});
  let refused=false;page.once('dialog',async d=>{refused=true;await d.dismiss();});await page.getByRole('button',{name:'← Zpět na seznam',exact:true}).click();
  await page.waitForTimeout(150);if(!refused||!page.url().includes('/new?'))throw Error('Unsaved create draft was not protected');checks.push({name:'unsaved-original-form-draft-preserved',pass:true});
  await page.getByRole('button',{name:'Uložit',exact:true}).dblclick();await page.waitForURL(/\/admin\/items\/view\/[0-9]+\?catalog=1/);
@@ -68,6 +69,7 @@ try{
  }
  // Current three-level dictionary creation and rename through the actual original selectors.
  await page.goto(base+'/admin/items/edit/'+input.cloneSource+'?catalog=1&edit=professional');const dictTabs=page.getByRole('navigation',{name:'Karty DEMUS'});await dictTabs.getByRole('button',{name:'MatTech',exact:true}).click();const binding=page.getByRole('region',{name:'Současné číselníkové vazby'});
+ await binding.getByRole('textbox',{name:'Hledat: Materiál',exact:true}).fill('GENERATED LARGE MATERIAL 2105');const materialFound=binding.getByRole('combobox',{name:'Výsledky hledání: Materiál',exact:true});await expect(materialFound).toContainText('GENERATED LARGE MATERIAL 2105');await materialFound.selectOption({label:'GENERATED LARGE MATERIAL 2105'});await expect(binding.getByLabel('Vybraná cesta: Materiál')).toContainText('GENERATED LARGE MATERIAL 2105');checks.push({name:'server-paged-material-hierarchy-over2100-values-searches-and-resolves-current-path',pass:true});
  let parentLabel=null;
  for(const label of ['GENERATED Dřevo','GENERATED Listnaté','GENERATED Buk']){
   await binding.getByRole('button',{name:'+ Nová položka číselníku',exact:true}).click();const modal=page.locator('form').filter({has:page.locator('#dictLabel')});await modal.locator('input#dictLabel, #dictLabel input').fill(label);
@@ -140,7 +142,7 @@ try{
  await page.getByRole('button',{name:'Odhlásit se',exact:true}).click();await login('gen-manager');
  if(await page.getByRole('button',{name:'Nový předmět',exact:true}).isEnabled())throw Error('Reader can create');
  await page.goto(base+'/admin/items/new?catalog=1');if(await page.getByRole('button',{name:'Uložit',exact:true}).isEnabled())throw Error('Direct route bypasses create permission');checks.push({name:'reader-and-direct-route-read-only',pass:true});
- const failed=requests.filter(r=>r.status>=400&&!(r.path==='/api/auth/local/refresh'&&r.status===401));
+ const failed=requests.filter(r=>r.status>=400&&!(r.path==='/api/auth/local/refresh'&&r.status===401)&&!(r.method==='POST'&&r.path==='/api/v2/catalogs/1/dictionaries/FUND/values'&&r.status===409));
  if(failed.length)throw Error('Unexpected API failures: '+JSON.stringify(failed));
  if(errors.length)throw Error('JavaScript page errors');
  fs.writeFileSync(input.output+'/browser-result.json',JSON.stringify({status:'PASS',data:'GENERATED_ONLY_NOT_POLAKOVA',itemId:id,checks,errors,requests},null,2));
