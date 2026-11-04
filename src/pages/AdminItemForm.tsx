@@ -1951,13 +1951,13 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                     {originalIntegrationEnabled()&&!isViewMode&&scopedDomain==='professional'&&<div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><label className="space-y-1">Současný materiál — volný text<input id="current-material-text" value={rootControl(form.material,'Material_S').value} placeholder={rootControl(form.material,'Material_S').placeholder} onChange={e=>setForm((prev:any)=>({...prev,material:e.target.value}))}/></label><label className="space-y-1">Současná technika — volný text<input id="current-technique-text" value={rootControl(form.technique,'Technika_S').value} placeholder={rootControl(form.technique,'Technika_S').placeholder} onChange={e=>setForm((prev:any)=>({...prev,technique:e.target.value}))}/></label></div>}
                         {/* Materiál a Technika */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál (Číselník)" scoped={originalIntegrationEnabled()} readOnly={isViewMode} historicalValue={form.material||historicalControl(null,rootText('Material_S'),true).value} value={form.materialDictionaryId ?? null}
+                            <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál (Číselník)" scoped={originalIntegrationEnabled()} readOnly={isViewMode} historicalValue={historicalControl(form.material,rootText('Material_S'),true).value} historicalSource={(!form.material||!String(form.material).trim())&&!!rootText('Material_S')} value={form.materialDictionaryId ?? null}
                                 onChange={dictionaryId => setForm((prev: any) => ({ ...prev, materialDictionaryId: dictionaryId }))} />
 
-                            <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika (Číselník)" scoped={originalIntegrationEnabled()} readOnly={isViewMode} historicalValue={form.technique||historicalControl(null,rootText('Technika_S'),true).value} value={form.techniqueDictionaryId ?? null}
+                            <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika (Číselník)" scoped={originalIntegrationEnabled()} readOnly={isViewMode} historicalValue={historicalControl(form.technique,rootText('Technika_S'),true).value} historicalSource={(!form.technique||!String(form.technique).trim())&&!!rootText('Technika_S')} value={form.techniqueDictionaryId ?? null}
                                 onChange={dictionaryId => setForm((prev: any) => ({ ...prev, techniqueDictionaryId: dictionaryId }))} />
                         </div>
-                        <p>Text materiálu: {form.material || '—'} · Text techniky: {form.technique || '—'}</p>
+                        <p>Text materiálu: {historicalControl(form.material,rootText('Material_S'),true).value || '—'} · Text techniky: {historicalControl(form.technique,rootText('Technika_S'),true).value || '—'}</p>
 
                         {/* Poznámka k materiálu a technice (DEMUS: PoznMT) */}
                         <div className="space-y-1">

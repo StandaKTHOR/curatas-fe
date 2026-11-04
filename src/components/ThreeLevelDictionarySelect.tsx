@@ -26,9 +26,9 @@ function findPath(nodes: Node[], id: number|string | null, path: Node[] = []): N
     }
     return [];
 }
-export default function ThreeLevelDictionarySelect({ type, label, value, historicalValue, onChange, readOnly = false, allowEmpty = true, scoped = false, scopedValue, onScopedChange, unavailableReason }: {
+export default function ThreeLevelDictionarySelect({ type, label, value, historicalValue, onChange, readOnly = false, allowEmpty = true, scoped = false, scopedValue, onScopedChange, unavailableReason,historicalSource=false }: {
     type: 'MATERIAL' | 'TECHNIQUE'; label: string; value: number | null; scoped?:boolean; scopedValue?:string|null; onScopedChange?:(id:string|null)=>void;
-    historicalValue?: string | null; readOnly?: boolean; allowEmpty?: boolean;
+    historicalValue?: string | null;historicalSource?:boolean; readOnly?: boolean; allowEmpty?: boolean;
     unavailableReason?:string;
     onChange: (id: number | null, choice?: Choice) => void;
 }) {
@@ -73,7 +73,7 @@ export default function ThreeLevelDictionarySelect({ type, label, value, histori
         }}>Zkusit znovu</button></div>}
         {unavailableReason&&<p role="status">{unavailableReason}</p>}
         {!unavailableReason && !loading && !error && !nodes.length && <p className="text-xs">Číselník zatím nemá položky. Uložené údaje zůstávají zachované.</p>}
-        {historicalValue && <p className="text-xs">{scoped?'Současný kurátorský text':'Původní text'}: {historicalValue}{!scoped&&value == null ? ' (zatím nepřiřazeno v číselníku)' : ''}</p>}
+        {historicalValue && <p className="text-xs">{historicalSource?'Původní text DEMUS':scoped?'Současný kurátorský text':'Původní text'}: {historicalValue}{!scoped&&value == null ? ' (zatím nepřiřazeno v číselníku)' : ''}</p>}
         {!historicalValue && value == null && <p className="text-xs">{scoped?'Současný text není vyplněn; vazba předmětu není ověřena.':'Nevyplněno'}</p>}
         {!loading && !error && unknown && <p role="status">Stávající vazba #{value} nemá dostupnou tříúrovňovou cestu. Zůstává zachována.</p>}
         <input data-scoped-read={scoped?true:undefined} aria-label={`Hledat: ${label}`} value={query} onChange={e => setQuery(e.target.value)}
@@ -92,7 +92,7 @@ export default function ThreeLevelDictionarySelect({ type, label, value, histori
                 </select>
             </label>;
         })}
-        <p className="text-xs text-gray-600">{scoped?(onScopedChange?'Výběr se uloží až tlačítkem Přidat vazbu. Současný text ani historický zdroj se nemění.':'Prohlížení katalogového číselníku: výběr je dočasný. Uložení nebo odebrání vazby předmětu je BLOCKED — scoped kontrakt vazby není dostupný. Současný text ani zdroj se nemění.'):'Vyberte dostupné úrovně od kořene. Změna nadřazené úrovně zruší výběr jejích potomků; údaje se uloží až po potvrzení formuláře.'}</p>
+        <p className="text-xs text-gray-600">{scoped?(onScopedChange?'Výběr se uloží až tlačítkem Přidat vazbu. Současný text ani historický zdroj se nemění.':'Prohlížení katalogového číselníku: výběr je dočasný. Pro přiřazení použijte část Současné číselníkové vazby. Současný text ani zdroj se nemění.'):'Vyberte dostupné úrovně od kořene. Změna nadřazené úrovně zruší výběr jejích potomků; údaje se uloží až po potvrzení formuláře.'}</p>
         {!allowEmpty && <p className="text-xs text-gray-600">Stávající vazbu lze změnit. Její úplné odebrání tento záznam zatím nepodporuje; úprava jiných polí ji zachová.</p>}
     </fieldset>;
 }
