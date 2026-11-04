@@ -10,7 +10,8 @@ import subprocess
 import sys
 import uuid
 
-TARGET = Path('/var/www/mes-green-20261104')
+TARGET_PATH = '/var/www/mes-green-20261104'
+TARGET = Path(TARGET_PATH)
 CSS='8aaf645251805d6da8174a0bb0a7d47ba6f0d855cdc3c8c30e91b027d964a5bc'
 def require(ok,message):
     if not ok:raise RuntimeError(message)
@@ -18,7 +19,7 @@ def sha(path):
     with path.open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
 def payload(bundle):
     metadata=json.loads((bundle/'BUILD.json').read_text(encoding='utf-8'))
-    require(metadata['kind']=='MES_GREEN_FRONTEND_STAGED_ONLY' and metadata['target']=={'frontend':str(TARGET),'backendPort':8086,'database':'mes_green_20261104','catalogId':1},'Pinned separate green target required')
+    require(metadata['kind']=='MES_GREEN_FRONTEND_STAGED_ONLY' and metadata['target']=={'frontend':TARGET_PATH,'backendPort':8086,'database':'mes_green_20261104','catalogId':1},'Pinned separate green target required')
     expected={}
     for line in (bundle/'FRONTEND.SHA256SUMS').read_text(encoding='utf-8').splitlines():
         digest,name=line.split('  ',1);p=Path(name)

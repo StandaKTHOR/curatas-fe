@@ -65,3 +65,8 @@ it.each(['title','current','source','inventory'])('rejects a JSON number masquer
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({...expected,totalElements:1,totalPages:1,semantics:curatorPageSemantics,items:[value]}),{headers:{'Cache-Control':'no-store, no-store'}})));
  await expect(scopedApi(71,'generated').curatorPage(0,50,'inventoryNumber,asc',{},new AbortController().signal)).rejects.toThrow('JSON type');
 });
+
+it.each([123,{AUTHOR:'only incomplete'},null])('rejects malformed current authority labels %j',async bad=>{
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({...expected,totalElements:1,totalPages:1,semantics:curatorPageSemantics,items:[{...row(),currentAuthorityLabels:bad}]}),{headers:headers()})));
+ await expect(scopedApi(71,'generated').curatorPage(0,50,'inventoryNumber,asc',{},new AbortController().signal)).rejects.toThrow();
+});

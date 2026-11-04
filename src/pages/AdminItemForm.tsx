@@ -1319,10 +1319,10 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 parentEtag={editSessionRef.current?.etag}
                 hasToolbar
                 fond={managed.label('FUND')||currentFundLabel}
-                predmet={managed.label('OBJECT_TYPE')||form.objectType}
+                predmet={form.objectType?.trim()?form.objectType:managed.label('OBJECT_TYPE')}
                 popis={form.description}
                 titul={form.title}
-                autor={managed.label('AUTHOR')||currentAuthor}
+                autor={currentAuthor?.trim()?currentAuthor:managed.label('AUTHOR')}
                 datace={currentDating}
                 inventoryNumber={form.inventoryNumber || form.accessionNumber}
                 quantity={form.quantity}

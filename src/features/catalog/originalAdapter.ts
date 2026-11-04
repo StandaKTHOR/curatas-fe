@@ -63,10 +63,10 @@ export async function originalDemusIdentity(id:number):Promise<import('../../lib
   sourceQuantity:count(summary.sourceQuantity),quantity:count(current.value.quantity)};
 }
 type CuratorRow=Awaited<ReturnType<ReturnType<typeof scopedApi>['curatorPage']>>['items'][number];
-const originalRow=(row:CuratorRow)=>({...row.item,...(row.lifecycle?{isActive:row.lifecycle.active,published:row.lifecycle.published,catalogingStatus:row.lifecycle.status}:{}),author:row.current.authorText,datingText:row.current.datingText,
-  material:row.current.materialText,technique:row.current.techniqueText,objectType:row.current.objectType,originPlace:row.current.originPlace,
+const originalRow=(row:CuratorRow)=>({...row.item,...(row.lifecycle?{isActive:row.lifecycle.active,published:row.lifecycle.published,catalogingStatus:row.lifecycle.status}:{}),author:row.current.authorText?.trim()?row.current.authorText:row.currentAuthorityLabels.AUTHOR??null,datingText:row.current.datingText,
+  material:row.current.materialText,technique:row.current.techniqueText,objectType:row.current.objectType?.trim()?row.current.objectType:row.currentAuthorityLabels.OBJECT_TYPE??null,originPlace:row.current.originPlace,
   currentAssertionState:row.currentPresent?'PRESENT':'ABSENT',quantity:row.currentInventory?.quantity===null||row.currentInventory?.quantity===undefined?null:Number(row.currentInventory.quantity),otherNumber:row.currentInventory?.otherNumber??null,sourceInventory:row.source,
-  subCollection:row.source.Podsb_S,fundLegacyCode:row.source.Fond_S,hasPhoto:row.hasPhoto,hasAttachment:row.hasAttachment});
+  subCollection:row.currentAuthorityLabels.COLLECTION??(row.source.Podsb_S===null?null:row.source.Podsb_S+' (DEMUS)'),currentAuthorityLabels:row.currentAuthorityLabels,fundLegacyCode:row.source.Fond_S,hasPhoto:row.hasPhoto,hasAttachment:row.hasAttachment});
 export async function originalList(params:Record<string,unknown>){
  const {api,signal}=originalSession();
  const {page=0,size=50,sortField='inventoryNumber',sortDirection='asc',...filters}=params;
