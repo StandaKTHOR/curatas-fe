@@ -1,3 +1,4 @@
+import ScopedItemAudit from '../features/catalog/ScopedItemAudit';
 import CurrentClassificationFlags from '../features/catalog/CurrentClassificationFlags';
 import {useManagedAuthorities} from '../features/catalog/useManagedAuthorities';
 import {originalPrintCardFields} from '../features/catalog/originalAdapter';
@@ -256,6 +257,15 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         setAuditSaving(true);
         setAuditSaveMessage(null);
         try {
+            if(originalIntegrationEnabled()&&import.meta.env.VITE_CURRENT_FLAGS_ENABLED==='true'){
+                const originalComment=form.auditComment;const comment=originalComment.trim();const {api,signal}=originalSession();const session=editSessionRef.current as any;
+                if(isViewMode||!originalCanEdit('professional')||!session?.scopedCurrent)throw new Error('Chybí oprávnění nebo původní verze pro auditní poznámku.');
+                session.busy=true;try{
+                const tag=await api.saveCuratorRecord(Number(id),'audit-note',session.etag,{note:comment},signal);const fresh=await api.curatorRecord(Number(id),'audit-note',signal);
+                if(fresh.etag!==tag||fresh.value.note!==comment)throw new Error('Zápis auditu proběhl, ale opětovné načtení nepotvrdilo jeho verzi. Obnovte audit před opakováním.');
+                if(signal.aborted||editSessionRef.current!==session)return;session.etag=tag;session.scopedCurrent.etag=tag;
+                setForm((prev:any)=>({...prev,auditComment:prev.auditComment===originalComment?'':prev.auditComment}));setAuditSaveMessage('Auditní záznam byl úspěšně uložen.');return;}finally{session.busy=false;}
+            }
             const comment = form.auditComment.trim();
             const payload = {auditComment: comment};
             await updateItem(Number(id), payload, editSessionRef.current);
@@ -2649,13 +2659,13 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             )}
                             {museumSubTab === 'audit' && (
                                 <div className="space-y-4">
-                                    <div className="p-4 bg-yellow-50/70 border-l-4 border-[#00204a] rounded space-y-3">
+                                    <div data-scoped-reference-editor={originalIntegrationEnabled()&&import.meta.env.VITE_CURRENT_FLAGS_ENABLED==='true'?true:undefined} className="p-4 bg-yellow-50/70 border-l-4 border-[#00204a] rounded space-y-3">
                                         <label htmlFor="auditComment">Zdůvodnění provedených změn (Auditní stopa) *</label>
                                         <p className="text-[11px] text-gray-500 italic">
                                             Při editaci sbírkového předmětu zadejte stručné zdůvodnění změny pro zachování auditní stopy.
                                         </p>
                                         <textarea
-                                            id="auditComment"
+                                            id="auditComment" readOnly={isViewMode||originalIntegrationEnabled()&&(!originalCanEdit('professional')||import.meta.env.VITE_CURRENT_FLAGS_ENABLED!=='true')}
                                             rows={3}
                                             className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#00204a]"
                                             value={form.auditComment || ''}
@@ -2678,7 +2688,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                     type="solid"
                                                     color="primary"
                                                     size="s"
-                                                    disabled={auditSaving || !form.auditComment?.trim()}
+                                                    disabled={auditSaving || isViewMode || !form.auditComment?.trim()||originalIntegrationEnabled()&&!originalCanEdit('professional')}
                                                     onClick={handleSaveAuditRecord}
                                                 >
                                                     {auditSaving ? 'Ukládám audit...' : 'Uložit auditní záznam'}
@@ -2687,6 +2697,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                         )}
                                     </div>
 
+                                    {id&&originalIntegrationEnabled()&&import.meta.env.VITE_CURRENT_FLAGS_ENABLED==='true'&&<ScopedItemAudit key={`${id}:${editSessionRef.current?.etag}`} itemId={Number(id)}/>}
                                     {/* Historie auditních událostí */}
                                     <div className="bg-white rounded border border-gray-200 overflow-hidden">
                                         <div className="bg-gray-50 border-b px-4 py-2">
