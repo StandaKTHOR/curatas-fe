@@ -35,10 +35,12 @@ export function itemFilterQuery(filters:ItemFilters):URLSearchParams {
     if(filters.quantityState==='NULL'&&(filters.quantityMin!==undefined||filters.quantityMax!==undefined))throw new Error('Prázdný počet nelze kombinovat s rozsahem.');
     return query;
 }
-export interface Dimension { id: number; itemId: number; catalogId: number; type: string; value: string | null; unit: string | null; createdInScopedApi: boolean }
+export interface Dimension { id: number; itemId: number; catalogId: number; type: string; value: string | null; unit: string | null; createdInScopedApi: boolean;note?:string|null }
 export interface Media { id: string; itemId: number; catalogId: number; kind: 'IMAGE' | 'ATTACHMENT'; name: string; mimeType: string; byteSize: number; variants: ('content' | 'thumbnail')[] }
 export interface DictionaryValue {id:string;catalogId:number;type:string;label:string;code:string|null;parentId:string|null;version:string}
 export interface Versioned<T> { value: T; etag: string }
+export interface CurrentDimensionWrite {id:number|null;type:string;value:string;unit:string|null;note:string|null}
+export type CurrentSectionWrites=Partial<Record<'inventory'|'professional'|'storage'|'item',Record<string,string|null>>> & {dimensions?:{rows:CurrentDimensionWrite[]}};
 export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string|null;professional?:Record<string,string|null>;inventory?:{quantity:number|null;otherNumber:string|null};storage?:Record<string,string|null>}
 export interface Creation {item:Item;origin:'MES_CREATED';requestId:string;replayed:boolean}
 export interface ItemOrigin {catalogId:number;itemId:number;itemVersion:string;origin:'MES_CREATED'|'UNRECORDED';createdAt:string|null;createdBy?:string|null;createdBySubject?:string|null}
@@ -105,7 +107,7 @@ export function scopedApi(catalogId: number, token: string) {
     function dimension(v: any, parent: number, id?: number): Dimension {
         if (integer(v.catalogId) !== catalogId || integer(v.itemId) !== parent || (id !== undefined && integer(v.id) !== id) || typeof v.createdInScopedApi !== 'boolean') throw new Error('Foreign dimension response');
         if (v.value !== null) decimal(text(v.value));
-        return { id: integer(v.id), catalogId, itemId: parent, type: text(v.type), value: nullable(v.value), unit: nullable(v.unit), createdInScopedApi: v.createdInScopedApi };
+        return { id: integer(v.id), catalogId, itemId: parent, type: text(v.type), value: nullable(v.value), unit: nullable(v.unit), createdInScopedApi: v.createdInScopedApi,...(Object.hasOwn(v,'note')?{note:nullable(v.note)}:{}) };
     }
     function media(v: any, parent: number, id?: string): Media {
         if (integer(v.catalogId) !== catalogId || integer(v.itemId) !== parent || (id !== undefined && uuid(v.id) !== id) || !['IMAGE', 'ATTACHMENT'].includes(v.kind)
@@ -314,10 +316,11 @@ export function scopedApi(catalogId: number, token: string) {
             const {body,response}=await read(itemPath(id)+'/curator-record/'+section,signal,{method:'PUT',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(value)});
             return body?.itemVersion!==undefined?tag(response,body.itemVersion):response.headers.get('ETag')||'';
         },
-        saveCuratorRecords:async(id:number,etag:string,input:Partial<Record<'inventory'|'professional'|'storage'|'item',Record<string,string|null>>>,signal:AbortSignal)=>{
-            const sections=Object.keys(input);if(!sections.length||sections.some(k=>!['inventory','professional','storage','item'].includes(k)))throw new Error('Invalid current sections');
-            const values:Record<string,Record<string,string|number|null>>={};
-            for(const section of sections as ('inventory'|'professional'|'storage'|'item')[]){
+        saveCuratorRecords:async(id:number,etag:string,input:CurrentSectionWrites,signal:AbortSignal)=>{
+            const sections=Object.keys(input);if(!sections.length||sections.some(k=>!['inventory','professional','storage','item','dimensions'].includes(k)))throw new Error('Invalid current sections');
+            const values:Record<string,any>={};
+            for(const section of sections as (keyof CurrentSectionWrites)[]){
+                if(section==='dimensions'){const rows=input.dimensions?.rows;if(!rows?.length||rows.length>20)throw new Error('Uložte jednu až dvacet změněných měr.');const ids=new Set<number>();for(const row of rows){if(Object.keys(row).length!==5||!['id','type','value','unit','note'].every(k=>Object.hasOwn(row,k))||row.id!==null&&(ids.has(integer(row.id))||!ids.add(row.id))||typeof row.type!=='string'||!row.type.trim()||row.type.length>255)throw new Error('Neplatná současná míra.');decimal(row.value);for(const key of ['unit','note'] as const)if(row[key]!==null&&(typeof row[key]!=='string'||row[key]!.includes('\0')||row[key]!.length>(key==='note'?50:255)))throw new Error('Poznámka má nejvýše50 znaků; jednotka nejvýše255.');}values.dimensions={rows};continue;}
                 const value=input[section]!;if(section==='item'){if(!value||!Object.keys(value).length||Object.keys(value).some(k=>!['title','inventoryNumber'].includes(k))||Object.values(value).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid inventory identity patch');values.item={...value};continue;}const fields=curatorSectionFields[section];
                 if(!value||Object.keys(value).length!==fields.length||fields.some(k=>!Object.hasOwn(value,k))||Object.values(value).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid current section fields');
                 values[section]={...value};

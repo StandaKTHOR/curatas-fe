@@ -8,7 +8,6 @@ import AuthorityAndRangeBindings from '../features/catalog/AuthorityAndRangeBind
 import CreationOrigin from '../features/catalog/CreationOrigin';
 import {originalCanCreate,originalCreationFields,createOriginalItem,originalCreationOutcome,applyOriginalCreationBoundary,CreationValidationError} from '../features/catalog/originalCreate';
 import {useOriginalMedia} from '../features/catalog/useOriginalMedia';
-import {useOriginalDimensions} from '../features/catalog/useOriginalDimensions';
 import {originalCanEdit,originalEditHref,saveOriginalCurrent,applyOriginalEditBoundary,type OriginalEditDomain} from '../features/catalog/originalEdit';
 import OriginalSourceBridge from '../features/catalog/OriginalSourceBridge';
 import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
@@ -219,7 +218,6 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     >('documentation');
 
     const scopedMedia=useOriginalMedia(Number(id),activeTab==='photos'||activeTab==='museum'&&museumSubTab==='attachments');
-    const scopedDimensions=useOriginalDimensions(Number(id),activeTab==='dimensions');
     const sourcePlus=useOriginalSourcePlus(Number(id),activeTab==='museum'&&museumSubTab==='plus');
     const [loading, setLoading] = useState(false);
     const [scopedNeedsReload,setScopedNeedsReload]=useState(false);
@@ -589,7 +587,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         // Scoped current fields use scalar control names, not legacy aggregate payload keys
         // such as authors/materials. The original guard must see those actual edits too.
         const keys=originalIntegrationEnabled()
-            ? (!id?['title','inventoryNumber','accessionNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']:['title','inventoryNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber'])
+            ? (!id?['title','inventoryNumber','accessionNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']:['title','inventoryNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']).concat('locationBuilding','locationRoom','permanentLocation','dimensions')
             : Object.keys(buildItemPayload({})).filter(key => key !== 'auditComment' && key !== 'clearFund').concat('authorRole');
         const clone = Object.fromEntries(keys.sort().map(key => [key, f[key] ?? '']));
         return JSON.stringify(clone, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
@@ -769,7 +767,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 unit: d.unit ?? '',
                                 note: d.note || '',
                                 sortOrder: d.sortOrder,
-                                legacyData: d.legacyData
+                                legacyData: d.legacyData,createdInScopedApi:d.createdInScopedApi
                             }))
                             : [],
                         auditComment: '',
@@ -1161,7 +1159,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         );
     }
 
-    const dimensionRows=originalIntegrationEnabled()?scopedDimensions.rows.map(row=>({...row,dimensionType:row.type,note:''})):form.dimensions;
+    const dimensionRows=form.dimensions;
     return (
         <div className="space-y-3 animate-in fade-in duration-300">
                 {/* HLAVIČKA FORMULÁŘE */}
@@ -1950,7 +1948,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 </div>)}
 
                 {activeTab === 'dimensions' && (<div className="space-y-4">
-                        {originalIntegrationEnabled()&&<>{scopedDimensions.busy&&<p role="status">Načítání současných opakovaných měr…</p>}{scopedDimensions.error&&<p role="alert">{scopedDimensions.error}</p>}{scopedDimensions.next&&<button data-scoped-read="true" type="button" disabled={scopedDimensions.busy} onClick={()=>void scopedDimensions.loadMore()}>Další současné míry</button>}<p>Scoped opakované míry jsou současné záznamy, oddělené od zdroje i přesného kurátorského měření. Zápis tohoto původního editoru včetně poznámky není napojen; hodnoty se nemění.</p></>}{/* FYZICKÉ ROZMĚRY & MÍRY */}
+                        {originalIntegrationEnabled()&&<p>Současné míry se ukládají hlavním tlačítkem Uložit společně s ostatními údaji. Historické míry zůstávají pouze pro čtení. Poznámka má nejvýše50 znaků.</p>}{/* FYZICKÉ ROZMĚRY & MÍRY */}
                         <div className="bg-gray-50 p-4 rounded border border-gray-200 space-y-3">
                             <div className="flex justify-between items-center">
                                 <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider">
@@ -1958,7 +1956,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 </h4>
                                 <button
                                     type="button"
-                                    onClick={addDimensionRow}
+                                    data-scoped-dimension="editable" onClick={addDimensionRow}
                                     className="px-2.5 py-1 bg-[#00204a] text-white text-xs font-bold rounded hover:bg-[#003366] transition-colors flex items-center gap-1"
                                 >
                                     <FaPlus size={10} /> Přidat rozměr
@@ -1989,7 +1987,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                     <p className="text-[11px] font-bold text-gray-600 uppercase">Opakovatelné rozměry (DEMUS Parita):</p>
                                     {dimensionRows.map((dim: any, idx: number) => (
                                         <div key={originalIntegrationEnabled()?dim.id:idx} className="flex items-center gap-2 bg-white p-2 rounded border border-gray-200 text-xs">
-                                            <select
+                                            <select data-scoped-dimension={!dim.id||dim.createdInScopedApi?'editable':'readonly'}
                                                 value={dim.dimensionType}
                                                 onChange={e => updateDimensionRow(idx, 'dimensionType', e.target.value)}
                                                 className="w-1/4 bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-700"
@@ -2005,7 +2003,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                 <option>Hmotnost</option>
                                                 <option>Jiné</option>
                                             </select>
-                                            <input
+                                            <input data-scoped-dimension={!dim.id||dim.createdInScopedApi?'editable':'readonly'}
                                                 type="number"
                                                 step="any"
                                                 placeholder="Hodnota"
@@ -2013,7 +2011,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                 onChange={e => updateDimensionRow(idx, 'value', e.target.value)}
                                                 className="w-1/4 bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-700"
                                             />
-                                            <select
+                                            <select data-scoped-dimension={!dim.id||dim.createdInScopedApi?'editable':'readonly'}
                                                 value={dim.unit}
                                                 onChange={e => updateDimensionRow(idx, 'unit', e.target.value)}
                                                 className="w-1/6 bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-700"
@@ -2025,7 +2023,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                 <option>g</option>
                                                 <option>kg</option>
                                             </select>
-                                            <input
+                                            <input data-scoped-dimension={!dim.id||dim.createdInScopedApi?'editable':'readonly'}
                                                 placeholder="Poznámka k míře..."
                                                 value={dim.note || ''}
                                                 onChange={e => updateDimensionRow(idx, 'note', e.target.value)}
@@ -2033,7 +2031,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                             />
                                             <button
                                                 type="button"
-                                                disabled={!!dim.legacyData} title={dim.legacyData ? 'Importovaný rozměr nelze odstranit' : 'Odebrat rozměr'} onClick={() => removeDimensionRow(idx)}
+                                                data-scoped-dimension={!dim.id?'editable':'readonly'} disabled={originalIntegrationEnabled()?!!dim.id:!!dim.legacyData} title={dim.legacyData ? 'Importovaný rozměr nelze odstranit' : 'Odebrat rozměr'} onClick={() => removeDimensionRow(idx)}
                                                 className="p-1.5 text-red-500 hover:text-red-700 rounded"
                                             >
                                                 <FaTrash size={12} />
