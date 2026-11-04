@@ -7,7 +7,7 @@ const metadata=(change:Record<string,unknown>={})=>({...expected,totalElements:0
 const headers=(value='no-store')=>new Headers({'Cache-Control':value});
 describe('private HTTP cache policy',()=>{
  it.each(['no-store',' no-store ','No-Store','no-store, no-store','no-cache, no-store, max-age=0, must-revalidate','private, no-store','extension="a,b", no-store'])('accepts %s without allowing storage',value=>expect(hasPrivateNoStore(headers(value))).toBe(true));
- it.each(['','no-cache','private','public','no-store, public','not-no-store','extension="no-store"','no-store="field"','no-store=true','no-store,','no-store, extension="open','nostore'])('rejects absent/invalid/weaker policy %s',value=>expect(hasPrivateNoStore(headers(value))).toBe(false));
+ it.each(['','no-cache','private','public','max-age=600','no-store, no-store, public, max-age=600','no-store, public','not-no-store','extension="no-store"','no-store="field"','no-store=true','no-store,','no-store, extension="open','nostore'])('rejects absent/invalid/weaker policy %s',value=>expect(hasPrivateNoStore(headers(value))).toBe(false));
  it('requires a cache header',()=>expect(hasPrivateNoStore(new Headers())).toBe(false));
 });
 describe('exact curator-page metadata',()=>{

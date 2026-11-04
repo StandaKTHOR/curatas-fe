@@ -84,7 +84,7 @@ class ReleaseTests(unittest.TestCase):
                     'target': {'frontend': str(live), 'catalog': 'POLAKOVA', 'catalogId': 1, 'backendPort': 8085, 'httpsPort': 8444}}
         (bundle/'BUILD.json').write_text(json.dumps(metadata))
         (bundle/'FRONTEND.SHA256SUMS').write_text(''.join(release.sha(path)+'  '+path.relative_to(bundle).as_posix()+'\n' for path in sorted(frontend.rglob('*')) if path.is_file()))
-        with patch.multiple(release, LIVE=live, VERSIONS=versions, RECEIPTS=receipts, __file__=str(bundle/'operator/frontend_release.py')), patch.object(release, 'context', return_value='httpd_sys_content_t'), patch.object(release.subprocess, 'run'):
+        with patch.multiple(release, LIVE=live, VERSIONS=versions, RECEIPTS=receipts, __file__=str(bundle/'operator/frontend_release.py')), patch.object(release, 'context', return_value='httpd_sys_content_t'), patch.object(release.subprocess, 'run') as commands:
             for action in ['prepare', 'activate', 'status', 'rollback', 'status']:
                 with patch.object(release.sys, 'argv', ['frontend_release.py', action]):
                     release.main()
@@ -94,6 +94,7 @@ class ReleaseTests(unittest.TestCase):
                     self.assertEqual((live/'index.html').read_text(), 'new index')
                     self.assertEqual((live/'assets/old.js').read_text(), 'old chunk')
             self.assertEqual(release.tree(live), old_tree)
+            commands.assert_not_called()  # No restorecon, Apache reload or other system mutation.
 
 
 if __name__ == '__main__':

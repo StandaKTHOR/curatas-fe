@@ -139,8 +139,7 @@ def main():
                             target.parent.mkdir(parents=True, exist_ok=True)
                             shutil.copyfile(entry, target)
                             os.chmod(target, 0o644)
-            # Only label the new static tree according to existing local policy.
-            subprocess.run(['restorecon', '-RF', str(staged)], check=True)
+            # Read-only label checks. Never relabel files or modify SELinux policy.
             require(context(LIVE/'index.html') == 'httpd_sys_content_t', 'Unexpected existing QA index label; stop for review')
             require(all(context(entry) == 'httpd_sys_content_t' for entry in [staged, *staged.rglob('*')]), 'New static tree labels differ; no policy changes allowed')
             new = tree(staged)

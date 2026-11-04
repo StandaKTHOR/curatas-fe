@@ -18,6 +18,12 @@ async function capture(value){
  return JSON.parse(output);
 }
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
+it('reproduces the operator-confirmed single failed check with 8155/164/50 metadata and 50 GENERATED valid DTOs',async()=>{
+ const value={...body(row()),totalElements:8155,totalPages:164,items:Array.from({length:50},(_,index)=>{const r=row();return {...r,item:{...r.item,id:1001+index}};})};
+ const report=await capture(value);
+ expect(report.failed).toEqual(['Cache-Control exact original check']);
+ expect(report.dtoAudit).toEqual({checkedItems:50,valid:true,failures:[]});
+});
 it('captures the merged browser header and audits DTOs without logging item values or losing bigint versions',async()=>{
  const report=await capture(body(row()));
  expect(report.response.cacheControl).toBe('no-store, no-store');

@@ -1,39 +1,30 @@
-# Curator evidence contract — 4 November 2026
+# Confirmed curator-page root cause — 4 November 2026
 
-Status: QA duplicate no-store fields confirmed by operator; supplied metadata match. Browser combination and candidate fix proven locally. Actual DTOs and real-data workflow acceptance NOT VERIFIED.
+CONFIRMED by the human operator's actual capture from authenticated live QA. Exactly one original check failed: Cache-Control exact original check. response.headers.get("Cache-Control") returned no-store, no-store. All other captured checks passed; dtoAudit={checkedItems:50,valid:true,failures:[]}. No raw credentials or item contents were requested or copied. Structured evidence: QA-OPERATOR-METADATA-20261104.json.
 
-Current authoritative evidence and optional QA-only header normalization: P0-QA-HEADER-CORRECTION-20261104.md and QA-OPERATOR-METADATA-20261104.json. Candidate60265e38f6dc already addresses the header incompatibility; production React/CSS/validation logic is unchanged in this follow-up.
-
-The operator has now provided actual authenticated HTTP200 metadata and confirmed two no-store response fields. The full row DTOs have not been provided. The earlier private DNS/forwarding limitation was a Codex access limitation, not a deployed QA defect. The merged value fails the old Cache-Control predicate; no claim is made that all later DTO checks have passed on actual QA data. Use operator/capture-curator-response.js in the release on the already authenticated QA page, click its existing retry button, and save the metadata output without credentials or item contents. No extra request is initiated by this helper. Do not reload the page while capture is armed.
-
-Request trace: DemusApp/catalog context → original AdminItems (or authenticated Catalog) → scopedIntegration/scopedApi → GET /api/v2/catalogs/{catalogId}/items/curator-page → CuratorCatalogController → CuratorCatalogService → catalog-owned, nondeleted item SQL/current assertions/source inventory projection → repeatable-read page/count response → exactJson → metadata validator → existing strict item/current/source validators → original compact table. Permission checks precede data queries. No legacy/public endpoint fallback was added.
-
-| Check | Actual source contract and validation | Actual failing QA value |
+| Original condition | Actual operator-captured result | Assessment |
 |---|---|---|
-| catalogId | Selected positive catalog ID; response must match; item catalog ownership also checked | Reported1 matches request1; each item ownership still pending |
-| page | Zero-based integer, echoed exactly | Reported0 matches request0 |
-| pageSize | Requested positive bounded size, echoed exactly | Reported50 matches request size50 |
-| sort | Whitelisted field,direction, echoed exactly | Reported inventoryNumber,asc matches full request |
-| semantics | CURRENT_ASSERTIONS_AND_SEPARATELY_LABELLED_SOURCE_INVENTORY | Reported exact match |
-| items | Array of scoped projections; duplicate/foreign identities rejected | MISSING |
-| totalElements | Exact nonnegative safe integer; no hardcoded total | Reported8155, safe and nonnegative |
-| totalPages | ceil(totalElements/pageSize) | Reported164 = ceil(8155/50) |
-| items.length | min(pageSize,max(0,totalElements-page*pageSize)) | Reported50, matches formula |
-| Cache-Control | Private no-store required; original code incorrectly required byte-exact no-store | Two no-store fields confirmed; merged no-store, no-store fails old check |
-| DTO | item{id,catalogId,title,inventoryNumber,accessionNumber,version}; current whitelist/currentPresent; currentInventory whitelist; source whitelist; nullable media flags | MISSING |
-| query | q/page/size/sort extracted; remaining filters validated/bound by service; invalid or unsupported inputs rejected | MISSING |
-| auth | Existing local-auth token + selected-catalog read capability; invalid catalog/401/403 stay errors | MISSING |
+| HTTP/authentication | Authenticated HTTP200 | PASS for this request |
+| catalogId equals selected catalog1 | 1 | PASS |
+| page equals request0 | 0 | PASS |
+| pageSize equals request size50 | 50 | PASS |
+| sort equals complete request | inventoryNumber,asc | PASS |
+| semantics literal | CURRENT_ASSERTIONS_AND_SEPARATELY_LABELLED_SOURCE_INVENTORY | PASS |
+| items array and length | Other captured checks passed;50 rows audited | PASS for captured page |
+| totalElements safe nonnegative integer | 8155 | PASS |
+| totalPages=ceil(totalElements/size) | 164=ceil(8155/50) | PASS |
+| row count=min(size,max(0,total-page*size)) | 50 | PASS |
+| exact Cache-Control equality to no-store | no-store, no-store | FAIL — identified cause |
+| item/current/currentInventory/source/media DTO checks |50 checked; valid=true; failures=[] | Operator-confirmed PASS for page0 |
 
-Public original default createdAt,desc and scoped QA default inventoryNumber,asc differ. The existing scoped whitelist does not authorize createdAt. Supported sort strings are sent and echoed without aliasing or silent mapping; unsupported chronological sorting remains a reported limitation. This difference alone does not explain a successful response failing its echoed sort check.
+The original validator throws Invalid curator page at the exact Cache-Control predicate. This is now a demonstrated failure condition on live QA, not a hypothesis. It does not imply a sort/catalog/pagination mismatch. Public UAT createdAt sorting versus the scoped inventoryNumber default is a separate documented contract limitation, not the cause of this captured error.
 
-Proven defect: HTTP Cache-Control is a directive list; a proxy and origin can produce no-store, no-store. The old equality check rejects this valid privacy instruction. Existing QA Apache source and Spring both set no-store, matching the operator-confirmed QA duplication. [HTTP caching specification](https://www.rfc-editor.org/rfc/rfc9111.html#section-5.2) defines these directives; [Apache mod_headers](https://httpd.apache.org/docs/2.4/mod/mod_headers.html) explains header combination/duplication. Actual duplicated fields are confirmed by operator; raw body/DTO and complete real workflow acceptance remain pending.
+Candidate60265e38f6dc already fixes this exact problem: hasPrivateNoStore requires a syntactically valid, unqualified no-store directive and handles duplicate fields combined into a directive list. It rejects missing headers, max-age alone, no-cache alone, private alone, public caching even alongside no-store, qualified no-store and malformed syntax. Metadata, totals, item identities/catalog ownership, current/source DTOs, duplicate IDs, permissions and ETag/If-Match checks remain active. Caching is not enabled to fix the error.
 
-Fix: parse the combined header semantically, including case and quoted extension values, and require an unqualified no-store directive. Missing headers, no-cache alone, public caching, malformed syntax and qualified no-store are rejected. All metadata, count, item/DTO, catalog, permission and source/current checks remain. Other scoped private-response checks use the same helper. Errors identify the failed metadata field without logging item contents or credentials.
+Request trace: original DemusApp/catalog context → AdminItems/Catalog → scopedIntegration/scopedApi → authenticated GET /api/v2/catalogs/{catalogId}/items/curator-page → CuratorCatalogController → catalog-authorized CuratorCatalogService SQL/current assertions/source projections → repeatable-read count/page response → exactJson → metadata validator → strict DTO/ownership checks → original compact table. No public/legacy fallback and no fake successful empty results.
 
-Second proven defect: AdminItems returned only a bare error before rendering its original frame, search and toolbar. It now retains that frame and offers a retry; counts/table require actual data. Catalog likewise does not label an API failure as a zero-item successful search. No failures are converted to empty successful pages.
+This final delivery keeps every production frontend file byte-identical to60265 except qa-build.json, with packaging-time equality enforcement. That candidate was built from verified original public UAT Git commit db026f32cf3d0f9cf28ea6271e29c9d0443febc3 with eight prior QA feature commits ported individually. Original stylesheet bytes, public compiled CSS SHA and all20 tab IDs/order are protected by automated guards. No new production React, CSS or API-validator change is needed after the confirmed audit.
 
-Header role finding: local-auth JWT source issues an empty global roles array; the old header checked only that array. Presentation now recognizes the already granted catalog.grant.manage capability for the original Administrátor label. It changes no authorization, global role, password or account. Without that capability the label stays Kurátor. Actual qa.admin capabilities remain unobserved.
+Apache changes are NOT REQUIRED. The final frontend-only bundle omits the earlier optional Apache patch and commands; do not apply that earlier patch as part of this release. No Apache reload, backend rebuild/restart, migration, DB/account/tunnel/certificate/SELinux change is required. Installer label checks are read-only and stop on mismatch without relabeling.
 
-No backend source/JAR change was necessary for the locally reproduced contract. No QA database, schema, migrations, users, infrastructure or public UAT was accessed or changed. Native PostgreSQL tests use disposable, isolated generated fixtures, not the Poláková database.
-
-The expanded browser run initially exposed HTTP500 for dictionary references: its inherited v9 test role lacked SELECT on core.catalog_item_dictionary_reference. Existing reviewed QA runtime.sql already grants this read. Only the isolated test fixture was aligned (SELECT only, no DELETE); production source/configuration and actual QA grants were not changed. The final browser assertion rejects unexpected HTTP errors and all20 tabs pass. This separate fixture issue is not attributed to the actual QA deployment.
+Acceptance is scoped honestly: live QA page0 metadata and50 DTOs are operator-confirmed; the fix and private-cache rejection are locally tested. The operator must still deploy this frontend and verify actual original-table rendering, reachability of all8155 items, filters/sorts/pagination/detail, all20 populated tabs, authorized edits/conflicts and equal-state original-UAT visual acceptance. One captured page is not a test of the whole CITEM integration. See UPDATE2-FE-ACCEPTANCE-MATRIX.md and P0-QA-FRONTEND-OPERATOR-20261104.md. No remote deployment was performed by Codex.

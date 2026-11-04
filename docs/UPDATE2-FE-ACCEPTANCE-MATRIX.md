@@ -1,6 +1,6 @@
 # Original UAT integration acceptance matrix — 4 November 2026
 
-PASS below means local implementation/test evidence. Remote QA remains NOT VERIFIED. Original UAT db026f32cf3d0f9cf28ea6271e29c9d0443febc3 is the foundation; see P0-UAT-FOUNDATION-20261104.md. Existing QA feature commits were ported individually; original worktrees remain intact.
+PASS below means local implementation/test evidence. The operator confirmed page0 metadata and50 DTOs; post-deployment QA UI/workflow acceptance remains NOT VERIFIED. Original UAT db026f32cf3d0f9cf28ea6271e29c9d0443febc3 is the foundation; see P0-UAT-FOUNDATION-20261104.md. Existing QA feature commits were ported individually; original worktrees remain intact.
 
 | Requirement | Implementation/evidence | Status / limitation |
 |---|---|---|
@@ -8,8 +8,8 @@ PASS below means local implementation/test evidence. Remote QA remains NOT VERIF
 | Original styles and layout components | guard-original-uat: original stylesheet bytes, existing literal layout classes, compiled public CSS SHA, all20 tab IDs/order | PASS; not populated pixel acceptance |
 | Frame/header/navigation/compact table | Original DemusApp/AdminItems/Catalog reused; original classes retained; error frame restored | PASS local; real QA MISSING |
 | Catalog ownership/private access | CatalogProvider/scopedIntegration, scoped API strict ownership checks, backend authorization tests | PASS local; no public catalog exposed by QA build |
-| Real Poláková 8155 items | Never hardcoded or replaced by generated rows | Operator reports total8155 and first50 rows; DTO/rendering/workflows NOT VERIFIED |
-| Contract validation and errors | curatorPageContract tests, real HTTP+PG contract tests, combined cache-header browser reproduction, retry component tests | PASS local; QA duplicated cache fields confirmed; actual DTO audit still MISSING |
+| Real Poláková 8155 items | Never hardcoded or replaced by generated rows | Operator confirms total8155 and50 valid DTOs; post-deployment rendering/all pages/workflows NOT VERIFIED |
+| Contract validation and errors | curatorPageContract tests, real HTTP+PG contract tests, combined cache-header browser reproduction, retry component tests | PASS local; QA duplicated cache fields confirmed; actual page0 DTO audit PASS50/50; exact old header predicate is the sole failed check |
 | Quick search/filter/page/Back/Forward | Existing URL-bound controls and scoped whitelist; generated native contract tests; component regression | PASS supported contract |
 | Full advanced AST/legacy export/worksets | Existing controls remain explicitly unavailable where scoped authority absent | INCOMPLETE approved scoped contract; no fallback/fake success |
 | Chronological createdAt sorting | Public default differs from scoped contract whitelist | INCOMPLETE backend authorization; no silent sort mapping |
