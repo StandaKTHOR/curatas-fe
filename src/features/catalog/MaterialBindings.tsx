@@ -36,8 +36,8 @@ function Bindings({itemId,onSave,readOnly=false}:Props){
   <p>Kurátorské přiřazení. Historické texty DEMUS se nemění a nejsou automaticky přiřazeny k číselníku.</p>
   {error&&<p role="alert">{error}</p>}
   {!snapshot&&!error&&<p role="status">Načítání vazeb…</p>}
-  {snapshot&&<ul>{snapshot.items.map(v=><li key={v.id}>{v.type==='MATERIAL'?'Materiál':'Technika'}: {v.label}
-   {enabled&&<button type="button" disabled={busy||noDelete} title={noDelete?'Izolované QA nepovoluje mazání vazeb; aktuální vazba zůstává zachována.':undefined} onClick={()=>void save(v.id,v.type,true)}>Odebrat vazbu</button>}
+  {snapshot&&<ul>{snapshot.items.filter(v=>v.type==='MATERIAL'||v.type==='TECHNIQUE').map(v=><li key={v.id}>{v.type==='MATERIAL'?'Materiál':'Technika'}: {v.label}
+   {enabled&&<button type="button" disabled={busy||noDelete} title={noDelete?'Izolované QA nepovoluje mazání vazeb; aktuální vazba zůstává zachována.':undefined} onClick={()=>void save(v.id,v.type as 'MATERIAL'|'TECHNIQUE',true)}>Odebrat vazbu</button>}
   </li>)}</ul>}
   {snapshot&&!snapshot.items.length&&<p>Žádné současné číselníkové vazby. Není to tvrzení o původních hodnotách DEMUS.</p>}
   <label>Číselník <select aria-label="Číselník vazby" disabled={busy} value={type} onChange={e=>{setType(e.target.value as typeof type);setSelected(null);}}><option value="MATERIAL">Materiál</option><option value="TECHNIQUE">Technika</option></select></label>

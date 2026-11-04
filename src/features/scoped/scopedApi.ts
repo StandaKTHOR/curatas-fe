@@ -1,3 +1,5 @@
+export const managedDictionaryTypes=['MATERIAL','TECHNIQUE','FUND','OBJECT_TYPE','CUSTODIAN','AUTHOR','AUTHOR_ROLE','COUNTRY','COLLECTION','GROUP','LOCALITY','CLASSIFICATION','SUBJECT'] as const;
+export type ManagedDictionaryType=typeof managedDictionaryTypes[number];
 import {professionalFields} from '../../lib/professional';
 import {hasPrivateNoStore} from '../../lib/privateResponsePolicy';
 import {historicalTables,historicalRelatedTables,historicalStates,typedHistorical,type HistoricalTable,type HistoricalPage,type HistoricalRow} from '../catalog/historicalContract';
@@ -241,12 +243,19 @@ export function scopedApi(catalogId: number, token: string) {
             const result={id:integer(r.id),kind,dictionaryId:r.dictionaryId===null?null:integer(r.dictionaryId),partyId:r.partyId===null?null:integer(r.partyId),payload:r.payload,materialDictionaryId:r.materialDictionaryId===null?null:integer(r.materialDictionaryId),techniqueDictionaryId:r.techniqueDictionaryId===null?null:integer(r.techniqueDictionaryId),sourceTable:null,sourceKey:null,legacyData:null};
             return {value:result,etag:tag(response,body.itemVersion)};
         },
-        dictionaryMetadata:async(type:'MATERIAL'|'TECHNIQUE',signal:AbortSignal)=>{
+        saveDictionary:async(type:ManagedDictionaryType,input:{label:string;code:string|null;parentId:string|null;reason:string},signal:AbortSignal,id?:string,etag?:string):Promise<{value:DictionaryValue;etag:string}>=>{
+            if(!managedDictionaryTypes.includes(type)||!input.label.trim()||input.label.length>255||!input.reason.trim()||input.reason.length>1000)throw new Error('Neplatná položka číselníku.');
+            const {body,response}=await read(`${base}/dictionaries/${type}/values${id?'/'+uuid(id):''}`,signal,{method:id?'PUT':'POST',headers:id?{'If-Match':strongTag(etag??'')}:undefined,body:JSON.stringify({...input,parentId:input.parentId===null?null:uuid(input.parentId)})});
+            if(integer(body.catalogId)!==catalogId||body.type!==type||!hasPrivateNoStore(response.headers))throw new Error('Neplatný kontrakt uložení číselníku.');
+            const value={id:uuid(body.id),catalogId,type,label:text(body.label),code:nullable(body.code),parentId:body.parentId===null?null:uuid(body.parentId),version:version(body.version)};
+            if(id&&value.id!==id||value.label!==input.label||value.code!==input.code||value.parentId!==input.parentId)throw new Error('Uložení číselníku nebylo potvrzeno.');return {value,etag:tag(response,body.version)};
+        },
+        dictionaryMetadata:async(type:ManagedDictionaryType,signal:AbortSignal)=>{
             const {body,response}=await read(`${base}/dictionaries/${type}`,signal);
             if(body.type!==type||body.ownership!=='CATALOG_CREATED_ONLY'||body.parentSupport!=='EXPLICIT_SAME_TYPE'||!Array.isArray(body.operations)||!body.operations.includes('read')||!hasPrivateNoStore(response.headers))throw new Error('Unsupported dictionary contract');
             return body;
         },
-        dictionaryValues:async(type:'MATERIAL'|'TECHNIQUE',signal:AbortSignal,after?:string):Promise<Page<DictionaryValue,string>>=>{
+        dictionaryValues:async(type:ManagedDictionaryType,signal:AbortSignal,after?:string):Promise<Page<DictionaryValue,string>>=>{
             const {body,response}=await read(`${base}/dictionaries/${type}/values?limit=100${after?'&afterId='+uuid(after):''}`,signal);
             if(!Array.isArray(body.items)||body.items.length>100||!hasPrivateNoStore(response.headers))throw new Error('Invalid dictionary page');
             const items:DictionaryValue[]=body.items.map((v:any)=>{if(integer(v.catalogId)!==catalogId||v.type!==type)throw new Error('Foreign dictionary value');return {id:uuid(v.id),catalogId,type,label:text(v.label),code:nullable(v.code),parentId:v.parentId===null?null:uuid(v.parentId),version:version(v.version)};});
@@ -539,15 +548,15 @@ export function scopedApi(catalogId: number, token: string) {
             const {body,response}=await read(`${itemPath(parent)}/references`,signal);
             if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==parent||!Array.isArray(body.items)||body.items.length>200)throw new Error('Foreign or incomplete reference list');
             const seen=new Set<string>();
-            const items:Array<{id:string;type:'MATERIAL'|'TECHNIQUE';parentId:string|null;code:string|null;label:string}>=body.items.map((v:any)=>{
-                if(!['MATERIAL','TECHNIQUE'].includes(v.type)||seen.has(v.id))throw new Error('Invalid reference');seen.add(v.id);
-                return {id:uuid(v.id),type:v.type as 'MATERIAL'|'TECHNIQUE',parentId:v.parentId===null?null:uuid(v.parentId),code:nullable(v.code),label:text(v.label)};
+            const items:Array<{id:string;type:ManagedDictionaryType;parentId:string|null;code:string|null;label:string}>=body.items.map((v:any)=>{
+                if(!managedDictionaryTypes.includes(v.type)||seen.has(v.id))throw new Error('Invalid reference');seen.add(v.id);
+                return {id:uuid(v.id),type:v.type as ManagedDictionaryType,parentId:v.parentId===null?null:uuid(v.parentId),code:nullable(v.code),label:text(v.label)};
             });
             return {items,etag:tag(response,body.itemVersion)};
         },
-        assignReference: async (parent:number,type:'MATERIAL'|'TECHNIQUE',id:string,etag:string,signal:AbortSignal,remove=false) => {
+        assignReference: async (parent:number,type:ManagedDictionaryType,id:string,etag:string,signal:AbortSignal,remove=false) => {
             if(remove&&import.meta.env.VITE_QA_NO_DELETE==='true')throw new Error('Izolované QA nepovoluje mazání číselníkových vazeb. Vazba nebyla změněna.');
-            if(!['MATERIAL','TECHNIQUE'].includes(type))throw new Error('Invalid reference type');
+            if(!managedDictionaryTypes.includes(type))throw new Error('Invalid reference type');
             const {body,response}=await read(`${itemPath(parent)}/references/${type}/${uuid(id)}`,signal,
                 {method:remove?'DELETE':'PUT',headers:{'If-Match':strongTag(etag)},body:'{}'});
             return {value:item(body,parent),etag:tag(response,body.version)};

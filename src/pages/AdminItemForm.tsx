@@ -1,3 +1,4 @@
+import {useManagedAuthorities} from '../features/catalog/useManagedAuthorities';
 import {originalPrintCardFields} from '../features/catalog/originalAdapter';
 import {ScopedError} from '../features/scoped/scopedApi';
 import {useOriginalSourcePlus} from '../features/catalog/useOriginalSourcePlus';
@@ -648,6 +649,8 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         navigate(`${returnPath}${returnSearch}`);
     };
 
+    const managed=useManagedAuthorities(id?Number(id):undefined,editSessionRef.current?.etag,isViewMode||loading||scopedNeedsReload||hasUnsavedChanges(),etag=>{const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();});
+    const managedSelect=(type:import('../features/scoped/scopedApi').ManagedDictionaryType,controlId:string,fallback='— bez současné autority —')=><select id={controlId} data-scoped-reference-editor aria-label={`Současná autorita ${type}`} className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]" disabled={isViewMode||loading||scopedNeedsReload||hasUnsavedChanges()||managed.busy||!managed.ready||!originalCanEdit('professional')} value={managed.value(type)} onChange={e=>managed.select(type,e.target.value)}><option value="" disabled={!!managed.value(type)}>{fallback}</option>{managed.choices(type).map(v=><option key={v.id} value={v.id}>{v.label}</option>)}</select>;
     const historical = useOriginalHistoricalData(id?Number(id):undefined,editSessionRef.current,originalIntegrationEnabled());
     const historicalFields=historical?.fields;
     const historicalFund=currentBinding(historical?.authorities.fundRecordId)||historicalControl(null,historicalFields?.Fond_S,true).value;
@@ -1236,7 +1239,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             type="solid"
                             color="primary"
                             size="s"
-                            data-scoped-navigation="true" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Současná odborná sekce podle katalogového oprávnění" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(Number(id),'professional'):`/admin/items/edit/${id}`, { state: location.state })}
+                            data-scoped-navigation="true" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')&&!originalCanEdit('inventory')} title="Úprava podle živých katalogových oprávnění a provozních přepínačů" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(Number(id),originalCanEdit('professional')?'professional':'inventory'):`/admin/items/edit/${id}`, { state: location.state })}
                         >
                             ✏️ Upravit předmět
                         </GovButton>
@@ -1297,11 +1300,11 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 readHistorical={originalIntegrationEnabled() && isViewMode}
                 parentEtag={editSessionRef.current?.etag}
                 hasToolbar
-                fond={currentFundLabel}
-                predmet={form.objectType}
+                fond={managed.label('FUND')||currentFundLabel}
+                predmet={managed.label('OBJECT_TYPE')||form.objectType}
                 popis={form.description}
                 titul={form.title}
-                autor={currentAuthor}
+                autor={managed.label('AUTHOR')||currentAuthor}
                 datace={currentDating}
                 inventoryNumber={form.inventoryNumber || form.accessionNumber}
                 quantity={form.quantity}
@@ -1309,6 +1312,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 isNew={!id}
             />
 
+            {managed.enabled&&managed.error&&<p role="alert">{managed.error}</p>}
             {id&&originalIntegrationEnabled()&&<CreationOrigin itemId={Number(id)}/>}
             {id && <InventoryIdentityPanel key={originalIntegrationEnabled()?editSessionRef.current?.etag:undefined} itemId={Number(id)} inventoryNumber={form.inventoryNumber || ''}
                 canEdit={!isViewMode && !loading && !auditSaving && form.inventoryNumber === initialNumbers.inventory} onSaved={async () => {
@@ -1468,13 +1472,13 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                     <label htmlFor="fundDictionaryId">Fond</label>
                                     <button
                                         type="button"
-                                        onClick={() => openDictModal('FUND', 'Nový fond', 'fundDictionaryId')}
+                                        data-scoped-reference-editor={managed.enabled?true:undefined} disabled={managed.enabled&&(isViewMode||!managed.canCreate('FUND'))} title={managed.enabled&&!managed.canCreate('FUND')?'Vyžaduje dictionary.write, aktuální verzi a uložené změny.':undefined} onClick={() => openDictModal('FUND', 'Nový fond', 'fundDictionaryId')}
                                         className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
                                     >
                                         + Nový fond
                                     </button>
                                 </div>
-                                <select
+                                {managed.enabled?managedSelect('FUND','fundDictionaryId',historicalFund):<select
                                     id="fundDictionaryId"
                                     aria-label="Fond"
                                     disabled={fundSelectOptions.length === 0}
@@ -1499,7 +1503,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                             {f.label}
                                         </option>
                                     ))}
-                                </select>
+                                </select>}
                                 {form.fundLegacyCode && (
                                     <div className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded flex items-center justify-between">
                                         <span>Původní kód DEMUS:</span>
@@ -1510,13 +1514,14 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
 
                             <div className="space-y-1">
                                 <label htmlFor="subCollection">Podsbírka</label>
-                                <input
+                                {managed.enabled&&<button type="button" data-scoped-reference-editor disabled={isViewMode||!managed.canCreate('COLLECTION')} onClick={()=>openDictModal('COLLECTION','Podsbírka','subCollection')}>+ Nová podsbírka</button>}
+                                {managed.enabled?managedSelect('COLLECTION','subCollection',sourceControl(form.subCollection,'Podsb_S').value||'— bez současné podsbírky —'):<input
                                     id="subCollection"
                                     aria-label="Podsbírka"
                                     placeholder={sourceControl(form.subCollection,'Podsb_S').placeholder??'např. Výtvarné umění'}
                                     value={sourceControl(form.subCollection,'Podsb_S').value}
                                     onChange={(e: any) => setForm({ ...form, subCollection: e.target.value })}
-                                />
+                                />}
                             </div>
                         </div>
 
@@ -1526,13 +1531,13 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                     <label htmlFor="objectType">Typ předmětu</label>
                                     <button
                                         type="button"
-                                        onClick={() => openDictModal('OBJECT_TYPE', 'Typ předmětu', 'objectType')}
+                                        data-scoped-reference-editor={managed.enabled?true:undefined} disabled={managed.enabled&&(isViewMode||!managed.canCreate('OBJECT_TYPE'))} title={managed.enabled&&!managed.canCreate('OBJECT_TYPE')?'Vyžaduje dictionary.write, aktuální verzi a uložené změny.':undefined} onClick={() => openDictModal('OBJECT_TYPE', 'Typ předmětu', 'objectType')}
                                         className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
                                     >
                                         + Nový
                                     </button>
                                 </div>
-                                <select
+                                {managed.enabled?managedSelect('OBJECT_TYPE','objectType',historicalType):<select
                                     id="objectType"
                                     className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
                                     value={form.objectType || ''}
@@ -1547,7 +1552,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                             {t}
                                         </option>
                                     ))}
-                                </select>
+                                </select>}
                             </div>
 
                             <div className="space-y-1">
@@ -1555,13 +1560,13 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                     <label htmlFor="spravce">Správce sbírky</label>
                                     <button
                                         type="button"
-                                        onClick={() => openDictModal('SPRAVCE', 'Správce fondu', 'spravce')}
+                                        data-scoped-reference-editor={managed.enabled?true:undefined} disabled={managed.enabled&&(isViewMode||!managed.canCreate('SPRAVCE'))} title={managed.enabled&&!managed.canCreate('SPRAVCE')?'Vyžaduje dictionary.write, aktuální verzi a uložené změny.':undefined} onClick={() => openDictModal('SPRAVCE', 'Správce fondu', 'spravce')}
                                         className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
                                     >
                                         + Nový
                                     </button>
                                 </div>
-                                <select
+                                {managed.enabled?managedSelect('CUSTODIAN','spravce','— bez současného správce —'):<select
                                     id="spravce"
                                     className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
                                     value={form.spravce || ''}
@@ -1576,7 +1581,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                             {s}
                                         </option>
                                     ))}
-                                </select>
+                                </select>}
                             </div>
 
                             <div className="space-y-1">
@@ -1697,13 +1702,14 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => openDictModal('AUTHOR', 'Autor / Původce', 'author')}
+                                        data-scoped-reference-editor={managed.enabled?true:undefined} disabled={managed.enabled&&(isViewMode||!managed.canCreate('AUTHOR'))} title={managed.enabled&&!managed.canCreate('AUTHOR')?'Vyžaduje dictionary.write, aktuální verzi a uložené změny.':undefined} onClick={() => openDictModal('AUTHOR', 'Autor / Původce', 'author')}
                                         className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
                                     >
                                         + Nový autor
                                     </button>
                                 </div>
                             </div>
+                            {managed.enabled&&managedSelect('AUTHOR','current-author-authority',rootControl(form.author,'Autor_S').value||'— bez současného autora —')}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 <div className="sm:col-span-2 relative">
                                     <input
@@ -1784,7 +1790,8 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                     )}
                                 </div>
                                 <div>
-                                    <select
+                                    {managed.enabled&&<button type="button" data-scoped-reference-editor disabled={isViewMode||!managed.canCreate('AUTHOR_ROLE')} onClick={()=>openDictModal('AUTHOR_ROLE','Role autora','authorRole')}>+ Nová role</button>}
+                                    {managed.enabled?managedSelect('AUTHOR_ROLE','authorRole','— bez současné role —'):<select
                                         id="authorRole"
                                         aria-label="Role autora"
                                         className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
@@ -1809,7 +1816,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                         {AUTHOR_ROLES.map(role => (
                                             <option key={role} value={role}>{role}</option>
                                         ))}
-                                    </select>
+                                    </select>}
                                 </div>
                             </div>
 
@@ -2258,7 +2265,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => openDictModal('COUNTRY', 'Země původu', 'countryOfOrigin')}
+                                            data-scoped-reference-editor={managed.enabled?true:undefined} disabled={managed.enabled&&(isViewMode||!managed.canCreate('COUNTRY'))} title={managed.enabled&&!managed.canCreate('COUNTRY')?'Vyžaduje dictionary.write, aktuální verzi a uložené změny.':undefined} onClick={() => openDictModal('COUNTRY', 'Země původu', 'countryOfOrigin')}
                                             className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline"
                                         >
                                             + Nová země
@@ -2718,7 +2725,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 type="solid"
                                 color="primary"
                                 size="s"
-                                data-scoped-navigation="true" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Současná odborná sekce podle katalogového oprávnění" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(Number(id),'professional'):`/admin/items/edit/${id}`, { state: location.state })}
+                                data-scoped-navigation="true" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')&&!originalCanEdit('inventory')} title="Úprava podle živých katalogových oprávnění a provozních přepínačů" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(Number(id),originalCanEdit('professional')?'professional':'inventory'):`/admin/items/edit/${id}`, { state: location.state })}
                             >
                                 ✏️ Upravit tento předmět
                             </GovButton>
@@ -2776,6 +2783,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
 
             {/* INLINE MODÁL PRO ČÍSELNÍK (+ Nová země, + Nový materiál...) */}
             <AddDictionaryModal
+                onCreate={managed.enabled?managed.create:undefined}
                 isOpen={dictModal.isOpen}
                 dictionaryType={dictModal.type}
                 dictionaryTitle={dictModal.title}
