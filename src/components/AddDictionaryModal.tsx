@@ -149,7 +149,7 @@ export default function AddDictionaryModal({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+        <div data-scoped-reference-editor={onCreate?true:undefined} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full overflow-hidden border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
                 <div className="bg-[#00204a] text-white px-5 py-3.5 flex justify-between items-center">
                     <div>
