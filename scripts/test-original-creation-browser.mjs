@@ -6,7 +6,7 @@ import path from 'node:path';
 const input=JSON.parse(fs.readFileSync(process.argv[2],'utf8')),backend=new URL(input.backend),root=path.resolve(input.frontend);
 if(backend.hostname!=='127.0.0.1'||backend.protocol!=='http:'||['8082','8084','5432','5547'].includes(backend.port)||input.port!==18213)throw Error('Owned generated infrastructure required');
 const server=http.createServer((req,res)=>{
- if(req.url.startsWith('/api/')){const remote=http.request(new URL(req.url,backend),{method:req.method,headers:{...req.headers,host:backend.host}},r=>{res.writeHead(r.statusCode,r.headers);r.pipe(res);});remote.on('error',()=>{res.writeHead(502);res.end();});req.pipe(remote);return;}
+ if(req.url.startsWith('/api/')){const remote=http.request(new URL(req.url,backend),{method:req.method,headers:{...req.headers,host:backend.host}},r=>{const headers={...r.headers};if(req.url.split('?')[0].endsWith('/curator-page'))headers['cache-control']=[String(r.headers['cache-control']??''),'no-store'];res.writeHead(r.statusCode,headers);r.pipe(res);});remote.on('error',()=>{res.writeHead(502);res.end();});req.pipe(remote);return;}
  const file=path.resolve(root,'.'+new URL(req.url,'http://localhost').pathname);if(!file.startsWith(root+path.sep)&&file!==root){res.writeHead(400);res.end();return;}
  const target=fs.existsSync(file)&&fs.statSync(file).isFile()?file:path.join(root,'index.html');
  res.setHeader('Content-Type',({'.html':'text/html','.js':'application/javascript','.css':'text/css','.woff2':'font/woff2','.png':'image/png'})[path.extname(target)]??'application/octet-stream');fs.createReadStream(target).pipe(res);
@@ -18,10 +18,14 @@ try{
  browser=await chromium.launch({...(chrome&&!fs.existsSync((process.env.LOCALAPPDATA||'')+'/ms-playwright')?{executablePath:chrome}:{}),headless:true});const context=await browser.newContext({viewport:{width:1366,height:900}});
  await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
  page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message));
- page.on('response',r=>{const url=new URL(r.url());if(url.pathname.startsWith('/api/'))requests.push({path:url.pathname,method:r.request().method(),status:r.status()});});
+ page.on('response',r=>{const url=new URL(r.url());if(url.pathname.startsWith('/api/'))requests.push({path:url.pathname,method:r.request().method(),status:r.status(),cacheControl:r.headers()['cache-control']});});
  const base=`http://127.0.0.1:${input.port}`;
  async function login(username){await page.goto(base+'/login');await page.locator('input[type="text"]').fill(username);await page.locator('input[type="password"]').fill(input.password);await page.getByRole('button',{name:'Autorizovaný vstup'}).click();await page.getByLabel('Katalog',{exact:true}).selectOption('1');}
  await login(input.username);checks.push({name:'actual-local-auth-login-and-catalog',pass:true});
+ await page.getByRole('table',{name:'Sbírky — tabulkové zobrazení'}).waitFor();
+ if(!requests.some(r=>r.path.endsWith('/curator-page')&&r.cacheControl==='no-store, no-store'))throw Error('Combined proxy/origin cache field was not exercised');
+ checks.push({name:'actual-PG-list-through-duplicate-origin-proxy-no-store-fields',pass:true});
+ await page.screenshot({path:input.output+'/generated-evidence-list.png',fullPage:true});
  await page.getByRole('button',{name:'Nový předmět',exact:true}).click();await page.waitForURL('**/admin/items/new?catalog=1');
  await page.getByRole('button',{name:'Uložit',exact:true}).click();await page.getByText('Inventární číslo je povinné.',{exact:true}).first().waitFor();
  await page.getByLabel('Inventární číslo: Prefix',{exact:true}).fill('GEN-');await page.getByLabel('Inventární číslo: Hlavní číslo',{exact:true}).fill('00042');await page.getByLabel('Inventární číslo: Postfix',{exact:true}).fill('/Ž');
@@ -40,6 +44,10 @@ try{
  if(requests.filter(r=>r.method==='POST'&&r.path==='/api/v2/catalogs/1/items').length!==1)throw Error('Duplicate browser creation submission');checks.push({name:'double-click-one-submit',pass:true});
  if(await page.getByRole('navigation',{name:'Karty DEMUS'}).getByRole('button').count()!==20)throw Error('Original tabs changed');
  await page.screenshot({path:input.output+'/generated-created-card.png',fullPage:true});
+ const allTabs=page.getByRole('navigation',{name:'Karty DEMUS'});
+ const tabLabels=await allTabs.getByRole('button').allTextContents();if(tabLabels.length!==20)throw Error('Original twenty tabs changed');
+ for(let i=0;i<tabLabels.length;i++){await allTabs.getByRole('button',{name:tabLabels[i],exact:true}).click();await page.waitForLoadState('networkidle');const alerts=await page.getByRole('alert').allTextContents();if(alerts.some(s=>/Invalid |Failed to fetch/.test(s)))throw Error('Tab contract failure: '+tabLabels[i]);await page.screenshot({path:input.output+'/generated-tab-'+String(i+1).padStart(2,'0')+'.png',fullPage:true});}
+ checks.push({name:'all20-original-tabs-open-through-real-HTTP',pass:true,tabs:tabLabels});
  if(input.cloneSource){
   await page.goto(base+'/admin/items/view/'+input.cloneSource+'?catalog=1');await expect(page.locator('#title')).toHaveValue('GENERATED ITEM');
   await page.setViewportSize({width:390,height:844});
@@ -80,6 +88,8 @@ try{
  await page.getByRole('button',{name:'Odhlásit se',exact:true}).click();await login('gen-reader');
  if(await page.getByRole('button',{name:'Nový předmět',exact:true}).isEnabled())throw Error('Reader can create');
  await page.goto(base+'/admin/items/new?catalog=1');if(await page.getByRole('button',{name:'Uložit',exact:true}).isEnabled())throw Error('Direct route bypasses create permission');checks.push({name:'reader-and-direct-route-read-only',pass:true});
+ const failed=requests.filter(r=>r.status>=400&&!(r.path==='/api/auth/local/refresh'&&r.status===401));
+ if(failed.length)throw Error('Unexpected API failures: '+JSON.stringify(failed));
  if(errors.length)throw Error('JavaScript page errors');
  fs.writeFileSync(input.output+'/browser-result.json',JSON.stringify({status:'PASS',data:'GENERATED_ONLY_NOT_POLAKOVA',itemId:id,checks,errors,requests},null,2));
 }catch(e){if(page){fs.writeFileSync(input.output+'/failure-dom.txt',await page.locator('body').innerText());await page.screenshot({path:input.output+'/failure.png',fullPage:true});}fs.writeFileSync(input.output+'/browser-result.json',JSON.stringify({status:'FAIL',data:'GENERATED_ONLY_NOT_POLAKOVA',checks,errors,requests,failure:e.message},null,2));throw e;}

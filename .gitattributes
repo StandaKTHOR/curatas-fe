@@ -1,0 +1,4 @@
+src/**/*.css text eol=lf
+src/**/*.scss text eol=lf
+src/**/*.sass text eol=lf
+scripts/*.sh text eol=lf

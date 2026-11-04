@@ -259,8 +259,6 @@ export default function AdminItems() {
         <button type="button" disabled={page + 1 >= (data?.totalPages || 1) || (originalIntegrationEnabled()&&page>=400)} onClick={() => setPage(p => p + 1)}>Další</button>
     </div>;
 
-    if (!data && loadError) return <div role="alert">{loadError}<button type="button" onClick={loadData}>Načíst znovu</button></div>;
-    if (!data) return <div className="p-10 text-center italic text-gray-400">Načítám správu sbírek...</div>
 
     const inputClass = "form-control text-sm border-gray-200 focus:border-[#ffbc34] focus:ring-0 rounded bg-white";
     const labelClass = "text-[9px] uppercase font-bold text-gray-500 tracking-tighter mb-1 block";
@@ -270,12 +268,12 @@ export default function AdminItems() {
             <div className="card-header bg-white py-4 flex flex-col gap-4 border-b">
                 <div className="flex justify-between items-center">
                     <h4 className="card-title m-0 font-bold text-[#1f262d] uppercase tracking-tighter">
-                        Správa sbírkových předmětů <span className="text-[#ffbc34] ml-2">({data.totalElements})</span>
+                        Správa sbírkových předmětů <span className="text-[#ffbc34] ml-2">({data ? data.totalElements : 'počet nedostupný'})</span>
                     </h4>
                     <div className="flex flex-wrap gap-2">
                         <button
                             onClick={handlePrintList}
-                            disabled={isPrintLoading}
+                            disabled={!data||isPrintLoading}
                             className="genric-btn info-border radius px-3 py-2 text-[10px] font-bold uppercase flex items-center gap-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50"
                             title="Vytisknout úřední inventární soupis všech vyfiltrovaných položek"
                         >
@@ -403,9 +401,10 @@ export default function AdminItems() {
 
             <div className="card-body p-0">
                 {originalIntegrationEnabled()&&<p role="status">Fond a podsbírka jsou původní zdrojové kódy; Předmět je původní Predmet_S, nikoli současné kurátorské tvrzení. Autor, datace, materiál a technika jsou současná kurátorská tvrzení, oddělená od zdroje. Prázdná buňka neprokazuje chybějící data v DEMUS.</p>}
-                {loadError && <p role="alert">{loadError}</p>}
-                {pagination}
-                <div className="table-responsive">
+                {loadError && <p role="alert">{loadError} <button type="button" onClick={loadData}>Načíst znovu</button></p>}
+                {!data&&!loadError&&<p role="status" className="p-10 text-center italic text-gray-400">Načítám správu sbírek...</p>}
+                {data&&pagination}
+                {data&&<div className="table-responsive">
                     <table className="demus-datasheet" aria-label="Sbírky — tabulkové zobrazení">
                         <thead><tr>
                             <th><input type="checkbox" aria-label="Vybrat stránku" checked={data.content.length > 0 && data.content.every((it: any) => selectedIds.includes(it.id))}
@@ -436,12 +435,12 @@ export default function AdminItems() {
                             </td>
                         </tr>)}</tbody>
                     </table>
-                </div>
-                {pagination}
+                </div>}
+                {data&&pagination}
             </div>
 
             {/* PLOVOUCÍ LIŠTA PRACOVNÍHO VÝBĚRU */}
-            {selectedIds.length > 0 && (
+            {data&&selectedIds.length > 0 && (
                 <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-[#00204a] text-white px-6 py-3 rounded-full shadow-2xl z-[9000] flex items-center gap-4 border border-blue-400/30 animate-in slide-in-from-bottom-5 duration-300">
                     <div className="flex items-center gap-2 text-xs font-bold">
                         <span className="bg-[#ffbc34] text-black w-6 h-6 rounded-full flex items-center justify-center font-black">

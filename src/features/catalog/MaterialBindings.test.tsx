@@ -47,3 +47,11 @@ it('stale ETag preserves the selected leaf and never retries the write',async()=
  await screen.findByRole('alert');expect(screen.getByLabelText('Materiál — úroveň 3')).toHaveValue(ids[2]);
  expect(f.mock.calls.filter(([,init])=>init?.method==='PUT')).toHaveLength(1);
 });
+
+it('shows QA no-DELETE restriction without silently removing a current binding',async()=>{
+ vi.stubEnv('VITE_QA_NO_DELETE','true');const f=transport();render(<MaterialBindings itemId={101}/>);await selectLeaf();
+ await userEvent.click(screen.getByRole('button',{name:'Přidat vazbu'}));await screen.findByText('Materiál: Leaf');
+ expect(screen.getByRole('button',{name:'Odebrat vazbu'})).toBeDisabled();
+ expect(screen.getByRole('button',{name:'Odebrat vazbu'})).toHaveAttribute('title',expect.stringContaining('QA nepovoluje'));
+ expect(f.mock.calls.some(([,init])=>init?.method==='DELETE')).toBe(false);
+});

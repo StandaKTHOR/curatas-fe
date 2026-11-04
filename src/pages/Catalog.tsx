@@ -52,6 +52,7 @@ export default function Catalog() {
 
     const [loading, setLoading] = useState(false);
     const [loadError, setLoadError] = useState('');
+    const [retryRevision, setRetryRevision] = useState(0);
 
     // Konfigurace sloupců (uložena v localStorage)
     const [columns, setColumns] = useState<ColumnConfig[]>(() => {
@@ -156,7 +157,7 @@ export default function Catalog() {
             .catch((err: Error) => {if(active){setItems([]);setTotalElements(0);setTotalPages(1);setLoadError(err.message);}})
             .finally(() => {if(active)setLoading(false);});
         return()=>{active=false;};
-    }, [searchParams, page, q, sort]);
+    }, [searchParams, page, q, sort, retryRevision]);
 
     // Změna jednoho pokročilého filtru
     const handleFilterChange = (key: string, value: string) => {
@@ -265,7 +266,7 @@ export default function Catalog() {
                         {native?`${originalSession().catalog.code} • ${originalSession().catalog.name}`:'Moravské zemské muzeum • Badatelský přístup k databázi'}
                     </p>
                 </div>
-                <p className="text-xs">Celkem nalezeno: <strong>{totalElements.toLocaleString('cs-CZ')}</strong></p>
+                <p className="text-xs">Celkem nalezeno: <strong>{loadError ? 'Počet nedostupný' : loading ? 'Načítám…' : totalElements.toLocaleString('cs-CZ')}</strong></p>
             </div>
 
             {/* VYHLEDÁVÁNÍ & FILTR PANEL */}
@@ -452,13 +453,13 @@ export default function Catalog() {
 
             {/* DATATABLE - VYSOKÁ HUSTOTA ZÁZNAMŮ (High-Density Desktop Layout) */}
             <div className="bg-white rounded border border-gray-200 shadow-sm overflow-hidden">
-                {loadError && <p role="alert">{loadError}</p>}
+                {loadError && <p role="alert">{loadError} <button type="button" onClick={() => setRetryRevision(value => value + 1)}>Načíst znovu</button></p>}
                 {loading ? (
                     <div className="p-20 text-center flex flex-col items-center justify-center space-y-4">
                         <span className="text-3xl animate-spin">⏳</span>
                         <p className="italic text-gray-500 font-medium">Načítám badatelský sbírkový katalog...</p>
                     </div>
-                ) : (
+                ) : loadError ? null : (
                     <div className="overflow-x-auto">
                         <table data-compact={compactView} className="w-full text-left border-collapse text-xs">
                             <thead>
@@ -634,28 +635,28 @@ export default function Catalog() {
             {/* STRÁNKOVÁNÍ (PAGINATION) - Kompatibilní s Spring Boot Pageable */}
             <div className="flex flex-col sm:flex-row justify-between items-center bg-gray-50 border border-gray-200 p-4 rounded shadow-sm gap-4">
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    {`Zobrazeno ${items.length.toLocaleString('cs-CZ')} z ${totalElements.toLocaleString('cs-CZ')} položek (strana ${page+1} z ${totalPages})`}
+                    {loadError ? 'Počet nedostupný' : `Zobrazeno ${items.length.toLocaleString('cs-CZ')} z ${totalElements.toLocaleString('cs-CZ')} položek (strana ${page+1} z ${totalPages})`}
                 </span>
                 <div className="flex gap-2">
                     <GovButton
                         type="outlined"
                         color="neutral"
                         size="s"
-                        disabled={page === 0 || loading}
+                        disabled={page === 0 || loading || !!loadError}
                         onClick={() => handlePageChange(page - 1)}
                     >
                         Předchozí
                     </GovButton>
                     <div className="flex items-center px-4">
                         <span className="text-xs font-black text-gray-800 font-mono">
-                            {page + 1} / {totalPages}
+                            {loadError ? '—' : `${page + 1} / ${totalPages}`}
                         </span>
                     </div>
                     <GovButton
                         type="outlined"
                         color="neutral"
                         size="s"
-                        disabled={(page+1>=totalPages||(native&&page>=400))||loading}
+                        disabled={(page+1>=totalPages||(native&&page>=400))||loading||!!loadError}
                         onClick={() => handlePageChange(page + 1)}
                     >
                         Další

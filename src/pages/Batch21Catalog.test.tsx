@@ -61,3 +61,16 @@ it('renders all 18 confirmed DEMUS columns and preserves NULL vs empty-string vs
 });
 it('retains the previous test closing',()=>{
 });
+it('keeps original evidence toolbar/search and explicit retry when the API contract fails',async()=>{
+ vi.mocked(api.listAdminItems).mockRejectedValueOnce(new Error('Invalid curator page: Cache-Control')).mockResolvedValue(row('Recovered') as any);
+ render(<MemoryRouter><AdminItems/></MemoryRouter>);
+ await screen.findByRole('alert');
+ expect(screen.getByRole('heading',{name:/Správa sbírkových předmětů/})).toHaveTextContent('počet nedostupný');
+ expect(screen.getByRole('button',{name:'Nový předmět'})).toBeInTheDocument();
+ expect(screen.getByPlaceholderText('Rychlé hledání: název, inv. číslo, popis, autor...')).toBeInTheDocument();
+ expect(screen.queryByRole('table')).not.toBeInTheDocument();
+ expect(screen.getByRole('button',{name:/Tisk soupisu/})).toBeDisabled();
+ await userEvent.click(screen.getByRole('button',{name:'Načíst znovu'}));
+ await screen.findByRole('button',{name:'Recovered'});
+ expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});

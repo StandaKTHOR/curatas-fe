@@ -10,7 +10,9 @@
     "build": "vite build",
     "build:uat": "node scripts/build-uat.mjs",
     "preview": "vite preview",
-    "lint": "eslint src vite.config.ts vitest.config.ts eslint.config.js"
+    "lint": "eslint src vite.config.ts vitest.config.ts eslint.config.js",
+    "build:qa": "node scripts/build-original-qa.mjs",
+    "verify:uat-design": "node scripts/guard-original-uat.mjs"
   },
   "dependencies": {
     "@gov-design-system-ce/components": "4.7.0",

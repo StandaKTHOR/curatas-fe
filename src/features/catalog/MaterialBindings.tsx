@@ -9,6 +9,7 @@ export default function MaterialBindings({itemId,onSave,readOnly=false}:{itemId:
  type Snapshot=Awaited<ReturnType<typeof api.references>>;
  const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[revision,setRevision]=useState(0);
  const [type,setType]=useState<'MATERIAL'|'TECHNIQUE'>('MATERIAL'),[selected,setSelected]=useState<string|null>(null);
+ const noDelete=import.meta.env.VITE_QA_NO_DELETE==='true';
  const enabled=dictionaryReadable&&!readOnly&&originalCanEdit('professional');
  useEffect(()=>{
   let alive=true;setSnapshot(null);setSelected(null);setError('');
@@ -31,7 +32,7 @@ export default function MaterialBindings({itemId,onSave,readOnly=false}:{itemId:
   {error&&<p role="alert">{error}</p>}
   {!snapshot&&!error&&<p role="status">Načítání vazeb…</p>}
   {snapshot&&<ul>{snapshot.items.map(v=><li key={v.id}>{v.type==='MATERIAL'?'Materiál':'Technika'}: {v.label}
-   {enabled&&<button type="button" disabled={busy} onClick={()=>void save(v.id,v.type,true)}>Odebrat vazbu</button>}
+   {enabled&&<button type="button" disabled={busy||noDelete} title={noDelete?'Izolované QA nepovoluje mazání vazeb; aktuální vazba zůstává zachována.':undefined} onClick={()=>void save(v.id,v.type,true)}>Odebrat vazbu</button>}
   </li>)}</ul>}
   {snapshot&&!snapshot.items.length&&<p>Žádné současné číselníkové vazby. Není to tvrzení o původních hodnotách DEMUS.</p>}
   <label>Číselník <select aria-label="Číselník vazby" disabled={busy} value={type} onChange={e=>{setType(e.target.value as typeof type);setSelected(null);}}><option value="MATERIAL">Materiál</option><option value="TECHNIQUE">Technika</option></select></label>

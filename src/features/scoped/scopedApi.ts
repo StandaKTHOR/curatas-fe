@@ -1,3 +1,5 @@
+import {hasPrivateNoStore} from '../../lib/privateResponsePolicy';
+import {validateCuratorPage} from './curatorPageContract';
 import { effectiveToken, localAuthEnabled } from '../localAuth/localAuthClient';
 import { resolveApiUrl } from '../../lib/api';
 import {curatorQuery,curatorCurrentFields,curatorCurrentInventoryFields} from './curatorContract';
@@ -141,13 +143,13 @@ export function scopedApi(catalogId: number, token: string) {
     async function cloneResult(path:string,requestId:string,signal:AbortSignal,init?:RequestInit){
         const {body,response}=await read(path,signal,init);const created=item(body.item);
         if(body.requestId!==uuid(requestId).toLowerCase()||typeof body.replayed!=='boolean'||!body.copied||typeof body.copied!=='object'
-            ||response.headers.get('Cache-Control')!=='no-store'||(init&&response.headers.get('Location')!==itemPath(created.id)))throw new Error('Invalid clone receipt');
+            ||!hasPrivateNoStore(response.headers)||(init&&response.headers.get('Location')!==itemPath(created.id)))throw new Error('Invalid clone receipt');
         return {value:{item:created,clonedFromItemId:integer(body.clonedFromItemId),requestId:body.requestId,replayed:body.replayed,copied:body.copied},etag:tag(response,created.version)};
     }
     return {
         professionalHistory:async(id:number,signal:AbortSignal)=>{
             const {body,response}=await read(`${itemPath(id)}/professional-records/history`,signal);
-            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_OWNED_MUSEUM_HISTORY_NOT_USER_AUDIT'||!Array.isArray(body.items)||body.items.length>1000||response.headers.get('Cache-Control')!=='no-store')throw new Error('Invalid museum history contract');
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_OWNED_MUSEUM_HISTORY_NOT_USER_AUDIT'||!Array.isArray(body.items)||body.items.length>1000||!hasPrivateNoStore(response.headers))throw new Error('Invalid museum history contract');
             const items:MuseumHistoryRow[]=body.items.map((v:any)=>{if(!['REVISION','RESTORATION','LOAN'].includes(v.eventType)||(v.eventDate!==null&&!/^\d{4}-\d{2}-\d{2}$/.test(v.eventDate)))throw new Error('Unclassified museum event');return {id:integer(v.id),eventType:v.eventType,eventDate:nullable(v.eventDate),description:nullable(v.description)};});
             if(new Set(items.map((v:{id:number})=>v.id)).size!==items.length)throw new Error('Duplicate history identity');return {items,etag:tag(response,body.itemVersion)};
         },
@@ -159,25 +161,25 @@ export function scopedApi(catalogId: number, token: string) {
         cloneOutcome:(requestId:string,signal:AbortSignal)=>cloneResult(`${root}/clone-requests/${uuid(requestId)}`,requestId,signal),
         cloneOrigin:async(id:number,signal:AbortSignal)=>{
             const response=await request(`${itemPath(id)}/clone-origin`,signal);
-            if(response.headers.get('Cache-Control')!=='no-store')throw new Error('Invalid cache policy');if(response.status===204)return null;
+            if(!hasPrivateNoStore(response.headers))throw new Error('Invalid cache policy');if(response.status===204)return null;
             const b=exactJson(await response.text());if(integer(b.catalogId)!==catalogId||integer(b.itemId)!==id||typeof b.createdAt!=='string'||Number.isNaN(Date.parse(b.createdAt))||!b.copied||b.sourceEvidence?.semantics!=='CLONED_READ_ONLY_SOURCE_EVIDENCE_NOT_CURRENT_ASSERTIONS')throw new Error('Invalid clone origin');
             return {catalogId,itemId:id,itemVersion:version(b.itemVersion),clonedFromItemId:integer(b.clonedFromItemId),createdBy:integer(b.createdBy),createdAt:b.createdAt,copied:b.copied,etag:tag(response,b.itemVersion)};
         },
         professionalRecords:async(id:number,signal:AbortSignal)=>{
             const {body,response}=await read(`${itemPath(id)}/professional-records`,signal);
-            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_OWNED_RECORDS_NOT_SOURCE'||!Array.isArray(body.items)||body.items.length>1000||response.headers.get('Cache-Control')!=='no-store')throw new Error('Invalid current record contract');
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_OWNED_RECORDS_NOT_SOURCE'||!Array.isArray(body.items)||body.items.length>1000||!hasPrivateNoStore(response.headers))throw new Error('Invalid current record contract');
             const items=body.items.map((r:any)=>{if(!['DOCUMENTATION','CLASSIFICATION','DETERMINATION','DEACCESSION','MANIPULATION','ACTION','ISO','ORIGIN','MATERIAL_TECHNIQUE','BIBLIOGRAPHY'].includes(r.kind)||!r.payload||typeof r.payload!=='object'||Array.isArray(r.payload))throw new Error('Invalid professional record');
                 return {id:integer(r.id),kind:r.kind as import('../../lib/api').MuseumRecordKind,dictionaryId:r.dictionaryId===null?null:integer(r.dictionaryId),partyId:r.partyId===null?null:integer(r.partyId),payload:r.payload,materialDictionaryId:r.materialDictionaryId===null?null:integer(r.materialDictionaryId),techniqueDictionaryId:r.techniqueDictionaryId===null?null:integer(r.techniqueDictionaryId),sourceTable:null,sourceKey:null,legacyData:null};});
             if(new Set(items.map((r:{id:number})=>r.id)).size!==items.length)throw new Error('Duplicate professional identity');return {items,etag:tag(response,body.itemVersion)};
         },
         dictionaryMetadata:async(type:'MATERIAL'|'TECHNIQUE',signal:AbortSignal)=>{
             const {body,response}=await read(`${base}/dictionaries/${type}`,signal);
-            if(body.type!==type||body.ownership!=='CATALOG_CREATED_ONLY'||body.parentSupport!=='EXPLICIT_SAME_TYPE'||!Array.isArray(body.operations)||!body.operations.includes('read')||response.headers.get('Cache-Control')!=='no-store')throw new Error('Unsupported dictionary contract');
+            if(body.type!==type||body.ownership!=='CATALOG_CREATED_ONLY'||body.parentSupport!=='EXPLICIT_SAME_TYPE'||!Array.isArray(body.operations)||!body.operations.includes('read')||!hasPrivateNoStore(response.headers))throw new Error('Unsupported dictionary contract');
             return body;
         },
         dictionaryValues:async(type:'MATERIAL'|'TECHNIQUE',signal:AbortSignal,after?:string):Promise<Page<DictionaryValue,string>>=>{
             const {body,response}=await read(`${base}/dictionaries/${type}/values?limit=100${after?'&afterId='+uuid(after):''}`,signal);
-            if(!Array.isArray(body.items)||body.items.length>100||response.headers.get('Cache-Control')!=='no-store')throw new Error('Invalid dictionary page');
+            if(!Array.isArray(body.items)||body.items.length>100||!hasPrivateNoStore(response.headers))throw new Error('Invalid dictionary page');
             const items:DictionaryValue[]=body.items.map((v:any)=>{if(integer(v.catalogId)!==catalogId||v.type!==type)throw new Error('Foreign dictionary value');return {id:uuid(v.id),catalogId,type,label:text(v.label),code:nullable(v.code),parentId:v.parentId===null?null:uuid(v.parentId),version:version(v.version)};});
             if(items.some((v,i)=>v.id<=(after??'')||i>0&&v.id<=items[i-1].id))throw new Error('Unordered dictionary page');
             const next=body.nextAfterId===null?null:uuid(body.nextAfterId);if(next!==null&&(!items.length||next!==items[items.length-1].id))throw new Error('Invalid dictionary cursor');
@@ -186,9 +188,7 @@ export function scopedApi(catalogId: number, token: string) {
         curatorPage:async(page:number,size:number,sort:string,filters:Record<string,unknown>,signal:AbortSignal)=>{
             const query=curatorQuery(page,size,sort,filters);
             const {body,response}=await read(`${root}/curator-page?${query}`,signal);
-            if(integer(body.catalogId)!==catalogId||integer(body.page,true)!==page||integer(body.pageSize)!==size||body.sort!==sort||body.semantics!=='CURRENT_ASSERTIONS_AND_SEPARATELY_LABELLED_SOURCE_INVENTORY'||response.headers.get('Cache-Control')!=='no-store'||!Array.isArray(body.items))throw new Error('Invalid curator page');
-            const totalElements=integer(body.totalElements,true),totalPages=integer(body.totalPages,true);
-            if(totalPages!==Math.ceil(totalElements/size)||body.items.length!==Math.min(size,Math.max(0,totalElements-page*size)))throw new Error('Invalid curator totals');
+            const {totalElements,totalPages}=validateCuratorPage(body,response.headers,{catalogId,page,pageSize:size,sort});
             const items:{item:Item;current:Record<string,string|null>;currentPresent:boolean;currentInventory:Record<string,string|null>;source:Record<string,string|null>;hasPhoto:boolean|null;hasAttachment:boolean|null}[]=body.items.map((row:any)=>{
                 const current:Record<string,string|null>={};
                 if(!row.current||Object.keys(row.current).length!==curatorCurrentFields.length||Object.keys(row.current).some(k=>!curatorCurrentFields.includes(k as typeof curatorCurrentFields[number]))||typeof row.currentPresent!=='boolean')throw new Error('Invalid current projection');
@@ -202,7 +202,7 @@ export function scopedApi(catalogId: number, token: string) {
         },
         sourceInventory:async(id:number,signal:AbortSignal)=>{
             const {body,response}=await read(`${itemPath(id)}/source-inventory`,signal);
-            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='WHITELISTED_HISTORICAL_SOURCE_NOT_CURRENT_ASSERTION'||response.headers.get('Cache-Control')!=='no-store')throw new Error('Foreign source inventory');
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='WHITELISTED_HISTORICAL_SOURCE_NOT_CURRENT_ASSERTION'||!hasPrivateNoStore(response.headers))throw new Error('Foreign source inventory');
             return {fields:sourceInventory(body.source),itemVersion:version(body.itemVersion),etag:tag(response,body.itemVersion)};
         },
         sourceChoices:async(kind:string,signal:AbortSignal,after=''):Promise<Page<SourceChoice,string>>=>{
@@ -303,7 +303,7 @@ export function scopedApi(catalogId: number, token: string) {
         sourceDimensions:async(parent:number,signal:AbortSignal,offset=0,limit=50):Promise<Versioned<{items:SourceDimension[];nextOffset:number|null}>>=>{
             integer(offset,true);if(offset>100000||integer(limit)>100)throw new Error('Invalid page bounds');
             const {body,response}=await read(`${itemPath(parent)}/source-dimensions?offset=${offset}&limit=${limit}`,signal);
-            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==parent||!Array.isArray(body.items)||body.items.length>limit||response.headers.get('Cache-Control')!=='no-store')throw new Error('Foreign source dimension page');
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==parent||!Array.isArray(body.items)||body.items.length>limit||!hasPrivateNoStore(response.headers))throw new Error('Foreign source dimension page');
             const hash=(v:unknown)=>{const s=text(v);if(!/^[a-f0-9]{64}$/.test(s))throw new Error('Invalid source hash');return s;};
             const items:SourceDimension[]=body.items.map((v:any)=>{
                 const n=v.number,value=nullable(n.value),bits=nullable(n.bitPattern),scale=nullable(n.scale),order=nullable(v.sourceOrder);
@@ -321,7 +321,7 @@ export function scopedApi(catalogId: number, token: string) {
         sourceMatTech:async(parent:number,signal:AbortSignal,offset=0,limit=50):Promise<Versioned<{items:SourceMatTech[];nextOffset:number|null}>>=>{
             integer(offset,true);if(offset>100000||integer(limit)>100)throw new Error('Invalid page bounds');
             const {body,response}=await read(`${itemPath(parent)}/source-mattech?offset=${offset}&limit=${limit}`,signal);
-            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==parent||!Array.isArray(body.items)||body.items.length>limit||response.headers.get('Cache-Control')!=='no-store'||body.semantics!=='TECHNICAL_SOURCE_READ_ONLY_REVIEW_REQUIRED')throw new Error('Foreign source MatTech page');
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==parent||!Array.isArray(body.items)||body.items.length>limit||!hasPrivateNoStore(response.headers)||body.semantics!=='TECHNICAL_SOURCE_READ_ONLY_REVIEW_REQUIRED')throw new Error('Foreign source MatTech page');
             const hash=(v:unknown)=>{const s=text(v);if(!/^[a-f0-9]{64}$/.test(s))throw new Error('Invalid source hash');return s;};
             const items:SourceMatTech[]=body.items.map((v:any)=>{
                 const order=nullable(v.sourceOrder);if(order!==null&&!/^-?[0-9]+$/.test(order))throw new Error('Invalid source order');
@@ -363,6 +363,7 @@ export function scopedApi(catalogId: number, token: string) {
             return {items,etag:tag(response,body.itemVersion)};
         },
         assignReference: async (parent:number,type:'MATERIAL'|'TECHNIQUE',id:string,etag:string,signal:AbortSignal,remove=false) => {
+            if(remove&&import.meta.env.VITE_QA_NO_DELETE==='true')throw new Error('Izolované QA nepovoluje mazání číselníkových vazeb. Vazba nebyla změněna.');
             if(!['MATERIAL','TECHNIQUE'].includes(type))throw new Error('Invalid reference type');
             const {body,response}=await read(`${itemPath(parent)}/references/${type}/${uuid(id)}`,signal,
                 {method:remove?'DELETE':'PUT',headers:{'If-Match':strongTag(etag)},body:'{}'});
@@ -375,7 +376,7 @@ export function scopedApi(catalogId: number, token: string) {
             if (!checked.variants.includes(variant) || (variant === 'thumbnail' && checked.kind !== 'IMAGE')) throw new Error('Variant unavailable');
             const response = await request(`${itemPath(parent)}/media/${uuid(entry.id)}/${variant}`, signal);
             const mime = response.headers.get('Content-Type')?.split(';')[0]; const size = integer(response.headers.get('Content-Length'));
-            if (!response.headers.get('Cache-Control')?.split(',').some(v => v.trim() === 'no-store') || response.headers.get('X-Content-Type-Options') !== 'nosniff'
+            if (!hasPrivateNoStore(response.headers) || response.headers.get('X-Content-Type-Options') !== 'nosniff'
                 || !response.headers.get('Content-Disposition')?.startsWith('attachment;') || !mime || !['image/png','image/jpeg','application/pdf','application/octet-stream'].includes(mime)
                 || size > maxBytes || (variant === 'content' && (mime !== entry.mimeType || size !== entry.byteSize)) || (variant === 'thumbnail' && !['image/png','image/jpeg'].includes(mime))) throw new Error('Unsafe media headers');
             const blob = await response.blob(); if (signal.aborted) throw new Error('Request cancelled');

@@ -1,3 +1,4 @@
+import {catalogHeaderRole} from './features/catalog/catalogPresentation';
 import { CatalogProvider, useCatalog } from './features/catalog/CatalogContext';
 import { bindOriginalCatalog } from './features/catalog/originalAdapter';
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -39,7 +40,7 @@ function AppContent() {
     return <div className="demus-app" ref={appRef}>
         {!login && <header className="demus-app-menu" ref={menuRef}>
             <div className="demus-titlebar"><strong>CURATAS — Katalog sbírek</strong>
-                <span>{token ? (admin ? 'Administrátor' : 'Kurátor') : 'Veřejný katalog'}</span>
+                <span>{token ? catalogHeaderRole(roles,selectedCatalog?.capabilities??[]) : 'Veřejný katalog'}</span>
             </div>
             <nav aria-label="Hlavní menu" className="demus-menubar">
                 <NavLink end to="/">Katalog sbírek</NavLink>
