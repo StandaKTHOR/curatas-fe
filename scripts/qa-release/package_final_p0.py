@@ -49,6 +49,8 @@ def main():
     require(len(styles)==1 and sha(styles[0])==CSS, 'Original compiled CSS must be byte identical')
     tests = read(EVIDENCE/'final-p0-fe-all.json')
     require(tests['success'] and tests['numFailedTests']==0 and tests['numPassedTests']>=703, 'Current full FE suite')
+    require((EVIDENCE/'final-p0-fe-all.json').stat().st_mtime >= max(p.stat().st_mtime for p in (FE/'src').rglob('*') if p.is_file()), 'Stale FE regression evidence')
+    require('TYPECHECK PASS' in (EVIDENCE/'final-p0-typecheck.log').read_text(encoding='utf-8'),'Successful TypeScript check required')
     groups = {}
     for name in NATIVE_LOGS:
         log = (EVIDENCE/name).read_text(encoding='utf-8')
@@ -127,7 +129,7 @@ def main():
     write(sub/'BUILD.json',{'kind':'MES_GREEN_FRONTEND_STAGED_ONLY','releaseId':release,'frontendCommit':fc,'frontendBuild':build,'target':{'frontend':'/var/www/mes-green-20261104','catalogId':1,'backendPort':8086,'database':'mes_green_20261104'}})
     manifest(sub,[p for p in (sub/'frontend').rglob('*') if p.is_file()],sub/'FRONTEND.SHA256SUMS')
     manifest(sub,[p for p in sub.rglob('*') if p.is_file()],sub/'SHA256SUMS')
-    for name in ['final-p0-fe-all.json',*NATIVE_LOGS,'final-p0-typecheck.log','final-p0-lint.log','final-p0-green-helper-selfcheck.log','final-p0-green-staging-tests.log','consolidated-unit-selector.txt']:
+    for name in ['final-p0-fe-all.json',*NATIVE_LOGS,'final-p0-typecheck.log','final-p0-lint.log','final-p0-green-helper-selfcheck.log','final-p0-green-staging-tests.log','final-p0-build.log','consolidated-unit-selector.txt']:
         copy(EVIDENCE/name,output/'verification'/name)
     copy(FE/'artifacts/uat-design-guard.json',output/'verification/uat-design-guard.json')
     for path in browsers[0].parent.iterdir():
