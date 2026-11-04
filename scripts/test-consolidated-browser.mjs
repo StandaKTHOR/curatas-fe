@@ -16,7 +16,13 @@ try{
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(input.port,'127.0.0.1',resolve);});
  const chrome=['C:/Program Files/Google/Chrome/Application/chrome.exe','C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(p=>fs.existsSync(p));
  browser=await chromium.launch({...(chrome&&!fs.existsSync((process.env.LOCALAPPDATA||'')+'/ms-playwright')?{executablePath:chrome}:{}),headless:true});const context=await browser.newContext({viewport:{width:1366,height:900}});
- await context.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
+ // Keep generated rapid hard reloads below the unchanged production refresh limit (30/min/IP).
+ // Real HTTP is delayed, never fulfilled/mocked; 429 remains an unexpected test failure.
+ let refreshTimes=[];
+ await context.route('**/*',async r=>{const url=new URL(r.request().url());if(url.hostname!=='127.0.0.1')return r.abort();
+  if(url.pathname==='/api/auth/local/refresh'){refreshTimes=refreshTimes.filter(t=>Date.now()-t<61000);if(refreshTimes.length>=25)await new Promise(resolve=>setTimeout(resolve,Math.max(0,61000-(Date.now()-refreshTimes[0]))));refreshTimes=refreshTimes.filter(t=>Date.now()-t<61000);refreshTimes.push(Date.now());}
+  return r.continue();
+ });
  page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message));
  page.on('response',r=>{const url=new URL(r.url());if(url.pathname.startsWith('/api/'))requests.push({path:url.pathname,method:r.request().method(),status:r.status(),cacheControl:r.headers()['cache-control']});});
  const base=`http://127.0.0.1:${input.port}`;
