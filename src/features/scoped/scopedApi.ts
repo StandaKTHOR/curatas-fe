@@ -1,5 +1,6 @@
 import {professionalFields} from '../../lib/professional';
 import {hasPrivateNoStore} from '../../lib/privateResponsePolicy';
+import {historicalTables,historicalRelatedTables,historicalStates,typedHistorical,type HistoricalTable,type HistoricalPage,type HistoricalRow} from '../catalog/historicalContract';
 import {validateCuratorPage} from './curatorPageContract';
 import { effectiveToken, localAuthEnabled } from '../localAuth/localAuthClient';
 import { resolveApiUrl } from '../../lib/api';
@@ -323,6 +324,33 @@ export function scopedApi(catalogId: number, token: string) {
             if(items.some((v:{recordId:string},i:number)=>v.recordId<=after||i>0&&v.recordId<=items[i-1].recordId))throw new Error('Neuspořádaná zdrojová stránka.');
             const next=body.nextAfterId;if(next!==null&&(!items.length||next!==items[items.length-1].recordId))throw new Error('Neplatný zdrojový kurzor.');
             return {items,nextAfterId:next as string|null,etag:tag(response,body.itemVersion)};
+        },
+        sourceRelated:async(id:number,table:HistoricalTable,recordId:string,signal:AbortSignal,after=''):Promise<HistoricalPage>=>{
+            const cursorPattern=/^[a-f0-9]{64}:[a-f0-9]{64}:[a-f0-9]{64}$/;
+            if(!Object.hasOwn(historicalTables,table)||!/^[a-f0-9]{64}$/.test(recordId)||after!==''&&!cursorPattern.test(after))throw new Error('Invalid related source request');
+            const {body,response}=await read(`${itemPath(id)}/source-history/${table}/${recordId}/relations?limit=50&afterId=${after}`,signal);
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.table!==table||body.sourceRecordId!==recordId||body.semantics!=='DECLARED_SOURCE_AUTHORITY_GRAPH_NOT_CURRENT_IDS_V1'||!hasPrivateNoStore(response.headers)||!['AVAILABLE','SOURCE_ROW_UNAVAILABLE','REVIEW_REQUIRED_DEPTH_LIMIT'].includes(body.state)||!Array.isArray(body.items)||body.items.length>50||body.state==='SOURCE_ROW_UNAVAILABLE'&&body.items.length)throw new Error('Foreign related source');
+            const items:HistoricalRow[]=body.items.map((v:any)=>{
+                for(const k of ['relationshipId','recordId','sourceSha256','rowHash','viaRecordId'])if(typeof v[k]!=='string'||!/^[a-f0-9]{64}$/.test(v[k]))throw new Error('Invalid related lineage');
+                if(!historicalRelatedTables.includes(v.table)||version(v.occurrence)==='0'||version(v.matchingRecords)==='0'||!v.fields||typeof v.fields!=='object'||Array.isArray(v.fields)||!Object.values(v.fields).every(typedHistorical)||!Array.isArray(v.sourcePath)||v.sourcePath.length<2||v.sourcePath.length>7||v.sourcePath[0]!==recordId||v.sourcePath.at(-1)!==v.recordId||v.sourcePath.at(-2)!==v.viaRecordId||new Set(v.sourcePath).size!==v.sourcePath.length||v.sourcePath.some((p:unknown)=>typeof p!=='string'||!/^[a-f0-9]{64}$/.test(p)))throw new Error('Invalid related fields');
+                return {recordId:v.recordId,sourceSha256:v.sourceSha256,rowHash:v.rowHash,occurrence:version(v.occurrence),parentRecordId:v.viaRecordId,parentField:v.relationshipId,fields:v.fields,relationshipId:v.relationshipId,relatedTable:v.table,matchingRecords:version(v.matchingRecords),sourcePath:v.sourcePath};
+            });
+            const cursor=(v:HistoricalRow)=>`${v.relationshipId}:${v.parentRecordId}:${v.recordId}`;
+            if(items.some((v,i)=>cursor(v)<=after||i>0&&cursor(v)<=cursor(items[i-1])))throw new Error('Unordered related evidence');
+            const next=body.nextAfterId;if(next!==null&&(!items.length||next!==cursor(items[items.length-1])||!cursorPattern.test(next)||next<=after))throw new Error('Invalid related cursor');
+            return {items,state:body.state,nextAfterId:next,etag:tag(response,body.itemVersion)};
+        },
+        sourceHistory:async(id:number,table:HistoricalTable,signal:AbortSignal,after=''):Promise<HistoricalPage>=>{
+            if(!Object.hasOwn(historicalTables,table)||after!==''&&!/^[a-f0-9]{64}$/.test(after))throw new Error('Invalid historical source request');
+            const {body,response}=await read(`${itemPath(id)}/source-history/${table}?limit=50&afterId=${after}`,signal);
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.table!==table||body.semantics!=='TYPED_DEMUS_HISTORY_NOT_CURRENT_ASSERTIONS_V1'||!hasPrivateNoStore(response.headers)||!historicalStates.includes(body.state)||!Array.isArray(body.items)||body.items.length>50||body.state!=='AVAILABLE'&&body.items.length)throw new Error('Foreign historical source');
+            const items:HistoricalRow[]=body.items.map((v:any)=>{
+                for(const key of ['recordId','sourceSha256','rowHash','parentRecordId'])if(typeof v[key]!=='string'||!/^[a-f0-9]{64}$/.test(v[key]))throw new Error('Invalid historical lineage');
+                if((v.parentField!==historicalTables[table]&&!(table==='InvCisla'&&v.parentField==='inventory_alias_lineage.parent_record_id'))||version(v.occurrence)==='0'||!v.fields||typeof v.fields!=='object'||Array.isArray(v.fields)||!Object.values(v.fields).every(typedHistorical))throw new Error('Invalid historical fields');return {recordId:v.recordId,sourceSha256:v.sourceSha256,rowHash:v.rowHash,occurrence:version(v.occurrence),parentRecordId:v.parentRecordId,parentField:v.parentField,fields:v.fields};
+            });
+            if(items.some((v,i)=>v.recordId<=after||i>0&&v.recordId<=items[i-1].recordId))throw new Error('Unordered historical rows');
+            const next=body.nextAfterId;if(next!==null&&(body.state!=='AVAILABLE'||!items.length||next!==items[items.length-1].recordId||next<=after))throw new Error('Invalid historical cursor');
+            return {items,state:body.state,nextAfterId:next,etag:tag(response,body.itemVersion)};
         },
         sourceInventory:async(id:number,signal:AbortSignal)=>{
             const {body,response}=await read(`${itemPath(id)}/source-inventory`,signal);

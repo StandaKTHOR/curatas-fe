@@ -1,11 +1,15 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useState,useRef} from 'react';
 import ThreeLevelDictionarySelect from '../../components/ThreeLevelDictionarySelect';
 import {originalSession} from './originalAdapter';
 import {originalCanEdit} from './originalEdit';
 
+let scopeSequence=0;const scopeIds=new WeakMap<AbortSignal,number>();
 /** Current UUID associations; never reinterpret historical text as an authority ID. */
-export default function MaterialBindings({itemId,onSave,readOnly=false}:{itemId:number;onSave?:(etag:string)=>void;readOnly?:boolean}){
- const {api,signal,catalog}=originalSession();const dictionaryReadable=catalog.capabilities?.includes('dictionary.read')===true;
+type Props={itemId:number;onSave?:(etag:string)=>void;readOnly?:boolean};
+export default function MaterialBindings(props:Props){const {signal}=originalSession();if(!scopeIds.has(signal))scopeIds.set(signal,++scopeSequence);return <Bindings key={`${scopeIds.get(signal)}:${props.itemId}`} {...props}/>;}
+function Bindings({itemId,onSave,readOnly=false}:Props){
+ const {api,signal,catalog}=originalSession();const mounted=useRef(true);
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);const dictionaryReadable=catalog.capabilities?.includes('dictionary.read')===true;
  type Snapshot=Awaited<ReturnType<typeof api.references>>;
  const [snapshot,setSnapshot]=useState<Snapshot|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[revision,setRevision]=useState(0);
  const [type,setType]=useState<'MATERIAL'|'TECHNIQUE'>('MATERIAL'),[selected,setSelected]=useState<string|null>(null);
@@ -18,11 +22,12 @@ export default function MaterialBindings({itemId,onSave,readOnly=false}:{itemId:
   return()=>{alive=false;};
  },[itemId,signal,revision,dictionaryReadable]);
  async function save(id:string,kind:'MATERIAL'|'TECHNIQUE',remove=false){
-  if(!snapshot||busy||!enabled)return;
+  if(!snapshot||busy||!enabled||signal.aborted)return;
+  if(!remove&&snapshot.items.some(v=>v.id===id&&v.type===kind)){setError('Tato číselníková vazba již existuje.');return;}
   setBusy(true);setError('');
   try{
    const result=await api.assignReference(itemId,kind,id,snapshot.etag,signal,remove);
-   setSelected(null);setRevision(v=>v+1);onSave?.(result.etag);
+   if(!signal.aborted&&mounted.current){setSelected(null);setRevision(v=>v+1);onSave?.(result.etag);}
   }catch(e){if(!signal.aborted)setError((e as Error).message+' Neuložený výběr je zachován; před opakováním načtěte aktuální verzi.');}
   finally{if(!signal.aborted)setBusy(false);}
  }

@@ -4,20 +4,20 @@ import {cleanup, render, screen, waitFor} from '@testing-library/react';
 import OriginalPermanentIdentificationHeader from './OriginalPermanentIdentificationHeader';
 
 const mocks = vi.hoisted(() => ({
-    auth: vi.fn(), catalog: vi.fn(), sourceInventory: vi.fn(), curatorRecord: vi.fn(),
+    auth: vi.fn(), catalog: vi.fn(), sourceInventory: vi.fn(), curatorRecord: vi.fn(),sourceHistory:vi.fn(),
 }));
 
 vi.mock('../../components/AuthContext', () => ({useAuth: mocks.auth}));
 vi.mock('./CatalogContext', () => ({useCatalog: mocks.catalog}));
 vi.mock('../scoped/scopedApi', () => ({
     scopedApi: () => ({
-        sourceInventory: mocks.sourceInventory,
+        sourceInventory: mocks.sourceInventory,sourceHistory:mocks.sourceHistory,
         curatorRecord: mocks.curatorRecord,
     }),
 }));
 vi.mock('../../components/PermanentIdentificationHeader', () => ({
-    default: ({fond, predmet, titul}: {fond?: string | null; predmet?: string | null; titul?: string | null}) => (
-        <div data-testid="original-header" data-fond={fond ?? ''} data-predmet={predmet ?? ''} data-titul={titul ?? ''} />
+    default: ({fond, predmet, titul,autor,datace,popis}: {fond?: string | null; predmet?: string | null; titul?: string | null;autor?:string|null;datace?:string|null;popis?:string|null}) => (
+        <div data-testid="original-header" data-autor={autor??''} data-datace={datace??''} data-popis={popis??''} data-fond={fond ?? ''} data-predmet={predmet ?? ''} data-titul={titul ?? ''} />
     ),
 }));
 
@@ -40,7 +40,7 @@ beforeEach(() => {
     });
     mocks.curatorRecord.mockResolvedValue({etag: '"v1"'});
 });
-afterEach(() => cleanup());
+afterEach(() => {cleanup();vi.unstubAllEnvs();});
 
 describe('DEMUS read-only detail header fallback', () => {
     it('shows source values explicitly marked DEMUS when current values are absent', async () => {
@@ -97,4 +97,10 @@ describe('DEMUS read-only detail header fallback', () => {
         expect(header()).toHaveAttribute('data-predmet', '');
         expect(header()).toHaveAttribute('data-fond', '');
     });
+});
+
+it('uses verified root author/dating/description fields with matching parent ETag and current priority',async()=>{
+ vi.stubEnv('VITE_DEMUS_HISTORY_ENABLED','true');vi.stubEnv('VITE_ORIGINAL_SCOPED_TEST','true');
+ mocks.sourceHistory.mockResolvedValue({etag:'"v1"',state:'AVAILABLE',items:[{fields:{Autor_S:{kind:'TEXT',value:'Autor DEMUS'},Datace_S:{kind:'TEXT',value:'Datace DEMUS'},Popis_S:{kind:'TEXT',value:'Popis DEMUS'}}}]});
+ show({parentEtag:'"v1"',autor:'Současný autor'});await waitFor(()=>expect(header()).toHaveAttribute('data-datace','Datace DEMUS (DEMUS)'));expect(header()).toHaveAttribute('data-autor','Současný autor');expect(header()).toHaveAttribute('data-popis','Popis DEMUS (DEMUS)');
 });

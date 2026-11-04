@@ -55,3 +55,17 @@ it('shows QA no-DELETE restriction without silently removing a current binding',
  expect(screen.getByRole('button',{name:'Odebrat vazbu'})).toHaveAttribute('title',expect.stringContaining('QA nepovoluje'));
  expect(f.mock.calls.some(([,init])=>init?.method==='DELETE')).toBe(false);
 });
+
+it('refuses a duplicate existing UUID association without a second write',async()=>{
+ const f=transport();render(<MaterialBindings itemId={101}/>);await selectLeaf();await userEvent.click(screen.getByRole('button',{name:'Přidat vazbu'}));await screen.findByText('Materiál: Leaf');await selectLeaf();await userEvent.click(screen.getByRole('button',{name:'Přidat vazbu'}));await screen.findByText('Tato číselníková vazba již existuje.');expect(f.mock.calls.filter(([,init])=>init?.method==='PUT')).toHaveLength(1);
+});
+it('does not display a previous item association or propagate its late save ETag after navigation',async()=>{
+ const f=transport(),normal=f.getMockImplementation()!;let finish!:(r:Response)=>void;
+ f.mockImplementation((url:string,init:any={})=>{
+  if(url.includes('/references/')&&init.method==='PUT')return new Promise<Response>(r=>{finish=r;});
+  if(url.endsWith('/102/references'))return Promise.resolve(reply({catalogId:71,itemId:102,itemVersion:0,items:[]}));
+  return normal(url,init);
+ });
+ const onSave=vi.fn(),view=render(<MaterialBindings itemId={101} onSave={onSave}/>);await selectLeaf();await userEvent.click(screen.getByRole('button',{name:'Přidat vazbu'}));view.rerender(<MaterialBindings itemId={102} onSave={onSave}/>);expect(screen.queryByText('Materiál: Leaf')).not.toBeInTheDocument();
+ finish(reply({id:101,catalogId:71,title:null,inventoryNumber:null,accessionNumber:null,version:1},1));await screen.findByText(/Žádné současné číselníkové vazby/);expect(onSave).not.toHaveBeenCalled();expect(screen.getByRole('button',{name:'Přidat vazbu'})).toBeDisabled();
+});

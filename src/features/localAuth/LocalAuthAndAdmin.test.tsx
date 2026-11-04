@@ -128,3 +128,11 @@ describe('Priority 4: Scoped User, Role, Catalog Access, and Audit Administratio
   for(const end of ['','invalid','2020-01-01T00:00'])expect(()=>shareInterval('custom',end)).toThrow();
  });
 });
+
+it('updates only the selected user display name with expected current identity and existing authorization',async()=>{
+ let user={id:2,login:'gen-reader',displayName:'GENERATED',active:true,enabled:true,validFrom:'2026-01-01T00:00:00Z',validUntil:null,lockedUntil:null};
+ const f=vi.fn().mockImplementation((url:string,init:any={})=>{
+  if(url.endsWith('/identity')){expect(init.method).toBe('PUT');expect(JSON.parse(init.body)).toEqual({displayName:'Kurátor Čeřovský',expectedDisplayName:'GENERATED'});user={...user,displayName:'Kurátor Čeřovský'};return Promise.resolve(new Response(JSON.stringify(user)));}
+  const body=url.endsWith('/profiles')?{version:'mes-profiles-v2',profiles:[]}:url.endsWith('/2')?{user,membership:[],grants:[],effectiveCapabilities:[]}:[user];return Promise.resolve(new Response(JSON.stringify(body)));
+ });vi.stubGlobal('fetch',f);vi.spyOn(window,'confirm').mockReturnValue(true);render(<LocalUsers/>);fireEvent.click(await screen.findByRole('button',{name:'gen-reader — GENERATED'}));await screen.findByRole('heading',{name:'gen-reader'});fireEvent.change(screen.getByLabelText('Zobrazované jméno uživatele'),{target:{value:'Kurátor Čeřovský'}});fireEvent.click(screen.getByRole('button',{name:'Uložit zobrazované jméno'}));await screen.findByRole('button',{name:'gen-reader — Kurátor Čeřovský'});expect(f.mock.calls.filter(([url])=>String(url).endsWith('/identity'))).toHaveLength(1);
+});

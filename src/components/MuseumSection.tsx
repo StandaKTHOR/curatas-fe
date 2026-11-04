@@ -1,4 +1,6 @@
 import type {LifecycleState} from '../features/scoped/scopedApi';
+import {HistoricalTableRows,HistoricalTable} from '../features/catalog/HistoricalRows';
+import type {HistoricalTable as HistoricalSourceTable} from '../features/catalog/historicalContract';
 import ThreeLevelDictionarySelect from './ThreeLevelDictionarySelect';
 import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
 import {originalCanEdit} from '../features/catalog/originalEdit';
@@ -40,7 +42,15 @@ const recordKinds: Partial<Record<Section, MuseumRecordKind>> = {
 const scopedSpecialistSections: Partial<Record<Section, 'reference' | 'manipulation' | 'action' | 'iso'>> = {
     bibliography: 'reference', manipulation: 'manipulation', action: 'action', iso: 'iso'
 };
+const rootHistoricalFields:Partial<Record<Section,[string,string][]>>={
+ determination:[['Predmet_S','Původní předmět — Sbirky'],['Urcil_S','Určil — Sbirky'],['DatUrc_S','Datum určení — Sbirky']],
+ origin:[['Autor_S','Autor — DEMUS text'],['Role_S','Role — DEMUS kód'],['Datace_S','Datace textem'],['RokOd_S','Rok od'],['RokDo_S','Rok do'],['MistoVz_S','Místo vzniku'],['PoznVz_S','Poznámka ke vzniku']],
+ classification:[['Skupina_S','Skupina — kód'],['Fond_S','Fond — DEMUS text'],['Podsb_S','Podsbírka — kód'],['Odd_S','Oddělení — kód']],
+ basic:[['Namet_S','Námět — kód'],['Archiv_S','Archiv DEMUS'],['Karta_S','Karta'],['Opsana_S','Opsáno'],['Overena_S','Ověřeno'],['Ozn_S','Označeno']],
+ locality:[['Lokalita_S','Lokalita — kód'],['Fond_S','Fond — DEMUS text'],['Skupina_S','Skupina — kód']],
+};
 const recordFields = professionalFields;
+const historicalKinds:Record<MuseumRecordKind,HistoricalSourceTable>={CLASSIFICATION:'Zarazeni',DETERMINATION:'Urceni',DOCUMENTATION:'Dokumentace',MANIPULATION:'Manipulace',ACTION:'Akce',ISO:'SbirkyISO',ORIGIN:'Vznik',MATERIAL_TECHNIQUE:'MatTech',BIBLIOGRAPHY:'Reference',DEACCESSION:'VyrazeniSb'};
 const recordDictionary: Partial<Record<MuseumRecordKind, string>> = {
     BIBLIOGRAPHY:'LITERATURE', CLASSIFICATION: 'CLASSIFICATION', DETERMINATION: 'DETERMINER', DOCUMENTATION: 'DOCUMENT_TYPE', DEACCESSION: 'DEACCESSION_REASON',
 };
@@ -445,7 +455,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                     <td>{kind !== 'DEACCESSION' && <button type="button" className="underline" onClick={() => startRecord(row)}>Upravit</button>}
                         {kind !== 'DEACCESSION' && !row.sourceTable && !originalIntegrationEnabled() && <button type="button" className="ml-3 text-red-700 underline" onClick={() => removeRecord(row)}>Odebrat</button>}
                     </td>
-                </tr>)}</tbody>
+                </tr>)}<HistoricalTableRows itemId={itemId} table={historicalKinds[kind]} etag={editSession?.etag} fields={recordFields[kind]}/></tbody>
             </table></div>
             {kind === 'DEACCESSION' && <div className="rounded border border-gray-200 bg-gray-50 p-4 space-y-3">
                 <h4 className="font-semibold">Vyřazení předmětu z evidence</h4>
@@ -533,6 +543,8 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                 </div>
             </div>}
         </div>}
+        {itemId&&rootHistoricalFields[section]&&<HistoricalTable itemId={itemId} table="Sbirky" etag={editSession?.etag} fields={rootHistoricalFields[section]!}/>}
+        {section==='history'&&<>{itemId&&<HistoricalTable itemId={itemId} table="Historie" etag={editSession?.etag} fields={[["Kdy_HS","Kdy"],["Kde_HS","Kde"],["Kdo_HS","Kdo"],["Historka_HS","Historie DEMUS"],["RokChr_HS","Chronologický rok"]]}/>}</>}
         {uncertain && <button type="button" onClick={async () => {try {if(originalIntegrationEnabled()){const {api,signal}=originalSession();const fresh=await api.professionalRecords(itemId,signal);setDetail(old=>old?{...old,records:fresh.items}:old);}else setDetail(await getMuseumItem(itemId)); setMessage(uncertainCreateMessage + ' Serverový seznam byl načten.');} catch (e) {setMessage((e as Error).message);}}}>Obnovit serverový seznam</button>}
         {message && <p role="status" className="text-sm text-[#00204a]">{message}</p>}
     </fieldset>;

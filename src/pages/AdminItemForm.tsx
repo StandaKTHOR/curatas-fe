@@ -1,6 +1,9 @@
 import {originalPrintCardFields} from '../features/catalog/originalAdapter';
 import {ScopedError} from '../features/scoped/scopedApi';
 import {useOriginalSourcePlus} from '../features/catalog/useOriginalSourcePlus';
+import {historicalEnabled} from '../features/catalog/useHistoricalRows';
+import {useHistoricalRows} from '../features/catalog/useHistoricalRows';
+import {HistoricalRoot,HistoricalTable} from '../features/catalog/HistoricalRows';
 import {useOriginalHistoricalData,historicalControl,demusText,currentBinding} from '../features/catalog/useOriginalHistoricalData';
 import OwnedHistory from '../features/catalog/OwnedHistory';
 import CloneOrigin from '../features/catalog/CloneOrigin';
@@ -650,6 +653,10 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     const historicalFund=currentBinding(historical?.authorities.fundRecordId)||historicalControl(null,historicalFields?.Fond_S,true).value;
     const historicalType=currentBinding(historical?.authorities.objectTypeRecordId)||historicalControl(null,historicalFields?.Predmet_S,true).value;
     const sourceControl=(current:unknown,key:string)=>historicalControl(current,historicalFields?.[key],isViewMode);
+    const fullHistorical=useHistoricalRows(id?Number(id):undefined,'Sbirky',editSessionRef.current?.etag);
+    const rootFields=fullHistorical.page?.state==='AVAILABLE'?fullHistorical.page.items[0]?.fields:undefined;
+    const rootText=(key:string)=>rootFields?.[key]?.kind==='TEXT'?String(rootFields[key].value):undefined;
+    const rootControl=(current:unknown,key:string)=>historicalControl(current,rootText(key),isViewMode);
 
     const currentFundLabel = useMemo(() => {
         if (form.fundDictionaryId) {
@@ -1288,6 +1295,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
             <PermanentIdentificationHeader
                 itemId={id ? Number(id) : undefined}
                 readHistorical={originalIntegrationEnabled() && isViewMode}
+                parentEtag={editSessionRef.current?.etag}
                 hasToolbar
                 fond={currentFundLabel}
                 predmet={form.objectType}
@@ -1328,7 +1336,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
             </nav>
 
 
-            {originalIntegrationEnabled() && activeTab!=='identity' && id && <OriginalSourceBridge key={`${id}:${editSessionRef.current?.etag}`} itemId={Number(id)} section={activeTab === 'museum' ? museumSubTab : activeTab}/>}
+            {originalIntegrationEnabled() && activeTab!=='identity' && id && <OriginalSourceBridge key={`${id}:${editSessionRef.current?.etag}`} itemId={Number(id)} etag={editSessionRef.current?.etag} section={activeTab === 'museum' ? museumSubTab : activeTab}/>}
             {/* CHYBOVÉ A ÚSPĚŠNÉ HLÁŠKY */}
             {successMessage && (
                 <div className="mx-6 mt-4 p-3 bg-green-50 border-l-4 border-green-600 text-xs text-green-800 font-bold rounded flex justify-between items-center animate-in fade-in duration-200">
@@ -1592,18 +1600,18 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 <label htmlFor="signature">Signatura / Nápis</label>
                                 <input
                                     id="signature"
-                                    value={form.signature || ''}
+                                    value={rootControl(form.signature,'Sign_S').value}
                                     onChange={(e: any) => setForm({ ...form, signature: e.target.value })}
-                                    placeholder="např. J. Mánes 1865 vpravo dole"
+                                    placeholder={rootControl(form.signature,'Sign_S').placeholder??'např. J. Mánes 1865 vpravo dole'}
                                 />
                             </div>
                             <div className="space-y-1">
                                 <label htmlFor="markant">Značení / Markant</label>
                                 <input
                                     id="markant"
-                                    value={form.markant || ''}
+                                    value={rootControl(form.markant,'Markant_S').value}
                                     onChange={(e: any) => setForm({ ...form, markant: e.target.value })}
-                                    placeholder="např. ražená značka dílny, puncovní značka"
+                                    placeholder={rootControl(form.markant,'Markant_S').placeholder??'např. ražená značka dílny, puncovní značka'}
                                 />
                             </div>
                         </div>
@@ -1702,7 +1710,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                         type="text"
                                         id="author"
                                         className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
-                                        value={form.author || ''}
+                                        value={rootControl(form.author,'Autor_S').value}
                                         onFocus={() => setShowAuthors(true)}
                                         onChange={e => {
                                             const val = e.target.value;
@@ -1744,7 +1752,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                 setShowAuthors(false);
                                             }
                                         }}
-                                        placeholder="Začněte psát jméno autora..."
+                                        placeholder={rootControl(form.author,'Autor_S').placeholder??'Začněte psát jméno autora...'}
                                     />
                                     {showAuthors && (
                                         <div className="absolute left-0 right-0 mt-1 max-h-[160px] overflow-y-auto bg-white border border-gray-200 rounded shadow-lg z-[999]">
@@ -1908,9 +1916,9 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                     <label htmlFor="datingText">Datace textem</label>
                                     <input
                                         id="datingText"
-                                        value={form.datingText || ''}
+                                        value={rootControl(form.datingText,'Datace_S').value}
                                         onChange={(e: any) => setForm({ ...form, datingText: e.target.value })}
-                                        placeholder="např. 60. léta 19. století"
+                                        placeholder={rootControl(form.datingText,'Datace_S').placeholder??'např. 60. léta 19. století'}
                                     />
                                 </div>
                             </div>
@@ -1923,9 +1931,9 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 id="description"
                                 rows={3}
                                 className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#00204a]"
-                                value={form.description || ''}
+                                value={rootControl(form.description,'Popis_S').value}
                                 onChange={e => setForm({ ...form, description: e.target.value })}
-                                placeholder="Podrobný popis vizuálního stavu, námětu, barevnosti..."
+                                placeholder={rootControl(form.description,'Popis_S').placeholder??'Podrobný popis vizuálního stavu, námětu, barevnosti...'}
                             />
                         </div>
 
@@ -1940,13 +1948,13 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                         const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();
                     }}/>}
                     <h3>Současná hlavní pole materiálu a techniky</h3>
-                    {originalIntegrationEnabled()&&!isViewMode&&scopedDomain==='professional'&&<div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><label className="space-y-1">Současný materiál — volný text<input id="current-material-text" value={form.material??''} onChange={e=>setForm((prev:any)=>({...prev,material:e.target.value}))}/></label><label className="space-y-1">Současná technika — volný text<input id="current-technique-text" value={form.technique??''} onChange={e=>setForm((prev:any)=>({...prev,technique:e.target.value}))}/></label></div>}
+                    {originalIntegrationEnabled()&&!isViewMode&&scopedDomain==='professional'&&<div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><label className="space-y-1">Současný materiál — volný text<input id="current-material-text" value={rootControl(form.material,'Material_S').value} placeholder={rootControl(form.material,'Material_S').placeholder} onChange={e=>setForm((prev:any)=>({...prev,material:e.target.value}))}/></label><label className="space-y-1">Současná technika — volný text<input id="current-technique-text" value={rootControl(form.technique,'Technika_S').value} placeholder={rootControl(form.technique,'Technika_S').placeholder} onChange={e=>setForm((prev:any)=>({...prev,technique:e.target.value}))}/></label></div>}
                         {/* Materiál a Technika */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál (Číselník)" scoped={originalIntegrationEnabled()} readOnly={isViewMode} historicalValue={form.material} value={form.materialDictionaryId ?? null}
+                            <ThreeLevelDictionarySelect type="MATERIAL" label="Materiál (Číselník)" scoped={originalIntegrationEnabled()} readOnly={isViewMode} historicalValue={form.material||historicalControl(null,rootText('Material_S'),true).value} value={form.materialDictionaryId ?? null}
                                 onChange={dictionaryId => setForm((prev: any) => ({ ...prev, materialDictionaryId: dictionaryId }))} />
 
-                            <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika (Číselník)" scoped={originalIntegrationEnabled()} readOnly={isViewMode} historicalValue={form.technique} value={form.techniqueDictionaryId ?? null}
+                            <ThreeLevelDictionarySelect type="TECHNIQUE" label="Technika (Číselník)" scoped={originalIntegrationEnabled()} readOnly={isViewMode} historicalValue={form.technique||historicalControl(null,rootText('Technika_S'),true).value} value={form.techniqueDictionaryId ?? null}
                                 onChange={dictionaryId => setForm((prev: any) => ({ ...prev, techniqueDictionaryId: dictionaryId }))} />
                         </div>
                         <p>Text materiálu: {form.material || '—'} · Text techniky: {form.technique || '—'}</p>
@@ -1958,9 +1966,9 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 id="materialNote"
                                 rows={2}
                                 className="w-full bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-[#00204a]"
-                                value={form.materialNote || ''}
+                                value={rootControl(form.materialNote,'PoznMT_S').value}
                                 onChange={e => setForm({ ...form, materialNote: e.target.value })}
-                                placeholder="Doplňující poznámka k materiálu nebo technice (např. technologie zpracování, povrchové úpravy)..."
+                                placeholder={rootControl(form.materialNote,'PoznMT_S').placeholder??'Doplňující poznámka k materiálu nebo technice (např. technologie zpracování, povrchové úpravy)...'}
                             />
                         </div>
 
@@ -2229,9 +2237,9 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 <label htmlFor="originPlace">Místo vzniku</label>
                                 <input
                                     id="originPlace"
-                                    value={form.originPlace || ''}
+                                    value={rootControl(form.originPlace,'MistoVz_S').value}
                                     onChange={(e: any) => setForm({ ...form, originPlace: e.target.value })}
-                                    placeholder="např. Brno, Vídeň, Čechy"
+                                    placeholder={rootControl(form.originPlace,'MistoVz_S').placeholder??'např. Brno, Vídeň, Čechy'}
                                 />
                             </div>
 
@@ -2487,7 +2495,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     <p>Změnil v DEMUS: {form.legacyData._cloneSourceHistory.legacyUpdatedBy || '—'}</p>
     <p>Datum změny: {form.legacyData._cloneSourceHistory.legacyUpdatedAt || '—'}</p>
 </div>}
-<DemusLegacyDataView unavailableMessage={originalIntegrationEnabled()?sourcePlus.message:undefined} legacyData={originalIntegrationEnabled()?sourcePlus.data:form.legacyData} /></div>}
+<HistoricalRoot itemId={id?Number(id):undefined} etag={editSessionRef.current?.etag}/>{id&&<HistoricalTable itemId={Number(id)} table="SbirkyPlus" etag={editSessionRef.current?.etag} fields={[["Sluz_SP","Původní služební údaj SbirkyPlus"]]}/>}<DemusLegacyDataView unavailableMessage={originalIntegrationEnabled()?sourcePlus.message:undefined} legacyData={originalIntegrationEnabled()?sourcePlus.data:form.legacyData} /></div>}
                             {museumSubTab === 'iso' && (
                                 <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="iso" onSave={handleSectionSave} />
                             )}
@@ -2504,7 +2512,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     <p>Změnil v DEMUS: {form.legacyData._cloneSourceHistory.legacyUpdatedBy || '—'}</p>
     <p>Datum změny: {form.legacyData._cloneSourceHistory.legacyUpdatedAt || '—'}</p>
 </div>}
-<DemusLegacyDataView unavailableMessage={originalIntegrationEnabled()?'Soukromý raw archiv není součástí tohoto pohledu. Dostupné zdrojové hodnoty a lineage jsou v příslušných oddělených sekcích; nejde o tvrzení, že historie neexistuje.':undefined} legacyData={form.legacyData} />
+<HistoricalRoot itemId={id?Number(id):undefined} etag={editSessionRef.current?.etag}/>{(!historicalEnabled()||form.legacyData&&Object.keys(form.legacyData).length>0)&&<DemusLegacyDataView unavailableMessage={originalIntegrationEnabled()?'Soukromý raw archiv není součástí tohoto pohledu. Dostupné zdrojové hodnoty a lineage jsou v příslušných oddělených sekcích; nejde o tvrzení, že historie neexistuje.':undefined} legacyData={form.legacyData} />}
                                     </div>
                                 </div>
                             )}
