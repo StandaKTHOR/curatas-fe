@@ -1443,7 +1443,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                         {id && <div className="grid grid-cols-2 gap-2 text-xs border p-2">
                             <p>Založil v MESonline: {form.createdByUser || '—'}</p><p>Datum založení v MESonline: {form.createdAt || '—'}</p>
                             <p>Změnil v MESonline: {form.modifiedByUser || '—'}</p><p>Poslední změna v MESonline: {form.lastModifiedAt || '—'}</p>
-                            <p>Zapsal v DEMUS: {historicalFields?demusText(historicalFields.Zapsal_S):form.legacyCreatedBy || '—'} · Určil v DEMUS: {historicalFields?demusText(historicalFields.Urcil_S):'—'}</p><p>Datum zápisu v DEMUS: {historicalFields?demusText(historicalFields.DatZap_S):form.legacyCreatedAt || '—'}</p>
+                            <p>Zapsal v DEMUS: {historicalFields?demusText(historicalFields.Zapsal_S):form.legacyCreatedBy || '—'}{historicalFields?` · Určil v DEMUS: ${demusText(historicalFields.Urcil_S)}`:''}</p><p>Datum zápisu v DEMUS: {historicalFields?demusText(historicalFields.DatZap_S):form.legacyCreatedAt || '—'}</p>
                             <p>Změnil v DEMUS: {form.legacyUpdatedBy || '—'}</p><p>Datum změny v DEMUS: {historicalFields?demusText(historicalFields.DatZm_S):form.legacyUpdatedAt || '—'}</p>
                         </div>}
                         <div className="space-y-1"><label htmlFor="quantity">{form.quantity==null&&historicalFields?.Pocet_S!=null?`Současný katalogový počet · historický počet: ${demusText(historicalFields.Pocet_S)}`:'Současný katalogový počet'}</label>
