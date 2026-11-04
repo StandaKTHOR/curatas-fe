@@ -1,3 +1,4 @@
+import ManagedDictionaries from '../features/catalog/ManagedDictionaries';
 import {useAuth} from '../components/AuthContext';
 import {useCatalog} from '../features/catalog/CatalogContext';
 import LocalUsers from '../features/localAuth/LocalUsers';
@@ -13,6 +14,7 @@ export default function Admin(){
             <h1 className='text-2xl font-semibold'>Admin</h1>
             <p className='text-sm text-gray-600 mt-2'>Správa uživatelů, oprávnění a auditu vybraného katalogu.</p>
             <LocalUsers />
+            <ManagedDictionaries/>
             {token && selectedCatalog && caps.includes('catalog.access.delegate') && (
                 <CatalogSharingPanel catalogId={selectedCatalog.id} token={token} onDenied={clearAccess} />
             )}

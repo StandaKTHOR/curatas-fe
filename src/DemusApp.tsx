@@ -45,7 +45,7 @@ function AppContent() {
             <nav aria-label="Hlavní menu" className="demus-menubar">
                 <NavLink end to="/">Katalog sbírek</NavLink>
                 {token && <NavLink to="/admin/items">Sbírky — evidence předmětů</NavLink>}
-                {token && selectedCatalog?.capabilities?.some(c => ['catalog.grant.manage', 'catalog.access.delegate', 'catalog.audit.read'].includes(c)) && <NavLink to="/admin">Správa uživatelů a přístupů</NavLink>}
+                {token && selectedCatalog?.capabilities?.some(c => (['catalog.grant.manage', 'catalog.access.delegate', 'catalog.audit.read'].includes(c)||import.meta.env.VITE_MANAGED_AUTHORITIES_ENABLED==='true'&&c==='dictionary.write')) && <NavLink to="/admin">Správa uživatelů a přístupů</NavLink>}
                 {admin && <NavLink to="/admin/import">{importTexts.title}</NavLink>}
                 <NavLink to="/feedback">Připomínky</NavLink>
                 {token && <label>Katalog <select aria-label="Katalog" disabled={catalogLoading} value={selectedCatalog?.id??''}

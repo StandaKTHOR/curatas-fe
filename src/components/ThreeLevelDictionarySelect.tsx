@@ -70,7 +70,7 @@ export default function ThreeLevelDictionarySelect({ type, label, value, histori
         onChange(node?.id as number ?? null, node ? { id: node.id as number, label: node.label, rawLabel: node.label, code: node.code } : undefined);
     };
     const flat=(list:Node[]):Node[]=>list.flatMap(n=>[n,...flat(n.children)]);
-    const manage=async(edit:boolean)=>{try{setError('');if(edit){const {api,signal}=originalSession();const page=await api.dictionaryValues(type,signal);const value=page.items.find(v=>v.id===selectedValue);if(!value)throw new Error('Vybranou položku je potřeba načíst z její aktuální stránky.');setManagedVersion({id:value.id,etag:`"${value.version}"`,label:value.label,code:value.code,parentId:value.parentId});}else setManagedVersion(null);setManagedModal(edit?'edit':'create');}catch(e){setError((e as Error).message);}};
+    const manage=async(edit:boolean)=>{try{setError('');if(edit){const {api,signal}=originalSession();const {value,etag}=await api.dictionaryValue(type,String(selectedValue),signal);setManagedVersion({id:value.id,etag,label:value.label,code:value.code,parentId:value.parentId});}else setManagedVersion(null);setManagedModal(edit?'edit':'create');}catch(e){setError((e as Error).message);}};
     return <fieldset className="space-y-2" disabled={readOnly||!!unavailableReason}>
         <legend className="text-sm font-semibold text-gray-700">{label}</legend>
         {!loading && !error && !unknown && path.length > 0 && <p aria-label={`Vybraná cesta: ${label}`} className="text-sm font-medium text-[#00204a]">{path.map(node => node.label).join(' › ')}</p>}

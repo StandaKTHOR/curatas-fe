@@ -1,3 +1,4 @@
+import CurrentClassificationFlags from '../features/catalog/CurrentClassificationFlags';
 import {useManagedAuthorities} from '../features/catalog/useManagedAuthorities';
 import {originalPrintCardFields} from '../features/catalog/originalAdapter';
 import {ScopedError} from '../features/scoped/scopedApi';
@@ -1672,7 +1673,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider mb-2">
                                 Číselníkové zařazení předmětu
                             </h4>
-                            <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="basic" key={editSessionRef.current?.etag} onSave={handleSectionSave} />
+                            {id&&import.meta.env.VITE_CURRENT_FLAGS_ENABLED==='true'?<CurrentClassificationFlags itemId={Number(id)} parentEtag={editSessionRef.current?.etag} readOnly={isViewMode} blocked={loading||scopedNeedsReload||!!initialFormSnapshotRef.current&&getFormSnapshot(formRef.current)!==initialFormSnapshotRef.current||Object.entries(sectionDrafts.current).some(([k,v]:[string,any])=>k!=='currentFlags'&&v.dirty)} drafts={sectionDrafts} onSave={etag=>{const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();}}>{managedSelect('SUBJECT','subjectDictionaryId','— bez současného námětu —')}</CurrentClassificationFlags>:<MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="basic" key={editSessionRef.current?.etag} onSave={handleSectionSave} />}
                             {originalIntegrationEnabled()&&id&&<div className="mt-2"><button type="button" data-scoped-navigation="true" onClick={()=>setShowScopedAuthorities(v=>!v)} className="text-xs font-semibold text-[#00204a] underline">{showScopedAuthorities?'Skrýt současné odborné vazby a rozsah inv. čísla':'Otevřít současné odborné vazby (Fond, Podsbírka, Skupina, Určil, Role autora) a rozsah inv. čísla'}</button>{showScopedAuthorities&&<div className="mt-2"><AuthorityAndRangeBindings itemId={Number(id)} readOnly={isViewMode||hasUnsavedChanges()||scopedNeedsReload||loading} onSave={etag=>{const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();}}/></div>}</div>}
                         </div>
                         {/* Autor / Původce & Role */}
