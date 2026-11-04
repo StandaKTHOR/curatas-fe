@@ -1,11 +1,15 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState,useRef } from 'react';
+import { useNavigate,useSearchParams } from 'react-router-dom';
 import { GovButton, GovFormInput, GovFormLabel } from '@gov-design-system-ce/react';
-import {localAuthEnabled} from '../features/localAuth/localAuthClient';
+import {localAuthEnabled,resetLocal} from '../features/localAuth/localAuthClient';
 import { login } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 
 export default function Login() {
+    const [params]=useSearchParams();
+    const resetMode=localAuthEnabled()&&params.get('reset')==='1';
+    const pending=useRef(false);
+    const [message,setMessage]=useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -16,10 +20,12 @@ export default function Login() {
 
     async function handleLogin(e: React.FormEvent) {
         e.preventDefault();
-        setError('');
+        if(pending.current)return;pending.current=true;
+        setError('');setMessage('');
         setLoading(true);
 
         try {
+            if(resetMode){await resetLocal(username,password);setUsername('');setPassword('');setMessage('Heslo bylo nastaveno. Účet musí aktivovat správce.');return;}
             if(localAuthEnabled()){await loginLocal(username,password);navigate('/admin/items');return;}
             const response = await login({ username, password });
 
@@ -34,7 +40,7 @@ export default function Login() {
         } catch (err: any) {
             setError(err.message || "Neplatné přihlašovací údaje");
         } finally {
-            setLoading(false);
+            pending.current=false;setLoading(false);
         }
     }
 
@@ -59,12 +65,12 @@ export default function Login() {
                     {/* UŽIVATELSKÉ JMÉNO */}
                     <div className="space-y-2">
                         <GovFormLabel htmlFor="username">
-                            Uživatelské jméno
+                            {resetMode?'Jednorázový reset token':'Uživatelské jméno'}
                         </GovFormLabel>
                         <GovFormInput
                             id="username"
                             type="text"
-                            placeholder="např. novak_k"
+                            placeholder={resetMode?'Soukromě předaný jednorázový token':'např. novak_k'}
                             value={username}
                             onChange={(e: any) => setUsername(e.target.value)}
                             required
@@ -95,6 +101,7 @@ export default function Login() {
                         </div>
                     )}
 
+                    {message&&<p role="status">{message}</p>}
                     {/* TLAČÍTKO PRO ODESLÁNÍ */}
                     <div className="pt-4">
                         <GovButton
@@ -104,7 +111,7 @@ export default function Login() {
                             nativeType="submit"
                             disabled={loading}
                         >
-                            {loading ? "Ověřování..." : "Autorizovaný vstup"}
+                            {loading ? "Ověřování..." : resetMode?"Nastavit heslo":"Autorizovaný vstup"}
                         </GovButton>
                     </div>
                 </form>

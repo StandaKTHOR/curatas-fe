@@ -1,3 +1,4 @@
+import {originalPrintCardFields} from '../features/catalog/originalAdapter';
 import {ScopedError} from '../features/scoped/scopedApi';
 import {useOriginalSourcePlus} from '../features/catalog/useOriginalSourcePlus';
 import OwnedHistory from '../features/catalog/OwnedHistory';
@@ -944,7 +945,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                 editSessionRef.current=fresh._editSession;persistedSnapshotRef.current=fresh;
                 initialFormValuesRef.current=loaded;initialFormSnapshotRef.current=getFormSnapshot(loaded);setForm(loaded);
                 setSuccessMessage('Současná sekce byla uložena přes scoped API a znovu načtena. Historické údaje DEMUS nebyly změněny.');
-            }catch(error){if(accepted)setScopedNeedsReload(true);setGlobalError((accepted?'Zápis byl potvrzen, ale obnovení verze selhalo. Před dalším zápisem obnovte stránku. ':'Zápis nebyl potvrzen; draft zůstává zachován. ')+(error instanceof Error?error.message:'Požadavek selhal.'));}
+            }catch(error){if(error instanceof ScopedError&&error.status===412){setScopedNeedsReload(true);setConflictError('Předmět se mezitím změnil. Rozpracované zadání zůstalo zachované. Porovnejte aktuální záznam a potom kartu znovu načtěte.');}if(accepted)setScopedNeedsReload(true);setGlobalError((accepted?'Zápis byl potvrzen, ale obnovení verze selhalo. Před dalším zápisem obnovte stránku. ':'Zápis nebyl potvrzen; draft zůstává zachován. ')+(error instanceof Error?error.message:'Požadavek selhal.'));}
             finally{mainSaveRef.current=false;setLoading(false);}
             return;
         }
@@ -1334,7 +1335,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                     }}>Porovnat s aktuálním záznamem</button>}
                     {comparison && <div className="overflow-auto mt-2">
                         <table><thead><tr><th>Pole</th><th>Moje zadání</th><th>Aktuální záznam</th></tr></thead>
-                            <tbody>{Object.keys(buildItemPayload(form)).filter(key => JSON.stringify(form[key]) !== JSON.stringify(comparison[key])).map(key =>
+                            <tbody>{Object.keys(originalIntegrationEnabled()?JSON.parse(getFormSnapshot(form)):buildItemPayload(form)).filter(key => JSON.stringify(form[key]) !== JSON.stringify(comparison[key])).map(key =>
                                 <tr key={key}><td>{key}</td><td>{JSON.stringify(form[key])}</td><td>{JSON.stringify(comparison[key])}</td></tr>)}</tbody></table>
                         <p>Rozpracované odborné sekce zůstávají zachovány. Pro jejich změny obnovte záznam a porovnejte původní evidenci.</p>
                     </div>}
@@ -1360,7 +1361,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
             <EditorNavigationGuard isDirty={hasUnsavedChanges} isSaving={() => mainSaveRef.current || auditSaving || !!editSessionRef.current?.busy}/>
             {!id&&originalIntegrationEnabled()&&createUncertain&&<p role="alert">Výsledek založení nebyl potvrzen. Nevytvářejte další požadavek. <button type="button" disabled={loading} onClick={async()=>{if(!creationKeyRef.current)return;setLoading(true);try{const result=await originalCreationOutcome(creationKeyRef.current);initialFormSnapshotRef.current='';navigate(`/admin/items/view/${result.value.item.id}?catalog=${result.value.item.catalogId}`,{replace:true});}catch{setGlobalError('Založení zatím nebylo potvrzeno. Uchovejte draft a ověřte výsledek znovu; další záznam nebyl automaticky odeslán.');}finally{setLoading(false);}}}>Ověřit výsledek založení</button></p>}
             {(location.state as any)?.creationNotice&&<p role="status">{(location.state as any).creationNotice}</p>}
-            <p className="px-6 text-sm">{originalIntegrationEnabled()?(!id?'Nový předmět: vyplňte název (nebo typ) a inventární číslo. Přírůstkové číslo je nepovinné. Další odborné údaje doplňte po založení podle oprávnění.':`Ukládá se pouze současná ${scopedDomain==='inventory'?'inventární':'odborná'} sekce. Historie DEMUS a nepodporovaná pole jsou zamčené. Nezměněné NULL se zachovávají.`):'Uložit: hlavní údaje a základní příznaky včetně Archivu. Odborné záznamy a akvizice ukládejte v příslušné sekci.'}</p>
+            <p className="px-6 text-sm">{originalIntegrationEnabled()?(!id?'Nový předmět: vyplňte název a inventární číslo. Přírůstkové číslo je nepovinné. Současné odborné údaje lze doplnit také před uložením podle oprávnění.':'Uloží se změněné současné údaje, rozměry a umístění podle vašich oprávnění. Historické údaje DEMUS zůstávají pouze pro čtení.'):'Uložit: hlavní údaje a základní příznaky včetně Archivu. Odborné záznamy a akvizice ukládejte v příslušné sekci.'}</p>
             <form id="item-editor" noValidate onSubmit={handleSubmit} className="p-6 space-y-4 demus-editor">
                 <fieldset disabled={loading || auditSaving || (isViewMode && activeTab !== 'photos')}>
                 {/* 1. ZÁKLADNÍ ÚDAJE & IDENTIFIKACE */}
@@ -2500,7 +2501,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             )}
                             {museumSubTab === 'attachments' && !isViewMode && (
                                 <div className="space-y-4">
-                                    {mediaStatus}{originalIntegrationEnabled()&&<p>Scoped přílohy lze číst a stáhnout. Upload, změna popisu a odstranění nemají ověřený scoped zápis a zůstávají zamčené.</p>}
+                                    {mediaStatus}{originalIntegrationEnabled()&&<p>Přílohy jsou soukromé a dostupné podle oprávnění katalogu. Nahrávání a úprava popisu vyžadují povolený režim úprav. Odstraňování není povoleno.</p>}
                                     {!id ? (
                                         <div className="p-6 text-center bg-gray-50 border border-gray-200 rounded text-gray-500">
                                             <FaPaperclip className="mx-auto text-2xl text-gray-400 mb-2" />
@@ -2735,7 +2736,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
 
             {showPrintCard && (
                 <MuseumCardPrint
-                    item={form}
+                    item={originalIntegrationEnabled()?originalPrintCardFields(form):form}
                     onClose={() => setShowPrintCard(false)}
                 />
             )}

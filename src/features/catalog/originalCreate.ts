@@ -8,7 +8,7 @@ export function originalCreationFields(form:Record<string,unknown>):NewItemField
  const fields:NewItemFields={title:String(form.title??''),inventoryNumber:String(form.inventoryNumber??''),accessionNumber:form.accessionNumber===''||form.accessionNumber==null?null:String(form.accessionNumber)};
  for(const key of ['inventoryNumber','title','accessionNumber'] as const){
   const value=fields[key];if(key==='accessionNumber'&&value===null)continue;
-  if(!value?.trim())throw new CreationValidationError(key,key==='inventoryNumber'?'Inventární číslo je povinné.':key==='title'?'Vyplňte název předmětu (nebo typ) na kartě Základ.':'Přírůstkové číslo ponechte prázdné nebo zadejte jeho hodnotu.');
+  if(!value?.trim())throw new CreationValidationError(key,key==='inventoryNumber'?'Inventární číslo je povinné.':key==='title'?'Vyplňte název předmětu na kartě Základ.':'Přírůstkové číslo ponechte prázdné nebo zadejte jeho hodnotu.');
   if(value.includes('\0')||value.length>(key==='title'?4096:255))throw new CreationValidationError(key,'Hodnota obsahuje nepovolený znak nebo je příliš dlouhá.');
  }
  const professional={objectType:'objectType',description:'description',authorText:'author',datingText:'datingText',originPlace:'originPlace',materialText:'material',techniqueText:'technique',materialNote:'materialNote'};

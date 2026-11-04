@@ -22,7 +22,7 @@ export default function UserProfiles({catalog,userId,token,from,until,effective,
  }
  return <section aria-label="Profilové šablony"><h3>Profily a účinná oprávnění</h3>
  <p>Profil je šablona. Rozhodují aktuální oprávnění a členství; název profilu sám přístup neuděluje.</p>
- <p>Budoucí editace jsou plánované a neaktivní. Vytváření, import a zápisy zůstávají vypnuté.</p>
+ <p>Tento formulář přiděluje pouze uvedená čtecí oprávnění. Zápisová oprávnění se profilovou šablonou neaktivují.</p>
  <ul aria-label="Účinná oprávnění">{effective.map(cap=><li key={cap}>{capabilityName(cap)}</li>)}{effective.length===0&&<li>Žádná účinná oprávnění</li>}</ul>
  {error&&<p role="alert">{error}</p>}
  {!definitions?<p role="status">Načítám profily…</p>:<><label>Profilová šablona<select value={selected} disabled={busy} onChange={e=>setSelected(e.target.value)}>{definitions.profiles.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>

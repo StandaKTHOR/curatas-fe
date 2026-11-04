@@ -11,7 +11,7 @@ export default function Admin(){
     return (
         <div className='mx-auto max-w-3xl px-4 py-6'>
             <h1 className='text-2xl font-semibold'>Admin</h1>
-            <p className='text-sm text-gray-600 mt-2'>Tady navážeme v dalším chatu (auth, dashboard, feedback workflow).</p>
+            <p className='text-sm text-gray-600 mt-2'>Správa uživatelů, oprávnění a auditu vybraného katalogu.</p>
             <LocalUsers />
             {token && selectedCatalog && caps.includes('catalog.access.delegate') && (
                 <CatalogSharingPanel catalogId={selectedCatalog.id} token={token} onDenied={clearAccess} />

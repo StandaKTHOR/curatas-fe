@@ -19,7 +19,7 @@ function AppContent() {
     const menuRef = useRef<HTMLElement>(null);
     const { pathname, search } = useLocation();
     const navigate=useNavigate();const attempted=useRef('');
-    const { token, logout, timeLeft } = useAuth();
+    const { token, logout, timeLeft, restoring } = useAuth();
     const { catalogs,selectedCatalog,selectCatalog,loading:catalogLoading,error:catalogError,clearAccess }=useCatalog();
     bindOriginalCatalog(selectedCatalog,token);
     useEffect(()=>{
@@ -62,7 +62,7 @@ function AppContent() {
             </nav>
         </header>}
         <main className="demus-workspace">
-            <Routes key={`${token??'anonymous'}:${selectedCatalog?.id??'none'}`}>
+            {restoring?<p role="status">Obnovuji přihlášení…</p>:<Routes key={`${token??'anonymous'}:${selectedCatalog?.id??'none'}`}>
                 <Route path="/" element={!token?<Navigate to="/login" replace />:selectedCatalog?<Catalog />:<p role="status">Vyberte katalog.</p>} />
                 <Route path="/items/:id" element={selectedCatalog?<AdminItemForm readOnly />:<Navigate to="/login" replace />} />
                 <Route path="/detail/:id" element={selectedCatalog?<AdminItemForm readOnly />:<Navigate to="/login" replace />} />
@@ -80,7 +80,7 @@ function AppContent() {
                     <Route path="/admin/items/edit/:id" element={selectedCatalog?<AdminItemForm />:<p role="status">Vyberte katalog.</p>} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            </Routes>}
         </main>
     </div>;
 }

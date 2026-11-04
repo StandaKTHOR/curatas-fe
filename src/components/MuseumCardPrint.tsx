@@ -145,7 +145,7 @@ export default function MuseumCardPrint({ item, onClose }: MuseumCardPrintProps)
                                 <td className="py-2 pr-4 font-bold uppercase text-gray-500">Fyzický stav:</td>
                                 <td className="py-2 text-gray-900 font-bold">{item.objectCondition || 'Dobrý'}</td>
                                 <td className="py-2 pr-4 font-bold uppercase text-gray-500">Hmotnost:</td>
-                                <td className="py-2 text-gray-900">{item.weight ? `${item.weight} kg` : '—'}</td>
+                                <td className="py-2 text-gray-900">{item.weight || '—'}</td>
                             </tr>
                             <tr className="border-b border-gray-200">
                                 <td className="py-2 pr-4 font-bold uppercase text-gray-500">Umístění (budova / místnost):</td>

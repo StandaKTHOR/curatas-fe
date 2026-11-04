@@ -110,3 +110,11 @@ export async function originalAcquisitionSave(itemId:number,recordId:number|unde
  if(!session||session.itemId!==itemId||session.busy||!catalog.professionalWriteEnabled||!catalog.capabilities?.includes('item.professional.write'))throw new Error('Chybí oprávnění nebo aktuální verze akvizice.');
  session.busy=true;try{const result=await api.saveAcquisition(itemId,recordId,session.etag,input,signal);session.etag=result.etag;if((session as any).scopedCurrent)(session as any).scopedCurrent.etag=result.etag;return result.value;}finally{session.busy=false;}
 }
+
+/** Original card template, explicit current values only; private physical storage never enters print. */
+export function originalPrintCardFields(form:Record<string,any>){
+ const keys=['id','title','inventoryNumber','accessionNumber','description','datingText','material','technique','countryOfOrigin','originPlace','findingLocality','weight'];
+ const value:Record<string,any>=Object.fromEntries(keys.map(k=>[k,form[k]??null]));
+ value.subCollection=form.subCollection||'Neuvedeno';value.author=form.author||'Neuvedeno';value.objectCondition=form.objectCondition||'Neuvedeno';value.modifiedByUser='Neuvedeno';
+ value.dimensions=Array.isArray(form.dimensions)?form.dimensions.map((d:any)=>({type:d.type??d.dimensionType,value:d.value,unit:d.unit})):[];return value;
+}

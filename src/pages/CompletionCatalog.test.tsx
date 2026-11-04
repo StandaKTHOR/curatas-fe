@@ -1,6 +1,6 @@
-import {render,screen,waitFor} from '@testing-library/react';
+import {render,screen,waitFor,fireEvent} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {MemoryRouter,useNavigate} from 'react-router-dom';
+import {MemoryRouter,useNavigate,Routes,Route,useLocation} from 'react-router-dom';
 import {beforeEach,afterEach,expect,it,vi} from 'vitest';
 import AdminItems from './AdminItems';
 import * as api from '../lib/api';
@@ -41,4 +41,10 @@ it('reuses the original workset selector and enables save only for authorized ed
  render(<MemoryRouter initialEntries={['/admin/items?catalog=1']}><AdminItems/></MemoryRouter>);await screen.findByRole('option',{name:/GENERATED set/});
  await userEvent.selectOptions(screen.getByRole('combobox'),id);await waitFor(()=>expect(api.listAdminItems).toHaveBeenLastCalledWith(expect.objectContaining({worksetId:id})));
  await userEvent.click(screen.getByRole('checkbox',{name:'Vybrat GEN-1'}));expect(screen.getByRole('button',{name:'Uložit do sady'})).toBeEnabled();
+});
+
+it('keeps the newest search when opening a row before the debounce and when going Back',async()=>{
+ function Detail(){const here=useLocation();return <output data-testid="return-query">{here.state?.fromSearch}</output>;}
+ render(<MemoryRouter initialEntries={['/admin/items?catalog=1']}><History/><Routes><Route path="/admin/items" element={<AdminItems/>}/><Route path="/admin/items/view/:id" element={<Detail/>}/></Routes></MemoryRouter>);
+ await screen.findByRole('button',{name:'GEN-1'});fireEvent.change(screen.getByPlaceholderText(/Název, autor/),{target:{value:'latest'}});fireEvent.click(screen.getByRole('button',{name:'GEN-1'}));expect(screen.getByTestId('return-query')).toHaveTextContent('q=latest');await userEvent.click(screen.getByRole('button',{name:'TestBack'}));await waitFor(()=>expect(screen.getByPlaceholderText(/Název, autor/)).toHaveValue('latest'));
 });

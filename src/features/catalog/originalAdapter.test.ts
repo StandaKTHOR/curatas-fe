@@ -1,3 +1,4 @@
+import {originalPrintCardFields} from './originalAdapter';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {bindOriginalCatalog,currentForm,originalList,originalDetail,originalInventorySource,originalCatalogList} from './originalAdapter';
 import {inventoryColumns} from '../scoped/scopedApi';
@@ -53,3 +54,8 @@ it.each(['Rada_S','PorC_S','Lomeni_S','HPorC_S','StatSpr_S','Spravce_S','Odd_S',
 });
 
 it.each(['advancedFilter','worksetId'])('rejects malformed %s before transport',async key=>{const f=vi.fn();vi.stubGlobal('fetch',f);await expect(originalList({[key]:'x'})).rejects.toThrow();expect(f).not.toHaveBeenCalled();});
+
+it('keeps original card current text exact without source inference or private physical storage',()=>{
+ const output=originalPrintCardFields({title:'GEN',author:null,objectCondition:null,weight:'12 g',locationBuilding:'PRIVATE',locationRoom:'PRIVATE',permanentLocation:'PRIVATE',latitude:'PRIVATE',longitude:'PRIVATE',insuranceValue:'PRIVATE',legacyData:{secret:'PRIVATE'},sourceInventory:{secret:'PRIVATE'},dimensions:[{id:5,dimensionType:'Výška',value:'0',unit:'cm',legacyData:{secret:'PRIVATE'}}]});
+ expect(output.author).toBe('Neuvedeno');expect(output.objectCondition).toBe('Neuvedeno');expect(output.weight).toBe('12 g');expect(output.dimensions).toEqual([{type:'Výška',value:'0',unit:'cm'}]);expect(JSON.stringify(output)).not.toContain('PRIVATE');
+});

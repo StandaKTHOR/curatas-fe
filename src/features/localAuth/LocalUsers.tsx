@@ -1,3 +1,4 @@
+import {Link} from 'react-router-dom';
 import {useCallback,useEffect,useState} from 'react';
 import {useAuth} from '../../components/AuthContext';
 import {useCatalog} from '../catalog/CatalogContext';
@@ -46,7 +47,7 @@ function Users({catalog,token,logout}:{catalog:number;token:string;logout:()=>vo
  <fieldset><legend>Explicitní čtecí oprávnění</legend>{['catalog.read','item.read','dictionary.read'].map(cap=><div key={cap}><span>{cap}: {detail.grants.find(g=>g.capability===cap)?.active?'Povoleno':'Nepovoleno'}</span>{[true,false].map(active=><button key={String(active)} disabled={busy} onClick={()=>{try{void change(`grants/${cap}`,validity(active),'PUT');}catch{setError('Zadejte platný ISO čas.');}}}>{active?'Přiřadit':'Odebrat'} {cap}</button>)}</div>)}</fieldset>
  {writeGrants.length>0&&<fieldset><legend>Redukce zápisových oprávnění (pouze odebrání)</legend>{writeGrants.map(g=><div key={g.capability}><span>{g.capability}: Povoleno (aktivace pouze offline)</span><button disabled={busy} onClick={()=>{try{void change(`grants/${g.capability}`,validity(false),'PUT');}catch{setError('Zadejte platný ISO čas.');}}}>Odebrat {g.capability}</button></div>)}</fieldset>}
  <button disabled={busy} onClick={()=>void change('reset',{})}>Vydat jednorázový reset</button><button disabled={busy} onClick={()=>void change('revoke',{})}>Zneplatnit všechna přihlášení</button>
- {resetToken&&<aside><p>Jednorázový token předejte soukromým ověřeným kanálem. Platí 15 minut.</p><output aria-label="Jednorázový reset token">{resetToken}</output><button onClick={()=>setResetToken('')}>Skrýt token</button></aside>}
+ {resetToken&&<aside><p>Jednorázový token předejte soukromým ověřeným kanálem. Platí 15 minut.</p><Link to="/login?reset=1">Nastavit heslo jednorázovým tokenem</Link><output aria-label="Jednorázový reset token">{resetToken}</output><button onClick={()=>setResetToken('')}>Skrýt token</button></aside>}
  </section>}
  <details><summary>Administrativní audit účtů a oprávnění katalogu</summary><button type="button" disabled={busy} onClick={()=>void loadAudit(0)}>Načíst administrativní audit</button>
  <ul aria-label="Administrativní audit katalogu">{auditRows.map(a=><li key={a.id}>{a.occurred_at} — aktér #{a.actor_id} → cíl #{a.target_id??'—'} — {a.event}{a.capability?` (${a.capability}: ${a.grant_active?'Povoleno':'Odebráno'})`:''}</li>)}{auditRows.length===0&&<li>Audit nebyl načten nebo neobsahuje záznamy.</li>}</ul>

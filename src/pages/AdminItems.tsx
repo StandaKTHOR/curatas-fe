@@ -121,7 +121,7 @@ export default function AdminItems() {
         setIsAdvancedFilterActive(query.has('advancedFilter'));
     },[location.search]);
 
-    const loadData = () => {
+    const currentQuery = () => {
         const queryParams: any = {
             page,
             size: 50,
@@ -135,6 +135,10 @@ export default function AdminItems() {
             queryParams.advancedFilter = JSON.stringify(advancedFilterGroup);
         }
 
+        return queryParams;
+    };
+    const currentSearch = () => {
+        const queryParams=currentQuery();
         const newParams = new URLSearchParams();
         Object.entries(queryParams).forEach(([k, v]) => {
             if (v !== undefined && v !== null && v !== '') {
@@ -142,10 +146,21 @@ export default function AdminItems() {
             }
         });
         if(originalIntegrationEnabled())newParams.set('catalog',String(originalSession().catalog.id));
-        const searchStr = '?' + newParams.toString();
+        return '?'+newParams.toString();
+    };
+    const openItem = (destination:string) => {
+        const fromSearch=currentSearch();
+        const ids=location.search===fromSearch?(data?.content||[]).map((v:any)=>v.id):undefined;
+        if(location.search!==fromSearch)navigate(location.pathname+fromSearch,{replace:true});
+        sessionStorage.setItem('adminItemsSearch',fromSearch);
+        navigate(destination,{state:{fromSearch,catalogIds:ids,returnPath:'/admin/items'}});
+    };
+    const loadData = () => {
+        const queryParams=currentQuery();
+        const searchStr=currentSearch();
         if (location.search !== searchStr) {
             ownSearch.current=searchStr;
-            setSearchParams(newParams);
+            setSearchParams(new URLSearchParams(searchStr));
         }
         sessionStorage.setItem('adminItemsSearch', searchStr);
 
@@ -300,7 +315,7 @@ export default function AdminItems() {
                         <button disabled={exporting} aria-busy={exporting} onClick={handleExportExcel} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">
                             <FaFileExcel /> {exporting ? 'Exportuji…' : 'Export .xlsx'}
                         </button>
-                        <button disabled={originalIntegrationEnabled()&&!originalCanCreate()} title="Založení podle katalogového oprávnění item.create a explicitního přepínače" onClick={() => navigate(`/admin/items/new${originalIntegrationEnabled()?'?catalog='+originalSession().catalog.id:''}`, { state: { fromSearch: location.search } })} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
+                        <button disabled={originalIntegrationEnabled()&&!originalCanCreate()} title="Založení podle katalogového oprávnění item.create a explicitního přepínače" onClick={() => navigate(`/admin/items/new${originalIntegrationEnabled()?'?catalog='+originalSession().catalog.id:''}`, { state: { fromSearch: currentSearch() } })} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
                             <FaPlus /> Nový předmět
                         </button>
                     </div>
@@ -436,7 +451,7 @@ export default function AdminItems() {
                         <tbody>{data.content.map((item: any) => <tr key={item.id}>
                             <td><input type="checkbox" aria-label={`Vybrat ${item.inventoryNumber || item.id}`} checked={selectedIds.includes(item.id)}
                                 onChange={() => setSelectedIds(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev,item.id])}/></td>
-                            <td><button type="button" className="underline" onClick={() => navigate(originalIntegrationEnabled()?originalItemHref(item.id):`/admin/items/view/${item.id}`,{state:{fromSearch:location.search,catalogIds:(data?.content||[]).map((v:any)=>v.id),returnPath:'/admin/items'}})}>{item.inventoryNumber || '—'}</button></td>
+                            <td><button type="button" className="underline" onClick={() => openItem(originalIntegrationEnabled()?originalItemHref(item.id):`/admin/items/view/${item.id}`)}>{item.inventoryNumber || '—'}</button></td>
                             <td>{item.accessionNumber || '—'}</td><td>{item.fundLegacyCode || item.fundName || '—'}</td>
                             <td>{item.subCollection || '—'}</td><td title={originalIntegrationEnabled()?'Původní DEMUS Predmet_S; není současným kurátorským tvrzením':undefined}>{originalIntegrationEnabled()?(item.sourceInventory?.Predmet_S===null||item.sourceInventory?.Predmet_S===undefined?'—':item.sourceInventory.Predmet_S===''?'Prázdný řetězec':item.sourceInventory.Predmet_S):(item.objectType || '—')}</td><td>{item.title || '—'}</td>
                             <td>{item.author || item.authors?.join(', ') || '—'}</td><td>{item.datingText || '—'}</td>
@@ -444,11 +459,11 @@ export default function AdminItems() {
                             {demusTableColumns.map(col => { const cell = formatDemusCell(item, col); return <td key={col.id} title={cell.title} data-source-field={col.id} data-value-state={cell.state} data-current-assertion={cell.hasCurrent ? 'present' : 'absent'}>{cell.text}</td>; })}
                             <td>{item.catalogingStatus==='VYRAZENO'?'Vyřazeno':item.published ? 'Zveřejněno' : 'Neveřejné'}</td>
                             <td className="demus-row-actions">
-                                <button type="button" aria-label="Upravit předmět" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')&&!originalCanEdit('inventory')} title="Současná odborná sekce podle oprávnění" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(item.id,originalCanEdit('professional')?'professional':'inventory'):`/admin/items/edit/${item.id}`,{state:{fromSearch:location.search,catalogIds:(data?.content||[]).map((v:any)=>v.id),returnPath:'/admin/items'}})}><FaEdit/></button>
+                                <button type="button" aria-label="Upravit předmět" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')&&!originalCanEdit('inventory')} title="Současná odborná sekce podle oprávnění" onClick={() => openItem(originalIntegrationEnabled()?originalEditHref(item.id,originalCanEdit('professional')?'professional':'inventory'):`/admin/items/edit/${item.id}`)}><FaEdit/></button>
                                 <button type="button" aria-label="Tisk štítku" title="Tisk štítku" onClick={() => handlePrint(item.id)}><FaPrint/></button>
                                 <button type="button" aria-label="Tisk muzejní karty" title="Tisk muzejní karty" onClick={() => setCardPrintModal({isOpen:true,item})}><FaIdCard/></button>
                                 <button type="button" aria-label="Klonovat předmět" disabled={originalIntegrationEnabled()&&!originalCanClone()} title="Nezávislé klonování podle katalogového oprávnění" onClick={() => setCloneModal({isOpen:true,item})}><FaCopy/></button>
-                                <button type="button" aria-label="Vyřadit z evidence" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Vyřazení podle katalogového oprávnění" onClick={() => originalIntegrationEnabled()?navigate(originalEditHref(item.id,'professional')+'&tab=deaccession',{state:{fromSearch:location.search}}):setDeaccessionModal({isOpen:true,item})}><FaTrash/></button>
+                                <button type="button" aria-label="Vyřadit z evidence" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Vyřazení podle katalogového oprávnění" onClick={() => originalIntegrationEnabled()?navigate(originalEditHref(item.id,'professional')+'&tab=deaccession',{state:{fromSearch:currentSearch()}}):setDeaccessionModal({isOpen:true,item})}><FaTrash/></button>
                             </td>
                         </tr>)}</tbody>
                     </table>
@@ -544,7 +559,7 @@ export default function AdminItems() {
                         setCloneModal({ isOpen: false, item: null });
                         loadData();
                         if (cloned?.id) {
-                            navigate(originalIntegrationEnabled()?originalItemHref(cloned.id):`/admin/items/edit/${cloned.id}`, { state: { fromSearch: location.search } });
+                            navigate(originalIntegrationEnabled()?originalItemHref(cloned.id):`/admin/items/edit/${cloned.id}`, { state: { fromSearch: currentSearch() } });
                         }
                     }}
                 />
