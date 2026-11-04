@@ -10,6 +10,7 @@ function History(){const navigate=useNavigate();return <><button onClick={()=>na
 beforeEach(()=>{
  vi.resetAllMocks();vi.stubEnv('VITE_ORIGINAL_SCOPED_TEST','true');
  bindOriginalCatalog({id:1,code:'GENERATED',name:'Generated',version:0,institution:{id:1,code:'GEN',name:'Generated'},capabilities:['catalog.read','item.read']},'generated-token');
+ vi.mocked(api.listWorksets).mockResolvedValue([]);
  vi.mocked(api.listAdminItems).mockResolvedValue({content:[{id:1,title:'GENERATED',inventoryNumber:'GEN-1'}],totalElements:8155,totalPages:164} as any);
 });
 afterEach(()=>{bindOriginalCatalog(null,null);vi.unstubAllEnvs();});
@@ -32,4 +33,12 @@ it('restores search and paging through browser Back/Forward and reaches the real
  await waitFor(()=>expect(api.listAdminItems).toHaveBeenLastCalledWith(expect.objectContaining({q:'second',page:0})));
  await userEvent.click(screen.getByRole('button',{name:'TestForward'}));
  await waitFor(()=>expect(api.listAdminItems).toHaveBeenLastCalledWith(expect.objectContaining({q:'second',page:163})));
+});
+
+it('reuses the original workset selector and enables save only for authorized editors',async()=>{
+ const id='00000000-0000-4000-8000-000000000001';vi.mocked(api.listWorksets).mockResolvedValue([{id,name:'GENERATED set',description:'',itemCount:1,createdAt:'2026-11-04T00:00:00Z',updatedAt:'2026-11-04T00:00:00Z'}]);
+ bindOriginalCatalog({id:1,code:'GENERATED',name:'Generated',version:0,institution:{id:1,code:'GEN',name:'Generated'},capabilities:['catalog.read','item.read','item.professional.write'],professionalWriteEnabled:true},'generated-token');
+ render(<MemoryRouter initialEntries={['/admin/items?catalog=1']}><AdminItems/></MemoryRouter>);await screen.findByRole('option',{name:/GENERATED set/});
+ await userEvent.selectOptions(screen.getByRole('combobox'),id);await waitFor(()=>expect(api.listAdminItems).toHaveBeenLastCalledWith(expect.objectContaining({worksetId:id})));
+ await userEvent.click(screen.getByRole('checkbox',{name:'Vybrat GEN-1'}));expect(screen.getByRole('button',{name:'Uložit do sady'})).toBeEnabled();
 });

@@ -1,5 +1,7 @@
 # Original UAT integration acceptance matrix — 4 November 2026
 
+Completion development update: see [field/operation matrix](CITEM-COMPLETION-MATRIX-20261104.md). The baseline rows below describe protected b9; new AST/createdAt, atomic multi-section writes, repeated records, storage, outputs and personal sets now have separate local integration evidence. Entire completion batch is NOT DONE and NOT QA VERIFIED.
+
 PASS below means local implementation/test evidence. The operator confirmed page0 metadata and50 DTOs; post-deployment QA UI/workflow acceptance remains NOT VERIFIED. Original UAT db026f32cf3d0f9cf28ea6271e29c9d0443febc3 is the foundation; see P0-UAT-FOUNDATION-20261104.md. Existing QA feature commits were ported individually; original worktrees remain intact.
 
 | Requirement | Implementation/evidence | Status / limitation |

@@ -1,3 +1,4 @@
+import {useOriginalSourcePlus} from '../features/catalog/useOriginalSourcePlus';
 import OwnedHistory from '../features/catalog/OwnedHistory';
 import CloneOrigin from '../features/catalog/CloneOrigin';
 import {originalItemHref} from '../features/catalog/originalAdapter';
@@ -219,6 +220,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
 
     const scopedMedia=useOriginalMedia(Number(id),activeTab==='photos'||activeTab==='museum'&&museumSubTab==='attachments');
     const scopedDimensions=useOriginalDimensions(Number(id),activeTab==='dimensions');
+    const sourcePlus=useOriginalSourcePlus(Number(id),activeTab==='museum'&&museumSubTab==='plus');
     const [loading, setLoading] = useState(false);
     const [scopedNeedsReload,setScopedNeedsReload]=useState(false);
     const [showScopedAuthorities,setShowScopedAuthorities]=useState(false);
@@ -2459,7 +2461,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     <p>Změnil v DEMUS: {form.legacyData._cloneSourceHistory.legacyUpdatedBy || '—'}</p>
     <p>Datum změny: {form.legacyData._cloneSourceHistory.legacyUpdatedAt || '—'}</p>
 </div>}
-<DemusLegacyDataView unavailableMessage={originalIntegrationEnabled()?'Soukromý raw archiv není součástí tohoto pohledu. Dostupné zdrojové hodnoty a lineage jsou v příslušných oddělených sekcích; nejde o tvrzení, že historie neexistuje.':undefined} legacyData={form.legacyData} /></div>}
+<DemusLegacyDataView unavailableMessage={originalIntegrationEnabled()?sourcePlus.message:undefined} legacyData={originalIntegrationEnabled()?sourcePlus.data:form.legacyData} /></div>}
                             {museumSubTab === 'iso' && (
                                 <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="iso" onSave={handleSectionSave} />
                             )}

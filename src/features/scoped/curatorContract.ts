@@ -3,7 +3,7 @@ import {validateAdvancedFilter} from './advancedFilterContract';
 export const demusListFields=['Rada_S','PorC_S','Lomeni_S','HPorC_S','StatSpr_S','Spravce_S','Odd_S','Podsb_S','Pocet_S','Ozn_S','JineC_S','Karta_S','Opsana_S','Overena_S','Zapsal_S','DatZap_S','Skupina_S','Urcil_S','Fond_S','Predmet_S','Titul_S','DatZm_S'] as const;
 export const curatorInventoryFields=['currentQuantity','currentOtherNumber'] as const;
 export const curatorSourceFilterKeys=['inventoryExact','quantityMin','quantityMax','quantityState','accessionFlag','series','department','collection','recordedBy','determinedBy','choiceKind','choiceRecordId'] as const;
-export const curatorFields=['inventoryNumber','accessionNumber','title','author','datingText','material','technique','objectType','originPlace','subCollection',...demusListFields,...curatorInventoryFields] as const;
+export const curatorFields=['inventoryNumber','accessionNumber','title','author','datingText','material','technique','objectType','originPlace','subCollection','locationBuilding','locationRoom','permanentLocation',...demusListFields,...curatorInventoryFields] as const;
 export const curatorCurrentFields=['authorText','datingText','materialText','techniqueText','objectType','originPlace'] as const;
 export const curatorCurrentInventoryFields=['quantity','otherNumber'] as const;
 
@@ -73,6 +73,7 @@ export function curatorQuery(page:number,size:number,sort:string,filters:Record<
  for(const [key,value] of Object.entries(filters)){
   if(value===undefined||value===null||value==='')continue;
   if(key==='advancedFilter'){if(typeof value!=='string')throw new Error('Neplatný AST filtr.');q.set(key,validateAdvancedFilter(value,curatorFields));continue;}
+  if(key==='worksetId'){if(typeof value!=='string'||!/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i.test(value))throw new Error('Neplatná identita osobní pracovní sady.');q.set(key,value);continue;}
   const allowed=key==='q'||curatorFields.includes(key as typeof curatorFields[number])||curatorSourceFilterKeys.includes(key as typeof curatorSourceFilterKeys[number]);
   if(!allowed)throw new Error(`Filtr ${key} není dostupný v existujícím scoped kontraktu.`);
   if(typeof value!=='string'||value.length>100)throw new Error('Neplatný filtr katalogu.');

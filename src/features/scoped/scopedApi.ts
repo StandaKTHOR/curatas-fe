@@ -1,3 +1,4 @@
+import {professionalFields} from '../../lib/professional';
 import {hasPrivateNoStore} from '../../lib/privateResponsePolicy';
 import {validateCuratorPage} from './curatorPageContract';
 import { effectiveToken, localAuthEnabled } from '../localAuth/localAuthClient';
@@ -6,8 +7,8 @@ import {curatorQuery,curatorCurrentFields,curatorCurrentInventoryFields} from '.
 
 export interface Item { id: number; catalogId: number; title: string | null; inventoryNumber: string | null; accessionNumber: string | null; version: string; sourceInventory?:Record<string,string|null> }
 export interface MuseumHistoryRow {id:number;eventType:'REVISION'|'RESTORATION'|'LOAN';eventDate:string|null;description:string|null}
-export type CuratorSection='inventory'|'professional'|'inventory-range'|'authorities'|'reference'|'manipulation'|'action'|'iso';
-export const curatorSectionFields:Record<CuratorSection,readonly string[]>={inventory:['quantity','otherNumber'],'inventory-range':['lowerNumber','upperNumber','seriesRecordId'],professional:['objectType','description','authorText','datingText','originPlace','materialText','techniqueText','materialNote'],authorities:['determinedByText','authorRoleText','groupRecordId','fundRecordId','collectionRecordId','departmentRecordId','objectTypeRecordId'],reference:['Ref_RF','Str_RF'],manipulation:['Typ_MN','DatMan_MN','Kdo_MN','Stav_MN','Osetreni_MN','InvRev_MN','PopisSt_MN'],action:['Poradi_AK','Prezentace_AK','Revers_AK','CKtlg_AK','Pozn_AK'],iso:['KodISO_SO','CharISO_SO','MatISO_SO','CenaISO_SO','MenaISO_SO','PovrchISO_SO','TvarISO_SO']};
+export type CuratorSection='inventory'|'professional'|'inventory-range'|'authorities'|'reference'|'manipulation'|'action'|'iso'|'storage';
+export const curatorSectionFields:Record<CuratorSection,readonly string[]>={storage:['locationBuilding','locationRoom','permanentLocation'],inventory:['quantity','otherNumber'],'inventory-range':['lowerNumber','upperNumber','seriesRecordId'],professional:['objectType','description','authorText','datingText','originPlace','materialText','techniqueText','materialNote'],authorities:['determinedByText','authorRoleText','groupRecordId','fundRecordId','collectionRecordId','departmentRecordId','objectTypeRecordId'],reference:['Ref_RF','Str_RF'],manipulation:['Typ_MN','DatMan_MN','Kdo_MN','Stav_MN','Osetreni_MN','InvRev_MN','PopisSt_MN'],action:['Poradi_AK','Prezentace_AK','Revers_AK','CKtlg_AK','Pozn_AK'],iso:['KodISO_SO','CharISO_SO','MatISO_SO','CenaISO_SO','MenaISO_SO','PovrchISO_SO','TvarISO_SO']};
 export const inventoryColumns={Predmet_S:'Předmět ve zdroji',Titul_S:'Titul ve zdroji',Rada_S:'Řada',PorC_S:'Poř. č.',Lomeni_S:'Lom',HPorC_S:'Až',StatSpr_S:'Stát',Spravce_S:'Správce',Odd_S:'Oddělení',Podsb_S:'Podsbírka',Pocet_S:'Počet ve zdroji',Ozn_S:'Označeno',JineC_S:'Jiné číslo',Karta_S:'Karta',Opsana_S:'Opsána',Overena_S:'Ověřena',Zapsal_S:'Zapsal',DatZap_S:'Datum zápisu',Skupina_S:'Skupina',Urcil_S:'Určil',DatZm_S:'Datum změny',Fond_S:'Fond'} as const;
 export interface SourceChoice {recordId:string;sourceSha256:string;rowHash:string;typedKey:Record<string,unknown>;code:string;label:string|null;groupingCode:string|null}
 export function inventoryDisplay(key:string,value:string|null|undefined){if(value===null||value===undefined)return 'Neuvedeno';return ['Ozn_S','Karta_S','Opsana_S','Overena_S'].includes(key)?value==='true'?'Ano':value==='false'?'Ne':value:value;}
@@ -38,7 +39,7 @@ export interface Dimension { id: number; itemId: number; catalogId: number; type
 export interface Media { id: string; itemId: number; catalogId: number; kind: 'IMAGE' | 'ATTACHMENT'; name: string; mimeType: string; byteSize: number; variants: ('content' | 'thumbnail')[] }
 export interface DictionaryValue {id:string;catalogId:number;type:string;label:string;code:string|null;parentId:string|null;version:string}
 export interface Versioned<T> { value: T; etag: string }
-export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string|null;professional?:Record<string,string|null>;inventory?:{quantity:number|null;otherNumber:string|null}}
+export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string|null;professional?:Record<string,string|null>;inventory?:{quantity:number|null;otherNumber:string|null};storage?:Record<string,string|null>}
 export interface Creation {item:Item;origin:'MES_CREATED';requestId:string;replayed:boolean}
 export interface ItemOrigin {catalogId:number;itemId:number;itemVersion:string;origin:'MES_CREATED'|'UNRECORDED';createdAt:string|null;createdBy?:string|null;createdBySubject?:string|null}
 export interface SourceSummary {itemVersion:string;sourceQuantity:string|null;sourceAccessionFlag:boolean|null;sourceSeries?:string|null;sourceDepartmentCode?:string|null;sourceCollectionCode?:string|null;sourceRecordedBy?:string|null;sourceDeterminedBy?:string|null}
@@ -146,7 +147,38 @@ export function scopedApi(catalogId: number, token: string) {
             ||!hasPrivateNoStore(response.headers)||(init&&response.headers.get('Location')!==itemPath(created.id)))throw new Error('Invalid clone receipt');
         return {value:{item:created,clonedFromItemId:integer(body.clonedFromItemId),requestId:body.requestId,replayed:body.replayed,copied:body.copied},etag:tag(response,created.version)};
     }
+    function workset(body:any){
+        if(integer(body.catalogId)!==catalogId||!Number.isFinite(Date.parse(body.createdAt))||!Number.isFinite(Date.parse(body.updatedAt)))throw new Error('Neplatná osobní pracovní sada.');
+        integer(body.ownerUserId);const count=integer(body.itemCount,true);if(count>10000)throw new Error('Překročen rozsah pracovní sady.');
+        return {id:uuid(body.id),name:text(body.name),description:body.description===null?'':text(body.description),itemCount:count,createdAt:body.createdAt as string,updatedAt:body.updatedAt as string};
+    }
+    function curatorRows(rows:any[]){
+        const items:{item:Item;current:Record<string,string|null>;currentPresent:boolean;currentInventory:Record<string,string|null>;source:Record<string,string|null>;hasPhoto:boolean|null;hasAttachment:boolean|null}[]=rows.map((row:any)=>{
+                const current:Record<string,string|null>={};
+                if(!row.current||Object.keys(row.current).length!==curatorCurrentFields.length||Object.keys(row.current).some(k=>!curatorCurrentFields.includes(k as typeof curatorCurrentFields[number]))||typeof row.currentPresent!=='boolean')throw new Error('Invalid current projection');
+                for(const key of curatorCurrentFields)current[key]=nullable(row.current[key]);
+                if(!row.currentPresent&&Object.values(current).some(v=>v!==null))throw new Error('Invalid current assertion state');
+                if(![true,false,null].includes(row.hasPhoto)||![true,false,null].includes(row.hasAttachment))throw new Error('Invalid media presence');
+                const currentInventory:Record<string,string|null>={quantity:null,otherNumber:null};if(row.currentInventory!==undefined&&row.currentInventory!==null){if(typeof row.currentInventory!=='object'||Array.isArray(row.currentInventory)||Object.keys(row.currentInventory).length!==curatorCurrentInventoryFields.length||Object.keys(row.currentInventory).some(k=>!curatorCurrentInventoryFields.includes(k as typeof curatorCurrentInventoryFields[number])))throw new Error('Invalid current inventory projection');for(const key of curatorCurrentInventoryFields)currentInventory[key]=nullable(row.currentInventory[key]);}return {item:item(row.item),current,currentPresent:row.currentPresent,currentInventory,source:sourceInventory(row.source),hasPhoto:row.hasPhoto as boolean|null,hasAttachment:row.hasAttachment as boolean|null};
+            });
+        if(new Set(items.map(row=>row.item.id)).size!==items.length)throw new Error('Duplicate curator identity');
+        return items;
+    }
     return {
+        worksets:async(signal:AbortSignal)=>{
+            const {body,response}=await read(`${base}/worksets`,signal);
+            if(!Array.isArray(body)||body.length>200||!hasPrivateNoStore(response.headers))throw new Error('Neplatný seznam osobních pracovních sad.');
+            const items=body.map(workset);if(new Set(items.map(v=>v.id)).size!==items.length)throw new Error('Duplicitní pracovní sada.');return items;
+        },
+        createWorkset:async(requestId:string,input:{name:string;description?:string;itemIds?:number[];filter?:Record<string,unknown>},signal:AbortSignal)=>{
+            if(typeof input.name!=='string'||!input.name.trim()||input.name.length>255||input.description!==undefined&&(typeof input.description!=='string'||input.description.length>4096))throw new Error('Vyplňte název pracovní sady.');
+            const payload:any={name:input.name,description:input.description??null};
+            if(input.itemIds!==undefined){if(input.filter!==undefined||input.itemIds.length>10000||new Set(input.itemIds).size!==input.itemIds.length)throw new Error('Neplatný pracovní výběr.');payload.itemIds=input.itemIds.map(id=>integer(id));}
+            else if(input.filter!==undefined){const {sort='inventoryNumber,asc',...filters}=input.filter;const query=curatorQuery(0,100,String(sort),filters);query.delete('page');query.delete('size');payload.filter={};query.forEach((v,k)=>{payload.filter[k]=v;});}
+            else throw new Error('Chybí pracovní výběr.');
+            const {body,response}=await read(`${base}/worksets`,signal,{method:'POST',headers:{'Idempotency-Key':uuid(requestId)},body:JSON.stringify(payload)});
+            if(!hasPrivateNoStore(response.headers)||uuid(body.id)!==requestId.toLowerCase())throw new Error('Neplatné potvrzení pracovní sady.');return workset(body);
+        },
         professionalHistory:async(id:number,signal:AbortSignal)=>{
             const {body,response}=await read(`${itemPath(id)}/professional-records/history`,signal);
             if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_OWNED_MUSEUM_HISTORY_NOT_USER_AUDIT'||!Array.isArray(body.items)||body.items.length>1000||!hasPrivateNoStore(response.headers))throw new Error('Invalid museum history contract');
@@ -172,6 +204,17 @@ export function scopedApi(catalogId: number, token: string) {
                 return {id:integer(r.id),kind:r.kind as import('../../lib/api').MuseumRecordKind,dictionaryId:r.dictionaryId===null?null:integer(r.dictionaryId),partyId:r.partyId===null?null:integer(r.partyId),payload:r.payload,materialDictionaryId:r.materialDictionaryId===null?null:integer(r.materialDictionaryId),techniqueDictionaryId:r.techniqueDictionaryId===null?null:integer(r.techniqueDictionaryId),sourceTable:null,sourceKey:null,legacyData:null};});
             if(new Set(items.map((r:{id:number})=>r.id)).size!==items.length)throw new Error('Duplicate professional identity');return {items,etag:tag(response,body.itemVersion)};
         },
+        saveProfessional:async(id:number,kind:import('../../lib/api').MuseumRecordKind,recordId:number|undefined,etag:string,payload:Record<string,unknown>,signal:AbortSignal)=>{
+            const fields=professionalFields[kind];
+            if(kind==='DEACCESSION'||!fields||!payload||!Object.keys(payload).length||Object.keys(payload).some(k=>!fields.some(([key])=>key===k)))throw new Error('Nepovolená pole odborného záznamu.');
+            for(const value of Object.values(payload))if(value!==null&&typeof value!=='string'&&typeof value!=='boolean'&&!(typeof value==='number'&&Number.isFinite(value)))throw new Error('Neplatná hodnota odborného záznamu.');
+            const {body,response}=await read(`${itemPath(id)}/professional-records/${kind}${recordId===undefined?'':'/'+integer(recordId)}`,signal,{method:recordId===undefined?'POST':'PATCH',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(payload)});
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.origin!=='CURRENT_CURATOR_STATEMENT_NOT_SOURCE'||!hasPrivateNoStore(response.headers))throw new Error('Neplatný kontrakt uložené odborné evidence.');
+            const r=body.record;
+            if(!r||r.kind!==kind||recordId!==undefined&&integer(r.id)!==recordId||!r.payload||typeof r.payload!=='object'||Array.isArray(r.payload)||Object.keys(r.payload).some(k=>!fields.some(([key])=>key===k)))throw new Error('Neplatný uložený odborný záznam.');
+            const result={id:integer(r.id),kind,dictionaryId:r.dictionaryId===null?null:integer(r.dictionaryId),partyId:r.partyId===null?null:integer(r.partyId),payload:r.payload,materialDictionaryId:r.materialDictionaryId===null?null:integer(r.materialDictionaryId),techniqueDictionaryId:r.techniqueDictionaryId===null?null:integer(r.techniqueDictionaryId),sourceTable:null,sourceKey:null,legacyData:null};
+            return {value:result,etag:tag(response,body.itemVersion)};
+        },
         dictionaryMetadata:async(type:'MATERIAL'|'TECHNIQUE',signal:AbortSignal)=>{
             const {body,response}=await read(`${base}/dictionaries/${type}`,signal);
             if(body.type!==type||body.ownership!=='CATALOG_CREATED_ONLY'||body.parentSupport!=='EXPLICIT_SAME_TYPE'||!Array.isArray(body.operations)||!body.operations.includes('read')||!hasPrivateNoStore(response.headers))throw new Error('Unsupported dictionary contract');
@@ -192,16 +235,43 @@ export function scopedApi(catalogId: number, token: string) {
                 ?await read(`${root}/curator-page/query`,signal,{method:'POST',body:JSON.stringify(bodyParams)})
                 :await read(`${root}/curator-page?${query}`,signal);
             const {totalElements,totalPages}=validateCuratorPage(body,response.headers,{catalogId,page,pageSize:size,sort});
-            const items:{item:Item;current:Record<string,string|null>;currentPresent:boolean;currentInventory:Record<string,string|null>;source:Record<string,string|null>;hasPhoto:boolean|null;hasAttachment:boolean|null}[]=body.items.map((row:any)=>{
-                const current:Record<string,string|null>={};
-                if(!row.current||Object.keys(row.current).length!==curatorCurrentFields.length||Object.keys(row.current).some(k=>!curatorCurrentFields.includes(k as typeof curatorCurrentFields[number]))||typeof row.currentPresent!=='boolean')throw new Error('Invalid current projection');
-                for(const key of curatorCurrentFields)current[key]=nullable(row.current[key]);
-                if(!row.currentPresent&&Object.values(current).some(v=>v!==null))throw new Error('Invalid current assertion state');
-                if(![true,false,null].includes(row.hasPhoto)||![true,false,null].includes(row.hasAttachment))throw new Error('Invalid media presence');
-                const currentInventory:Record<string,string|null>={quantity:null,otherNumber:null};if(row.currentInventory!==undefined&&row.currentInventory!==null){if(typeof row.currentInventory!=='object'||Array.isArray(row.currentInventory)||Object.keys(row.currentInventory).length!==curatorCurrentInventoryFields.length||Object.keys(row.currentInventory).some(k=>!curatorCurrentInventoryFields.includes(k as typeof curatorCurrentInventoryFields[number])))throw new Error('Invalid current inventory projection');for(const key of curatorCurrentInventoryFields)currentInventory[key]=nullable(row.currentInventory[key]);}return {item:item(row.item),current,currentPresent:row.currentPresent,currentInventory,source:sourceInventory(row.source),hasPhoto:row.hasPhoto as boolean|null,hasAttachment:row.hasAttachment as boolean|null};
-            });
-            if(new Set(items.map(row=>row.item.id)).size!==items.length)throw new Error('Duplicate curator identity');
+            const items=curatorRows(body.items);
             return {items,totalElements,totalPages,page,pageSize:size,hasMore:page+1<totalPages};
+        },
+        curatorPrint:async(sort:string,filters:Record<string,unknown>,signal:AbortSignal)=>{
+            const query=curatorQuery(0,100,sort,filters);query.delete('page');query.delete('size');
+            const params:Record<string,string>={};query.forEach((v,k)=>{params[k]=v;});
+            const {body,response}=await read(`${root}/curator-print`,signal,{method:'POST',body:JSON.stringify(params)});
+            const {totalElements}=validateCuratorPage(body,response.headers,{catalogId,page:0,pageSize:10000,sort});
+            if(totalElements>10000)throw new Error('Překročen limit úplného tiskového výstupu.');
+            return {items:curatorRows(body.items),totalElements};
+        },
+        curatorExcel:async(sort:string,filters:Record<string,unknown>,signal:AbortSignal,columns?:string[])=>{
+            const query=curatorQuery(0,100,sort,filters);query.delete('page');query.delete('size');
+            const params:Record<string,string>={};query.forEach((v,k)=>{params[k]=v;});
+            if(columns){if(!columns.length||new Set(columns).size!==columns.length||columns.some(k=>typeof k!=='string'||!k||k.includes(',')))throw new Error('Neplatné sloupce exportu.');params.columns=columns.join(',');}
+            const response=await request(`${root}/curator-export.xlsx`,signal,{method:'POST',body:JSON.stringify(params)});
+            if(!hasPrivateNoStore(response.headers)||response.headers.get('X-CURATAS-Catalog-Id')!==String(catalogId)||response.headers.get('Content-Type')?.split(';')[0]!=='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')throw new Error('Neplatný kontrakt XLSX exportu.');
+            const blob=await response.blob();if(signal.aborted)throw new Error('Request cancelled');return blob;
+        },
+        sourcePlus:async(id:number,signal:AbortSignal,after='')=>{
+            if(after&&!/^[a-f0-9]{64}$/.test(after))throw new Error('Neplatná zdrojová stránka.');
+            const {body,response}=await read(`${itemPath(id)}/source-plus?limit=50&afterId=${after}`,signal);
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='OPAQUE_TYPED_HISTORICAL_PLUS_NOT_CURRENT_ASSERTIONS'||!Array.isArray(body.items)||body.items.length>50||!hasPrivateNoStore(response.headers))throw new Error('Neplatný kontrakt zdrojových Plus/Sluz polí.');
+            const keys=['Plus1T_S','Plus2T_S','Plus3C_S','Sluz2_S','SluzF_S','Sluz_S'];
+            const items=body.items.map((v:any)=>{
+                for(const key of ['recordId','sourceSha256','rowHash'])if(typeof v[key]!=='string'||!/^[a-f0-9]{64}$/.test(v[key]))throw new Error('Neplatná identita zdroje Plus.');
+                if(!v.fields||Object.keys(v.fields).length!==keys.length||Object.keys(v.fields).some(k=>!keys.includes(k)))throw new Error('Nepovolené zdrojové pole.');
+                const fields:Record<string,unknown>={};for(const key of keys){const value=v.fields[key];
+                    if(value!==null){if(typeof value!=='object'||Array.isArray(value)||!['TEXT','NULL','FLOAT_BITS','DOUBLE_BITS'].includes(value.kind)||Object.keys(value).some(k=>!['kind','value'].includes(k))||value.value!==undefined&&value.value!==null&&typeof value.value!=='string')throw new Error('Neplatná typovaná zdrojová hodnota.');
+                        if(value.kind==='FLOAT_BITS'&&!/^[a-f0-9]{8}$/i.test(value.value)||value.kind==='DOUBLE_BITS'&&!/^[a-f0-9]{16}$/i.test(value.value))throw new Error('Neplatný bitový vzor zdroje.');}
+                    fields[key]=value;
+                }
+                return {recordId:v.recordId as string,sourceSha256:v.sourceSha256 as string,rowHash:v.rowHash as string,occurrence:integer(v.occurrence),fields};
+            });
+            if(items.some((v:{recordId:string},i:number)=>v.recordId<=after||i>0&&v.recordId<=items[i-1].recordId))throw new Error('Neuspořádaná zdrojová stránka.');
+            const next=body.nextAfterId;if(next!==null&&(!items.length||next!==items[items.length-1].recordId))throw new Error('Neplatný zdrojový kurzor.');
+            return {items,nextAfterId:next as string|null,etag:tag(response,body.itemVersion)};
         },
         sourceInventory:async(id:number,signal:AbortSignal)=>{
             const {body,response}=await read(`${itemPath(id)}/source-inventory`,signal);
@@ -244,10 +314,10 @@ export function scopedApi(catalogId: number, token: string) {
             const {body,response}=await read(itemPath(id)+'/curator-record/'+section,signal,{method:'PUT',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(value)});
             return body?.itemVersion!==undefined?tag(response,body.itemVersion):response.headers.get('ETag')||'';
         },
-        saveCuratorRecords:async(id:number,etag:string,input:Partial<Record<'inventory'|'professional'|'item',Record<string,string|null>>>,signal:AbortSignal)=>{
-            const sections=Object.keys(input);if(!sections.length||sections.some(k=>!['inventory','professional','item'].includes(k)))throw new Error('Invalid current sections');
+        saveCuratorRecords:async(id:number,etag:string,input:Partial<Record<'inventory'|'professional'|'storage'|'item',Record<string,string|null>>>,signal:AbortSignal)=>{
+            const sections=Object.keys(input);if(!sections.length||sections.some(k=>!['inventory','professional','storage','item'].includes(k)))throw new Error('Invalid current sections');
             const values:Record<string,Record<string,string|number|null>>={};
-            for(const section of sections as ('inventory'|'professional'|'item')[]){
+            for(const section of sections as ('inventory'|'professional'|'storage'|'item')[]){
                 const value=input[section]!;if(section==='item'){if(!value||!Object.keys(value).length||Object.keys(value).some(k=>!['title','inventoryNumber'].includes(k))||Object.values(value).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid inventory identity patch');values.item={...value};continue;}const fields=curatorSectionFields[section];
                 if(!value||Object.keys(value).length!==fields.length||fields.some(k=>!Object.hasOwn(value,k))||Object.values(value).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid current section fields');
                 values[section]={...value};
@@ -279,9 +349,10 @@ export function scopedApi(catalogId: number, token: string) {
                 sourceSeries:nullable(body.sourceSeries??null),sourceDepartmentCode:nullable(body.sourceDepartmentCode??null),sourceCollectionCode:nullable(body.sourceCollectionCode??null),sourceRecordedBy:nullable(body.sourceRecordedBy??null),sourceDeterminedBy:nullable(body.sourceDeterminedBy??null)};
         },
         createItem:async(requestId:string,input:NewItemFields,signal:AbortSignal)=>{
-            if(Object.keys(input).length<3||Object.keys(input).some(k=>!['title','inventoryNumber','accessionNumber','professional','inventory'].includes(k)))throw new Error('Invalid creation fields');
+            if(Object.keys(input).length<3||Object.keys(input).some(k=>!['title','inventoryNumber','accessionNumber','professional','inventory','storage'].includes(k)))throw new Error('Invalid creation fields');
             for(const key of ['title','inventoryNumber','accessionNumber'] as const){const value=input[key];if(key==='accessionNumber'&&value===null)continue;if(typeof value!=='string'||!value.trim()||value.length>(key==='title'?4096:255)||value.includes('\0'))throw new Error('Invalid creation field');}
             if(input.professional){const keys=curatorSectionFields.professional;if(Object.keys(input.professional).length!==keys.length||keys.some(k=>!Object.hasOwn(input.professional!,k))||Object.values(input.professional).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid creation professional fields');}
+            if(input.storage){const keys=curatorSectionFields.storage;if(Object.keys(input.storage).length!==keys.length||keys.some(k=>!Object.hasOwn(input.storage!,k))||Object.values(input.storage).some(v=>v!==null&&(typeof v!=='string'||v.includes('\0')||v.length>512)))throw new Error('Invalid private storage fields');}
             if(input.inventory){const v=input.inventory;if(Object.keys(v).length!==2||!Object.hasOwn(v,'quantity')||!Object.hasOwn(v,'otherNumber')||(v.quantity!==null&&(!Number.isInteger(v.quantity)||v.quantity<0||v.quantity>2147483647))||(v.otherNumber!==null&&typeof v.otherNumber!=='string'))throw new Error('Invalid creation inventory fields');}
             return creation(root,requestId,signal,{method:'POST',headers:{'Idempotency-Key':uuid(requestId)},body:JSON.stringify(input)});
         },

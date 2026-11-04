@@ -1,3 +1,4 @@
+import {originalCanEdit} from '../features/catalog/originalEdit';
 import {curatorFields,demusTableColumns,formatDemusCell} from '../features/scoped/curatorContract';
 import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
 import { useEffect, useState, useRef } from 'react';
@@ -74,7 +75,7 @@ export default function Catalog() {
 
     // Načtení pracovních sad uživatele (pokud je přihlášen)
     useEffect(() => {
-        if (token && !native) {
+        if (token) {
             listWorksets().then(setWorksets).catch(() => {});
         }
     }, [token]);
@@ -685,7 +686,7 @@ export default function Catalog() {
                         </button>
 
                         <button
-                            disabled={native} title={native?'Pracovní sady nemají scoped kontrakt':undefined}
+                            disabled={native&&!originalCanEdit('professional')} title={native?'Osobní pracovní sada podle katalogového oprávnění':undefined}
                             onClick={() => {
                                 setAllFilteredSelected(true);
                                 setShowWorksetModal(true);
@@ -700,7 +701,7 @@ export default function Catalog() {
 
                     <div className="flex items-center gap-2">
                         <button
-                            disabled={native} title={native?'Pracovní sady nemají scoped kontrakt':undefined}
+                            disabled={native&&!originalCanEdit('professional')} title={native?'Osobní pracovní sada podle katalogového oprávnění':undefined}
                             onClick={() => {
                                 setAllFilteredSelected(false);
                                 setShowWorksetModal(true);
@@ -732,7 +733,7 @@ export default function Catalog() {
             <WorksetModal
                 isOpen={showWorksetModal}
                 selectedIds={selectedIds}
-                currentFilter={allFilteredSelected ? getFiltersFromUrl() : undefined}
+                currentFilter={allFilteredSelected ? {...getFiltersFromUrl(),q,sort,...(selectedWorkset?{worksetId:selectedWorkset}:{})} : undefined}
                 fromFilter={allFilteredSelected}
                 onClose={() => setShowWorksetModal(false)}
                 onSuccess={(newWs) => {

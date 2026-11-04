@@ -20,6 +20,7 @@ export function originalCreationFields(form:Record<string,unknown>):NewItemField
   if(quantity!==null&&(!Number.isInteger(quantity)||quantity<0||quantity>2147483647))throw new CreationValidationError('quantity','Počet musí být celé nezáporné číslo nebo NULL.');
   fields.inventory={quantity,otherNumber:form.otherNumber===null||form.otherNumber===undefined||form.otherNumber===''?null:String(form.otherNumber)};
  }
+ if(originalCanEdit('inventory')&&['locationBuilding','locationRoom','permanentLocation'].some(key=>form[key]!==null&&form[key]!==undefined&&form[key]!==''))fields.storage=Object.fromEntries(['locationBuilding','locationRoom','permanentLocation'].map(key=>[key,form[key]===null||form[key]===undefined||form[key]===''?null:String(form[key])]));
  return fields;
 }
 export async function createOriginalItem(requestId:string,form:Record<string,unknown>){
@@ -34,7 +35,7 @@ export function applyOriginalCreationBoundary(root:HTMLElement|null,enabled:bool
  root?.querySelectorAll<HTMLElement>('input,textarea,select,button,gov-button,gov-form-input,gov-form-select').forEach(node=>{
   if(node.hasAttribute('data-scoped-navigation'))return;
   const approvedProfessional=originalCanEdit('professional')&&['current-object-type','description','author','datingText','originPlace','current-material-text','current-technique-text','materialNote'].includes(node.id);
-  const approvedInventory=originalCanEdit('inventory')&&['quantity','current-other-number'].includes(node.id);
+  const approvedInventory=originalCanEdit('inventory')&&['quantity','current-other-number','locationBuilding','locationRoom','permanentLocation'].includes(node.id);
   const active=enabled&&(['title','accessionNumber'].includes(node.id)||node.getAttribute('aria-label')?.startsWith('Inventární číslo:')||node.hasAttribute('data-scoped-save')||approvedProfessional||approvedInventory);
   (node as HTMLInputElement).disabled=!active;if(active)node.removeAttribute('disabled');else node.setAttribute('disabled','');
  });

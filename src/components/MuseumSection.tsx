@@ -154,14 +154,15 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     const editFormRef = useRef<HTMLDivElement>(null);
     const kind = recordKinds[section];
     const curatorSection = scopedSpecialistSections[section];
-    const canScopedWrite = Boolean(curatorSection) && !readOnly && originalIntegrationEnabled() && originalCanEdit('professional');
+    const canRepeat = originalIntegrationEnabled() && Boolean(kind && kind !== 'DEACCESSION') && originalSession().catalog.professionalRecordsEnabled === true;
+    const canScopedWrite = Boolean(curatorSection || canRepeat) && !readOnly && originalIntegrationEnabled() && originalCanEdit('professional');
     useEffect(() => {
-        const scopedDirty = originalIntegrationEnabled() && curatorSection && scopedValues
+        const scopedDirty = originalIntegrationEnabled() && curatorSection && record?.id === 0 && scopedValues
             ? Object.keys(scopedValues).some(k => String(payload[k] ?? '') !== String(scopedValues[k] ?? ''))
             : false;
         if (drafts) drafts.current[section] = {changes, record, payload, dictionaryId, partyId,
             materialId,techniqueId,clearParty,clearDictionary,uncertain,
-            dirty: uncertain || Object.keys(changes).length > 0 || (originalIntegrationEnabled() && curatorSection ? scopedDirty : Boolean(kind && Object.keys(professionalDelta(kind,payload,record)).length>0)) || clearParty || clearDictionary ||
+            dirty: uncertain || Object.keys(changes).length > 0 || (originalIntegrationEnabled() && curatorSection && record?.id === 0 ? scopedDirty : Boolean(kind && Object.keys(professionalDelta(kind,payload,record)).length>0)) || clearParty || clearDictionary ||
                 (record ? partyId!==record.partyId||dictionaryId!==record.dictionaryId||materialId!==(record.materialDictionaryId??null)||techniqueId!==(record.techniqueDictionaryId??null) : !!partyId||!!dictionaryId||!!materialId||!!techniqueId)};
     }, [changes, record, payload, dictionaryId, partyId, section, drafts,kind,materialId,techniqueId,clearParty,clearDictionary,uncertain,curatorSection,scopedValues]);
 
@@ -171,7 +172,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
             let alive=true;setDetail(null);const {api,signal,catalog}=originalSession();
             if(curatorSection && kind){
                 const loadOwned = catalog.professionalRecordsEnabled
-                    ? api.professionalRecords(itemId,signal).catch(()=>({items:[] as MuseumRecord[],etag:''}))
+                    ? api.professionalRecords(itemId,signal)
                     : Promise.resolve({items:[] as MuseumRecord[],etag:''});
                 Promise.all([api.curatorRecord(itemId,curatorSection,signal),loadOwned]).then(([cur,owned])=>{
                     if(!alive||signal.aborted)return;
@@ -179,7 +180,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                     setScopedEtag(cur.etag);setScopedValues(cur.value);
                     const currentRow:MuseumRecord|null=cur.present?{id:0,kind,dictionaryId:null,partyId:null,payload:cur.value,sourceTable:null,sourceKey:'CURRENT_CURATOR_STATEMENT',legacyData:null}:null;
                     setDetail({itemId,markant:null,signature:null,legacyArchived:null,legacyCard:null,legacyCopied:null,legacyVerified:null,legacyMarked:null,localityLegacyCode:null,fundLegacyCode:null,groupLegacyCode:null,subjectLegacyCode:null,materialDictionaryId:null,techniqueDictionaryId:null,localityDictionaryId:null,fundDictionaryId:null,groupDictionaryId:null,subjectDictionaryId:null,legacyCreatedBy:null,legacyCreatedAt:null,legacyUpdatedBy:null,legacyUpdatedAt:null,records:[...(currentRow?[currentRow]:[]),...owned.items]});
-                    setPayload(cur.value);
+                    setPayload(drafts?.current[section]?.payload ?? {});
                     setMessage(cur.present?'Současné kurátorské tvrzení v této odborné sekci je načteno ze scoped API (odděleně od historického zdroje DEMUS).':'Současné kurátorské tvrzení v této odborné sekci zatím nebylo zadáno (NULL). Historické zdrojové záznamy nejsou vydávány za současná tvrzení.');
                 }).catch((e)=>{if(alive&&!signal.aborted)setMessage((e as Error).message||'Současnou odbornou sekci se nepodařilo načíst. Obnovte kartu.');});
                 return()=>{alive=false;};
@@ -188,8 +189,9 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
             api.professionalRecords(itemId,signal).then(result=>{
                 if(!alive||signal.aborted)return;
                 if((editSession as any)?.scopedCurrent&&result.etag!==(editSession as any).scopedCurrent.etag)throw new Error('Verze podzáznamů se změnila. Obnovte kartu.');
+                setScopedEtag(result.etag);
                 setDetail({itemId,markant:null,signature:null,legacyArchived:null,legacyCard:null,legacyCopied:null,legacyVerified:null,legacyMarked:null,localityLegacyCode:null,fundLegacyCode:null,groupLegacyCode:null,subjectLegacyCode:null,materialDictionaryId:null,techniqueDictionaryId:null,localityDictionaryId:null,fundDictionaryId:null,groupDictionaryId:null,subjectDictionaryId:null,legacyCreatedBy:null,legacyCreatedAt:null,legacyUpdatedBy:null,legacyUpdatedAt:null,records:result.items});
-                setMessage('Současné vlastní odborné podzáznamy. Historické raw údaje zde nejsou přepsány ani vydávány za současná tvrzení. Editace této opakované sekce zatím není povolena.');
+                setMessage('Současné vlastní odborné podzáznamy. Historické raw údaje zde nejsou přepsány ani vydávány za současná tvrzení. Zápis současných záznamů vyžaduje oprávnění item.professional.write; původní zdrojové řádky se nemění.');
             }).catch(()=>{if(alive&&!signal.aborted)setMessage('Současné podzáznamy se nepodařilo ověřit. Obnovte kartu.');});return()=>{alive=false;};
         }
         let alive = true;
@@ -274,7 +276,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     const startRecord = (existing: MuseumRecord | null) => {
         if (uncertain) {setMessage(uncertainCreateMessage); return;}
         setRecord(existing);
-        setPayload(existing ? professionalDraft(existing) : (originalIntegrationEnabled() && curatorSection && scopedValues ? scopedValues : {}));
+        setPayload(existing ? professionalDraft(existing) : {});
         setDictionaryId(existing?.dictionaryId ?? null);
         setPartyId(existing?.partyId ?? null);
         setPartyQuery('');setClearParty(false);setClearDictionary(false);setReferenceError(false);setNativeCode(null);
@@ -290,7 +292,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     const saveRecord = async () => {
         if (!kind || saving || editSession?.busy) return;
         if (uncertain) {setMessage(uncertainCreateMessage); return;}
-        if (originalIntegrationEnabled() && curatorSection) {
+        if (originalIntegrationEnabled() && curatorSection && record?.id === 0) {
             if (!canScopedWrite) { setMessage('Chybí oprávnění item.professional.write pro zápis odborné sekce.'); return; }
             const nextValues: Record<string, string | null> = {};
             for (const [key] of recordFields[kind]) {
@@ -332,6 +334,31 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
             } finally {
                 setSaving(false);
             }
+            return;
+        }
+        if (originalIntegrationEnabled() && canRepeat) {
+            if(!canScopedWrite){setMessage('Chybí oprávnění item.professional.write.');return;}
+            if(record?.sourceTable || record?.legacyData){setMessage('Historický zdrojový záznam nelze tímto editorem přepsat.');return;}
+            const delta=professionalDelta(kind,payload,record);
+            if(!Object.keys(delta).length){setMessage('Záznam nemá žádné změny k uložení.');return;}
+            setSaving(true);setMessage('');if(editSession)editSession.busy=true;
+            let committed=false;
+            try{
+                const {api,signal}=originalSession();
+                const etag=(editSession as any)?.scopedCurrent?.etag || editSession?.etag || scopedEtag;
+                const saved=await api.saveProfessional(itemId,kind,record?.id,etag,delta,signal);committed=true;
+                if(editSession){editSession.etag=saved.etag;if((editSession as any).scopedCurrent)(editSession as any).scopedCurrent.etag=saved.etag;}
+                setScopedEtag(saved.etag);
+                const fresh=await api.professionalRecords(itemId,signal);
+                if(fresh.etag!==saved.etag)throw new Error('Verze se změnila při obnovení; načtěte kartu znovu.');
+                setDetail(old=>old?{...old,records:[...old.records.filter(r=>r.id===0),...fresh.items]}:old);
+                setRecord(null);setPayload({});
+                if(drafts?.current[section])drafts.current[section]={...drafts.current[section],record:null,payload:{},dirty:false};
+                await onSave?.();setMessage('Záznam uložen.');
+            }catch(e){
+                if(committed){if(!record)setUncertain(true);setMessage('Záznam byl uložen; obnovení dat selhalo: '+(e as Error).message);}
+                else {if(!record && !(typeof (e as any).status==='number'&&(e as any).status>=400&&(e as any).status<500))setUncertain(true);setMessage((e as Error).message);}
+            }finally{setSaving(false);if(editSession)editSession.busy=false;}
             return;
         }
         if (record && Object.keys(professionalDelta(kind,payload,record)).length === 0
@@ -392,7 +419,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
         } catch (e) { setMessage((e as Error).message); }
     };
 
-    return <fieldset data-scoped-reference-editor={originalIntegrationEnabled() && curatorSection ? '' : undefined} disabled={readOnly || saving || (originalIntegrationEnabled() && !canScopedWrite)} className="space-y-5 demus-section">
+    return <fieldset data-scoped-reference-editor={originalIntegrationEnabled() && (curatorSection || canRepeat) ? '' : undefined} disabled={readOnly || saving || (originalIntegrationEnabled() && !canScopedWrite)} className="space-y-5 demus-section">
         {fields && <div className="grid grid-cols-1 gap-4 rounded border border-gray-200 p-5 md:grid-cols-2">{fields}
             {section !== 'history' && <div className="col-span-full">{saveButton}</div>}</div>}
         {kind && <div className="space-y-4">
@@ -495,7 +522,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                 </div>
             </div>}
         </div>}
-        {uncertain && <button type="button" onClick={async () => {try {setDetail(await getMuseumItem(itemId)); setMessage(uncertainCreateMessage + ' Serverový seznam byl načten.');} catch (e) {setMessage((e as Error).message);}}}>Obnovit serverový seznam</button>}
+        {uncertain && <button type="button" onClick={async () => {try {if(originalIntegrationEnabled()){const {api,signal}=originalSession();const fresh=await api.professionalRecords(itemId,signal);setDetail(old=>old?{...old,records:fresh.items}:old);}else setDetail(await getMuseumItem(itemId)); setMessage(uncertainCreateMessage + ' Serverový seznam byl načten.');} catch (e) {setMessage((e as Error).message);}}}>Obnovit serverový seznam</button>}
         {message && <p role="status" className="text-sm text-[#00204a]">{message}</p>}
     </fieldset>;
 }

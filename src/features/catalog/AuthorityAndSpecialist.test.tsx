@@ -120,7 +120,7 @@ describe('Priority 3: Specialist Tabs (Reference, Manipulace, Akce, ISO) in Muse
  ] as const)('reads, edits, saves, and reloads specialist tab %s (%s) via scoped API',async(section,curatorSec,label,fieldKey,entered,initial)=>{
   let version=0;
   let stored:Record<string,string|null>={...initial};
-  let present=false;
+  let present=true;
   const f=vi.fn().mockImplementation((url:string,init:any={})=>{
    const u=new URL(String(url),'https://unit.invalid');
    if(u.pathname.endsWith('/curator-record/'+curatorSec)){
@@ -142,6 +142,7 @@ describe('Priority 3: Specialist Tabs (Reference, Manipulace, Akce, ISO) in Muse
   const onSave=vi.fn();
   render(<MuseumSection itemId={101} section={section} editSession={editSession} onSave={onSave}/>);
   const input=await screen.findByLabelText(label);
+  await userEvent.click(screen.getByRole('button',{name:'Upravit'}));
   expect(input).not.toBeDisabled();
   await userEvent.type(input,entered);
   await userEvent.click(screen.getByRole('button',{name:'Uložit záznam'}));

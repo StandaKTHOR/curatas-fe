@@ -1,4 +1,4 @@
-import {originalIntegrationEnabled,originalList,originalCatalogList,originalDetail,unsupported} from '../features/catalog/originalAdapter';
+import {originalIntegrationEnabled,originalList,originalCatalogList,originalDetail,originalPrint,originalExcel,originalWorksets,originalWorksetCreate,unsupported} from '../features/catalog/originalAdapter';
 import { requireEditSession, type ItemEditSession } from './editSession';
 import {LabelDto} from "@/components/LabelPrinter";
 import {PrintItemRow} from "@/components/ItemListPrint";
@@ -476,6 +476,9 @@ export async function setPrimaryItemImage(itemId: number, imageId: number): Prom
 }
 
 export async function exportItemsToExcel(params: any) {
+    let blob:Blob;
+    if(originalIntegrationEnabled())blob=await originalExcel(params);
+    else {
     const u = buildApiUrl('/api/v1/items/export/excel');
 
     // Přidáme filtry do URL
@@ -492,7 +495,8 @@ export async function exportItemsToExcel(params: any) {
     if (!r.ok) throw new Error('Export selhal');
 
     // Zpracování binárních dat (blob)
-    const blob = await r.blob();
+    blob = await r.blob();
+    }
     const downloadUrl = window.URL.createObjectURL(blob);
 
     // Vytvoření a kliknutí na skrytý odkaz
@@ -600,6 +604,7 @@ export interface WorksetSummary {
 }
 
 export async function listWorksets(): Promise<WorksetSummary[]> {
+    if(originalIntegrationEnabled())return originalWorksets();
     const r = await fetch(resolveApiUrl('/api/v1/worksets'), {
         headers: getAuthHeader()
     });
@@ -607,7 +612,8 @@ export async function listWorksets(): Promise<WorksetSummary[]> {
     return r.json();
 }
 
-export async function createWorkset(data: { name: string; description?: string; itemIds?: number[] }): Promise<WorksetSummary> {
+export async function createWorkset(data: { name: string; description?: string; itemIds?: number[]; requestId?:string }): Promise<WorksetSummary> {
+    if(originalIntegrationEnabled())return originalWorksetCreate(data);
     const r = await fetch(resolveApiUrl('/api/v1/worksets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
@@ -620,7 +626,8 @@ export async function createWorkset(data: { name: string; description?: string; 
     return r.json();
 }
 
-export async function createWorksetFromFilter(data: { name: string; description?: string; filter: any }): Promise<WorksetSummary> {
+export async function createWorksetFromFilter(data: { name: string; description?: string; filter: any; requestId?:string }): Promise<WorksetSummary> {
+    if(originalIntegrationEnabled())return originalWorksetCreate(data);
     const r = await fetch(resolveApiUrl('/api/v1/worksets/from-filter'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
@@ -731,6 +738,7 @@ export async function getPrintBasic(id: number) {
 }
 
 export async function searchPrintItems(params: any): Promise<PrintItemRow[]> {
+    if(originalIntegrationEnabled())return originalPrint(params) as unknown as PrintItemRow[];
     const response = await fetch(resolveApiUrl('/api/v1/items/search/print'), {
         method: 'POST',
         headers: {

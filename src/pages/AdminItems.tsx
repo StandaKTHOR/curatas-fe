@@ -167,7 +167,7 @@ export default function AdminItems() {
     };
 
     useEffect(() => {
-        if(!originalIntegrationEnabled())listWorksets().then(setWorksets).catch(() => {});
+        listWorksets().then(setWorksets).catch((e:Error) => {if(originalIntegrationEnabled())setLoadError('Pracovní sady: '+e.message);});
     }, []);
 
     useEffect(() => {
@@ -200,10 +200,9 @@ export default function AdminItems() {
     };
 
     const handlePrintList = async () => {
-        if (originalIntegrationEnabled()) { const items = Array.isArray(data?.content) ? data.content : []; setListPrintModal({ isOpen: true, mode: 'list', items, totalCount: data?.totalElements ?? items.length }); return; }
         setIsPrintLoading(true);
         try {
-            const queryParams: any = { q: searchTerm, ...filters };
+            const queryParams: any = { q: searchTerm, ...filters, ...(originalIntegrationEnabled()?{sortField,sortDirection}:{}) };
             if (selectedWorkset) queryParams.worksetId = selectedWorkset;
             if (isAdvancedFilterActive && (advancedFilterGroup.conditions.length > 0 || advancedFilterGroup.groups.length > 0)) {
                 queryParams.advancedFilter = JSON.stringify(advancedFilterGroup);
@@ -232,7 +231,7 @@ export default function AdminItems() {
                 const proceed = window.confirm(`Chystáte se exportovat ${totalCount.toLocaleString('cs-CZ')} předmětů. Operace může chvíli trvat. Chcete pokračovat?`);
                 if (!proceed) return;
             }
-            const queryParams: any = { q: searchTerm, ...filters };
+            const queryParams: any = { q: searchTerm, ...filters, ...(originalIntegrationEnabled()?{sortField,sortDirection}:{}) };
             if (selectedWorkset) queryParams.worksetId = selectedWorkset;
             if (isAdvancedFilterActive && (advancedFilterGroup.conditions.length > 0 || advancedFilterGroup.groups.length > 0)) {
                 queryParams.advancedFilter = JSON.stringify(advancedFilterGroup);
@@ -298,7 +297,7 @@ export default function AdminItems() {
                         >
                             <FaPrint /> {isPrintLoading ? 'Načítám tisk...' : 'Tisk soupisu (A4)'}
                         </button>
-                        <button disabled={originalIntegrationEnabled()||exporting} aria-busy={exporting} onClick={handleExportExcel} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">
+                        <button disabled={exporting} aria-busy={exporting} onClick={handleExportExcel} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">
                             <FaFileExcel /> {exporting ? 'Exportuji…' : 'Export .xlsx'}
                         </button>
                         <button disabled={originalIntegrationEnabled()&&!originalCanCreate()} title="Založení podle katalogového oprávnění item.create a explicitního přepínače" onClick={() => navigate(`/admin/items/new${originalIntegrationEnabled()?'?catalog='+originalSession().catalog.id:''}`, { state: { fromSearch: location.search } })} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
@@ -493,7 +492,7 @@ export default function AdminItems() {
                         </button>
 
                         <button
-                            disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => setShowWorksetModal(true)}
+                            disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Osobní pracovní sada podle katalogového oprávnění" onClick={() => setShowWorksetModal(true)}
                             className="px-3 py-1 bg-[#ffbc34] text-black font-extrabold text-xs uppercase rounded hover:bg-yellow-400 transition-colors shadow flex items-center gap-1.5"
                         >
                             <FaLayerGroup /> Uložit do sady

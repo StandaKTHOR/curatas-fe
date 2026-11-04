@@ -42,3 +42,10 @@ it('maps all eight professional controls as exact current text without date or d
  const values={objectType:'GEN type',description:' Žluťoučký\ntext ',author:' GEN author ',datingText:'asi 17. stol.',originPlace:' GEN origin ',material:' GEN material ',technique:' GEN technique ',materialNote:' GEN note '};
  expect(currentSectionDraft('professional',p,{...form(),...values}).values).toEqual({objectType:values.objectType,description:values.description,authorText:values.author,datingText:values.datingText,originPlace:values.originPlace,materialText:values.material,techniqueText:values.technique,materialNote:values.materialNote});
 });
+
+it('saves current private storage through the original aggregate save with the shared parent ETag',async()=>{
+ const snapshot={...session(),scopedCurrent:{...session().scopedCurrent,storage:{locationBuilding:'PRIVATE',locationRoom:null,permanentLocation:''}}};
+ const fetch=vi.fn().mockResolvedValue(new Response('{}'));vi.stubGlobal('fetch',fetch);
+ await saveOriginalCurrent(101,'inventory',snapshot,{...form(),locationBuilding:'PRIVATE',locationRoom:'ROOM',permanentLocation:''});
+ expect(fetch.mock.calls[0][0]).toContain('/curator-record/storage');expect(fetch.mock.calls[0][1].headers['If-Match']).toBe('"0"');expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({locationBuilding:'PRIVATE',locationRoom:'ROOM',permanentLocation:''});
+});

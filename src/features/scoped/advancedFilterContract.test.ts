@@ -13,7 +13,7 @@ it('submits advanced queries through authenticated read-only POST instead of ove
  const ast=JSON.stringify(group());const result=await scopedApi(1,'generated-token').curatorPage(0,50,'createdAt,desc',{advancedFilter:ast},new AbortController().signal);
  expect(result.totalElements).toBe(0);expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/catalogs/1/items/curator-page/query'),expect.objectContaining({method:'POST',cache:'no-store',body:JSON.stringify({page:'0',size:'50',sort:'createdAt,desc',advancedFilter:ast})}));
 });
-it.each(['legacy_data','locationRoom','countryOfOrigin','inventedSource'])('rejects specifically unsupported semantics %s rather than dropping a clause',field=>{
+it.each(['legacy_data','unknownCurrentField','countryOfOrigin','inventedSource'])('rejects specifically unsupported semantics %s rather than dropping a clause',field=>{
  expect(()=>curatorQuery(0,50,'inventoryNumber,asc',{advancedFilter:JSON.stringify(group(field))})).toThrow('nemá schválenou scoped sémantiku');
 });
 it('rejects invalid operators/depth/ranges and retains explicit NULL/empty operations',()=>{

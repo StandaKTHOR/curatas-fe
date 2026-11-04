@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { GovButton, GovFormInput, GovFormLabel, GovMessage } from '@gov-design-system-ce/react';
 import { createWorkset, createWorksetFromFilter } from '../lib/api';
 
@@ -20,6 +20,7 @@ export default function WorksetModal({
     onSuccess
 }: WorksetModalProps) {
     const [name, setName] = useState('');
+    const requestId=useRef(crypto.randomUUID());const submitting=useRef(false);
     const [description, setDescription] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -28,38 +29,38 @@ export default function WorksetModal({
 
     const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        if (loading) return;
+        if (loading || submitting.current) return;
         if (!name.trim()) {
             setError('Název pracovní sady je povinný.');
             return;
         }
 
         setError(null);
-        setLoading(true);
+        setLoading(true);submitting.current=true;
 
         try {
             let res;
             if (fromFilter && currentFilter) {
                 res = await createWorksetFromFilter({
-                    name: name.trim(),
+                    name: name.trim(), requestId:requestId.current,
                     description: description.trim() || undefined,
                     filter: currentFilter
                 });
             } else {
                 res = await createWorkset({
-                    name: name.trim(),
+                    name: name.trim(), requestId:requestId.current,
                     description: description.trim() || undefined,
                     itemIds: selectedIds
                 });
             }
-            onSuccess(res);
+            requestId.current=crypto.randomUUID();onSuccess(res);
             setName('');
             setDescription('');
             onClose();
         } catch (err: any) {
             setError(err.message || 'Vytvoření sady selhalo');
         } finally {
-            setLoading(false);
+            setLoading(false);submitting.current=false;
         }
     };
 

@@ -33,3 +33,9 @@ it('includes approved current sections in one creation payload and preserves exp
  const form=document.createElement('form');form.innerHTML='<input id="description"><input id="quantity"><input id="fundDictionaryId">';
  applyOriginalCreationBoundary(form,true);expect(form.querySelector<HTMLInputElement>('#description')!.disabled).toBe(false);expect(form.querySelector<HTMLInputElement>('#quantity')!.disabled).toBe(false);expect(form.querySelector<HTMLInputElement>('#fundDictionaryId')!.disabled).toBe(true);
 });
+
+it('includes approved private current storage without adopting historical fields',()=>{
+ bindOriginalCatalog({...catalog,inventoryWriteEnabled:true,capabilities:[...catalog.capabilities,'item.inventory.write']},'token');
+ const fields=originalCreationFields({title:'GENERATED',inventoryNumber:'GEN-STORAGE',locationBuilding:'GENERATED PRIVATE',locationRoom:'',permanentLocation:null,legacy_data:{storage:'SOURCE'}});
+ expect(fields.storage).toEqual({locationBuilding:'GENERATED PRIVATE',locationRoom:null,permanentLocation:null});expect(JSON.stringify(fields)).not.toContain('SOURCE');
+});
