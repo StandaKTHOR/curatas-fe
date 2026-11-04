@@ -86,7 +86,7 @@ export default function SelectiveCloneModal({
                     </button>
                 </div>
 
-                <p className="text-sm">{scoped?'Nezávislá kopie současných údajů a podporovaných vlastních podzáznamů včetně fotografií a příloh. Všechna média dostanou vlastní objekty a data. Zdrojové míry a MatTech zůstávají označené jako podklad, nikoli současné tvrzení. Historická aktivita ani původní inventární identita se nekopírují. Neověřený podzáznam celou operaci zastaví.':'Kopírují se vybrané popisné údaje a odborné záznamy. Foto, přílohy, akvizice, původní audit, pohyby a vyřazení se nepřenášejí. Klon má vlastní identitu a audit; historické auditní údaje originálu jsou samostatný podklad.'}</p>
+                <p className="text-sm">{scoped?'Nezávislá kopie současných údajů a podporovaných vlastních podzáznamů včetně fotografií a příloh. Všechna média dostanou vlastní objekty a data. Zdrojové míry a MatTech zůstávají označené jako podklad, nikoli současné tvrzení. Historická aktivita ani původní inventární identita se nekopírují. Akvizice ani vyřazení se nepřenášejí; předloha s takovými záznamy se odmítne. Neověřený podzáznam celou operaci zastaví.':'Kopírují se vybrané popisné údaje a odborné záznamy. Foto, přílohy, akvizice, původní audit, pohyby a vyřazení se nepřenášejí. Klon má vlastní identitu a audit; historické auditní údaje originálu jsou samostatný podklad.'}</p>
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     {error && (
                         <GovMessage color="error" type="bold">

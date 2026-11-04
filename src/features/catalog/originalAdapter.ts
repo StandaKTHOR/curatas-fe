@@ -15,16 +15,16 @@ export const unsupported=()=>{throw new Error('Tato původní operace nemá schv
 export const originalItemHref=(id:number)=>`/admin/items/view/${id}?catalog=${originalSession().catalog.id}`;
 
 /** Historical values never enter the original current-value form or its save draft. */
-export function currentForm(item:any,professional:any,inventory:any,storage?:any,dimensions?:any){
- if(item.etag!==professional.etag||item.etag!==inventory.etag||storage&&item.etag!==storage.etag||dimensions&&item.etag!==dimensions.etag)throw new Error('Předmět se změnil během čtení. Obnovte kartu.');
+export function currentForm(item:any,professional:any,inventory:any,storage?:any,dimensions?:any,additional?:any){
+ if(additional&&item.etag!==additional.etag||item.etag!==professional.etag||item.etag!==inventory.etag||storage&&item.etag!==storage.etag||dimensions&&item.etag!==dimensions.etag)throw new Error('Předmět se změnil během čtení. Obnovte kartu.');
  const v=professional.value;
  const storageValues=storage?.value??{locationBuilding:null,locationRoom:null,permanentLocation:null};
  const dimensionValues=dimensions?.value??[];
- const view={...item.value,...storageValues,dimensions:dimensionValues.map((row:any)=>({...row,dimensionType:row.type,value:row.value??'',unit:row.unit??'',note:row.note??''})),author:v.authorText,datingText:v.datingText,material:v.materialText,technique:v.techniqueText,
+ const view={...item.value,...(additional?.value??{}),...storageValues,dimensions:dimensionValues.map((row:any)=>({...row,dimensionType:row.type,value:row.value??'',unit:row.unit??'',note:row.note??''})),author:v.authorText,datingText:v.datingText,material:v.materialText,technique:v.techniqueText,
   objectType:v.objectType,description:v.description,originPlace:v.originPlace,materialNote:v.materialNote,
   quantity:inventory.value.quantity===null?null:Number(inventory.value.quantity),otherNumber:inventory.value.otherNumber,
   currentAssertionState:professional.present?'PRESENT':'ABSENT'};
- Object.defineProperty(view,'_editSession',{value:{itemId:item.value.id,etag:item.etag,scopedCurrent:{catalogId:item.value.catalogId,etag:item.etag,professional:{...professional.value},inventory:{...inventory.value},storage:{...storageValues},dimensions:dimensions?dimensionValues:undefined,core:{title:item.value.title,inventoryNumber:item.value.inventoryNumber}}}});
+ Object.defineProperty(view,'_editSession',{value:{itemId:item.value.id,etag:item.etag,scopedCurrent:{catalogId:item.value.catalogId,etag:item.etag,professional:{...professional.value},inventory:{...inventory.value},storage:{...storageValues},additional:additional?{...additional.value}:undefined,dimensions:dimensions?dimensionValues:undefined,core:{title:item.value.title,inventoryNumber:item.value.inventoryNumber}}}});
  return view as typeof view & {_editSession:any};
 }
 export async function originalDetail(id:string){
@@ -34,12 +34,13 @@ export async function originalDetail(id:string){
  const professional=await api.curatorRecord!(n,'professional',signal);
  const inventory=await api.curatorRecord!(n,'inventory',signal);
  const storage=await api.curatorRecord(n,'storage',signal);
+ const additional=await api.curatorRecord(n,'additional',signal);
  const rows=[];let after=0,done=false;
  for(let page=0;page<20;page++){const result=await api.dimensions(n,signal,after,100);if(result.etag!==item.etag)throw new Error('Verze měr se změnila během čtení. Obnovte kartu.');rows.push(...result.value.items);if(result.value.nextAfterId===null){done=true;break;}after=result.value.nextAfterId;}
  if(!done)throw new Error('Předmět má více než2000 měr; neúplný formulář nebyl zobrazen.');
 
  if(signal.aborted)throw new DOMException('Cancelled','AbortError');
- return currentForm(item,professional,inventory,storage,{value:rows,etag:item.etag});
+ return currentForm(item,professional,inventory,storage,{value:rows,etag:item.etag},additional);
 }
 /** Read historical evidence by actual scoped item ID, never by inventory text. */
 export async function originalInventorySource(id:number,expectedVersion:string,expectedCatalog:number){

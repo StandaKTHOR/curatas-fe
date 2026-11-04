@@ -13,7 +13,7 @@ it('submits advanced queries through authenticated read-only POST instead of ove
  const ast=JSON.stringify(group());const result=await scopedApi(1,'generated-token').curatorPage(0,50,'createdAt,desc',{advancedFilter:ast},new AbortController().signal);
  expect(result.totalElements).toBe(0);expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/catalogs/1/items/curator-page/query'),expect.objectContaining({method:'POST',cache:'no-store',body:JSON.stringify({page:'0',size:'50',sort:'createdAt,desc',advancedFilter:ast})}));
 });
-it.each(['legacy_data','unknownCurrentField','countryOfOrigin','inventedSource'])('rejects specifically unsupported semantics %s rather than dropping a clause',field=>{
+it.each(['legacy_data','unknownCurrentField','unsupportedCountryAuthority','inventedSource'])('rejects specifically unsupported semantics %s rather than dropping a clause',field=>{
  expect(()=>curatorQuery(0,50,'inventoryNumber,asc',{advancedFilter:JSON.stringify(group(field))})).toThrow('nemá schválenou scoped sémantiku');
 });
 it('rejects invalid operators/depth/ranges and retains explicit NULL/empty operations',()=>{
@@ -21,4 +21,9 @@ it('rejects invalid operators/depth/ranges and retains explicit NULL/empty opera
  const range={...group('currentQuantity','BETWEEN','2'),conditions:[{field:'currentQuantity',operator:'BETWEEN',value:'2',valueTo:'1'}]};
  expect(()=>curatorQuery(0,50,'title,asc',{advancedFilter:JSON.stringify(range)})).toThrow('rozsah');
  for(const op of ['IS_EMPTY','IS_NOT_EMPTY','NOT_EQUALS'])expect(curatorQuery(0,50,'title,asc',{advancedFilter:JSON.stringify(group('title',op,''))}).has('advancedFilter')).toBe(true);
+});
+
+it('accepts current country and reviewed calendar dates without guessing historical chronology',()=>{
+ for(const [field,op,value] of [['countryOfOrigin','EQUALS','Česká republika'],['datingFrom','GREATER_THAN','0001-01-01'],['datingTo','LESS_THAN','2026-11-04']])expect(()=>curatorQuery(0,50,'title,asc',{advancedFilter:JSON.stringify(group(field,op,value))})).not.toThrow();
+ for(const value of ['2025-02-29','0000-01-01','1500','1e5'])expect(()=>curatorQuery(0,50,'title,asc',{advancedFilter:JSON.stringify(group('datingFrom','GREATER_THAN',value))})).toThrow();
 });

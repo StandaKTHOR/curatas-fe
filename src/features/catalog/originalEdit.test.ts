@@ -1,5 +1,5 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-import {applyOriginalEditBoundary,currentSectionDraft,saveOriginalCurrent} from './originalEdit';
+import {applyOriginalEditBoundary,currentSectionDraft,saveOriginalCurrent,additionalFields} from './originalEdit';
 import {bindOriginalCatalog} from './originalAdapter';
 const p={objectType:null,description:'old',authorText:null,datingText:null,originPlace:null,materialText:null,techniqueText:null,materialNote:null};
 const i={quantity:'0',otherNumber:null};
@@ -34,7 +34,7 @@ it('saves permitted inventory and professional drafts in one scoped transaction 
 });
 it('locks legacy controls and enables only explicitly permitted current fields and existing save control',()=>{
  const root=document.createElement('form');root.innerHTML='<input id="author"><input id="quantity"><input id="inventoryNumber"><input id="latitude"><button data-scoped-save>Save</button><button data-scoped-navigation>Back</button><button id="clone">Clone</button>';
- applyOriginalEditBoundary(root,'professional',true,false);expect((root.querySelector('#author') as HTMLInputElement).disabled).toBe(false);for(const id of ['quantity','inventoryNumber'])expect((root.querySelector('#'+id) as HTMLInputElement).disabled).toBe(false);for(const id of ['latitude','clone'])expect((root.querySelector('#'+id) as HTMLInputElement).disabled).toBe(true);expect((root.querySelector('[data-scoped-save]') as HTMLButtonElement).disabled).toBe(false);expect((root.querySelector('[data-scoped-navigation]') as HTMLButtonElement).disabled).toBe(false);
+ applyOriginalEditBoundary(root,'professional',true,false);expect((root.querySelector('#author') as HTMLInputElement).disabled).toBe(false);for(const id of ['quantity','inventoryNumber','latitude'])expect((root.querySelector('#'+id) as HTMLInputElement).disabled).toBe(false);for(const id of ['clone'])expect((root.querySelector('#'+id) as HTMLInputElement).disabled).toBe(true);expect((root.querySelector('[data-scoped-save]') as HTMLButtonElement).disabled).toBe(false);expect((root.querySelector('[data-scoped-navigation]') as HTMLButtonElement).disabled).toBe(false);
  applyOriginalEditBoundary(root,'professional',false,false);expect((root.querySelector('#author') as HTMLInputElement).disabled).toBe(true);expect((root.querySelector('[data-scoped-save]') as HTMLButtonElement).disabled).toBe(true);
 });
 it('rejects incomplete section snapshots instead of filling missing metadata',()=>{expect(()=>currentSectionDraft('professional',{authorText:null},form())).toThrow('snapshot');});
@@ -48,4 +48,16 @@ it('saves current private storage through the original aggregate save with the s
  const fetch=vi.fn().mockResolvedValue(new Response('{}'));vi.stubGlobal('fetch',fetch);
  await saveOriginalCurrent(101,'inventory',snapshot,{...form(),locationBuilding:'PRIVATE',locationRoom:'ROOM',permanentLocation:''});
  expect(fetch.mock.calls[0][0]).toContain('/curator-record/storage');expect(fetch.mock.calls[0][1].headers['If-Match']).toBe('"0"');expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({locationBuilding:'PRIVATE',locationRoom:'ROOM',permanentLocation:''});
+});
+
+it('keeps default display values unasserted and saves exact additional decimal and original text',async()=>{
+ const baseline=Object.fromEntries(additionalFields.map(k=>[k,null]));const controls=Object.fromEntries(additionalFields.map(k=>[k,'']));controls.coordinateSystem='WGS-84';
+ expect(currentSectionDraft('additional',baseline,controls)).toEqual({values:baseline,changed:false});
+ const draft=currentSectionDraft('additional',baseline,{...controls,insuranceValue:'123456789012345678901234567890.01',latitude:'0',findingLocality:' Žluťoučký '});expect(draft.values.insuranceValue).toBe('123456789012345678901234567890.01');expect(draft.values.coordinateSystem).toBeNull();expect(draft.values.findingLocality).toBe(' Žluťoučký ');
+ const fetch=vi.fn().mockResolvedValue(new Response('{}'));vi.stubGlobal('fetch',fetch);const snap={...session(),scopedCurrent:{...session().scopedCurrent,additional:baseline}};
+ await saveOriginalCurrent(101,'professional',snap,{...form(),...controls,insuranceValue:'0',longitude:'-180'});expect(fetch.mock.calls[0][0]).toContain('/curator-record/additional');expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({...baseline,insuranceValue:'0',longitude:'-180'});
+});
+it('enables original inventory component aria inputs only with inventory capability',()=>{
+ const root=document.createElement('form');root.innerHTML='<input aria-label="Inventární číslo: řada"><input id="sourceLocalId">';applyOriginalEditBoundary(root,'inventory',true,false);expect(root.querySelector('input')!.disabled).toBe(false);expect((root.querySelector('#sourceLocalId') as HTMLInputElement).disabled).toBe(true);
+ bindOriginalCatalog({...catalog,capabilities:['item.read','item.professional.write']},'other');applyOriginalEditBoundary(root,'professional',true,false);expect(root.querySelector('input')!.disabled).toBe(true);
 });

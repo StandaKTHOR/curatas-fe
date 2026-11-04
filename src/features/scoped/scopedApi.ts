@@ -7,8 +7,8 @@ import {curatorQuery,curatorCurrentFields,curatorCurrentInventoryFields} from '.
 
 export interface Item { id: number; catalogId: number; title: string | null; inventoryNumber: string | null; accessionNumber: string | null; version: string; sourceInventory?:Record<string,string|null> }
 export interface MuseumHistoryRow {id:number;eventType:'REVISION'|'RESTORATION'|'LOAN';eventDate:string|null;description:string|null}
-export type CuratorSection='inventory'|'professional'|'inventory-range'|'authorities'|'reference'|'manipulation'|'action'|'iso'|'storage';
-export const curatorSectionFields:Record<CuratorSection,readonly string[]>={storage:['locationBuilding','locationRoom','permanentLocation'],inventory:['quantity','otherNumber'],'inventory-range':['lowerNumber','upperNumber','seriesRecordId'],professional:['objectType','description','authorText','datingText','originPlace','materialText','techniqueText','materialNote'],authorities:['determinedByText','authorRoleText','groupRecordId','fundRecordId','collectionRecordId','departmentRecordId','objectTypeRecordId'],reference:['Ref_RF','Str_RF'],manipulation:['Typ_MN','DatMan_MN','Kdo_MN','Stav_MN','Osetreni_MN','InvRev_MN','PopisSt_MN'],action:['Poradi_AK','Prezentace_AK','Revers_AK','CKtlg_AK','Pozn_AK'],iso:['KodISO_SO','CharISO_SO','MatISO_SO','CenaISO_SO','MenaISO_SO','PovrchISO_SO','TvarISO_SO']};
+export type CuratorSection='inventory'|'professional'|'inventory-range'|'authorities'|'reference'|'manipulation'|'action'|'iso'|'storage'|'additional';
+export const curatorSectionFields:Record<CuratorSection,readonly string[]>={additional:['extendedDescription','datingFrom','datingTo','countryOfOrigin','objectCondition','insuranceValue','weight','latitude','longitude','coordinateSystem','markant','signature','findingLocality'],storage:['locationBuilding','locationRoom','permanentLocation'],inventory:['quantity','otherNumber'],'inventory-range':['lowerNumber','upperNumber','seriesRecordId'],professional:['objectType','description','authorText','datingText','originPlace','materialText','techniqueText','materialNote'],authorities:['determinedByText','authorRoleText','groupRecordId','fundRecordId','collectionRecordId','departmentRecordId','objectTypeRecordId'],reference:['Ref_RF','Str_RF'],manipulation:['Typ_MN','DatMan_MN','Kdo_MN','Stav_MN','Osetreni_MN','InvRev_MN','PopisSt_MN'],action:['Poradi_AK','Prezentace_AK','Revers_AK','CKtlg_AK','Pozn_AK'],iso:['KodISO_SO','CharISO_SO','MatISO_SO','CenaISO_SO','MenaISO_SO','PovrchISO_SO','TvarISO_SO']};
 export const inventoryColumns={Predmet_S:'Předmět ve zdroji',Titul_S:'Titul ve zdroji',Rada_S:'Řada',PorC_S:'Poř. č.',Lomeni_S:'Lom',HPorC_S:'Až',StatSpr_S:'Stát',Spravce_S:'Správce',Odd_S:'Oddělení',Podsb_S:'Podsbírka',Pocet_S:'Počet ve zdroji',Ozn_S:'Označeno',JineC_S:'Jiné číslo',Karta_S:'Karta',Opsana_S:'Opsána',Overena_S:'Ověřena',Zapsal_S:'Zapsal',DatZap_S:'Datum zápisu',Skupina_S:'Skupina',Urcil_S:'Určil',DatZm_S:'Datum změny',Fond_S:'Fond'} as const;
 export interface SourceChoice {recordId:string;sourceSha256:string;rowHash:string;typedKey:Record<string,unknown>;code:string;label:string|null;groupingCode:string|null}
 export function inventoryDisplay(key:string,value:string|null|undefined){if(value===null||value===undefined)return 'Neuvedeno';return ['Ozn_S','Karta_S','Opsana_S','Overena_S'].includes(key)?value==='true'?'Ano':value==='false'?'Ne':value:value;}
@@ -36,13 +36,13 @@ export function itemFilterQuery(filters:ItemFilters):URLSearchParams {
     return query;
 }
 export interface Dimension { id: number; itemId: number; catalogId: number; type: string; value: string | null; unit: string | null; createdInScopedApi: boolean;note?:string|null }
-export interface Media { id: string; itemId: number; catalogId: number; kind: 'IMAGE' | 'ATTACHMENT'; name: string; mimeType: string; byteSize: number; variants: ('content' | 'thumbnail')[] }
+export interface Media { id: string; itemId: number; catalogId: number; kind: 'IMAGE' | 'ATTACHMENT'; name: string; mimeType: string; byteSize: number; variants: ('content' | 'thumbnail')[]; caption?:string|null }
 export interface DictionaryValue {id:string;catalogId:number;type:string;label:string;code:string|null;parentId:string|null;version:string}
 export interface Versioned<T> { value: T; etag: string }
 export interface CurrentDimensionWrite {id:number|null;type:string;value:string;unit:string|null;note:string|null}
-export type CurrentSectionWrites=Partial<Record<'inventory'|'professional'|'storage'|'item',Record<string,string|null>>> & {dimensions?:{rows:CurrentDimensionWrite[]}};
+export type CurrentSectionWrites=Partial<Record<'inventory'|'professional'|'storage'|'additional'|'item',Record<string,string|null>>> & {dimensions?:{rows:CurrentDimensionWrite[]}};
 export interface LifecycleState {active:boolean|null;published:boolean|null;status:string|null;deaccession:{reason:string;deaccessionDate:string;documentNumber:string|null}|null}
-export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string|null;professional?:Record<string,string|null>;inventory?:{quantity:number|null;otherNumber:string|null};storage?:Record<string,string|null>}
+export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string|null;professional?:Record<string,string|null>;inventory?:{quantity:number|null;otherNumber:string|null};storage?:Record<string,string|null>;additional?:Record<string,string|null>}
 export interface Creation {item:Item;origin:'MES_CREATED';requestId:string;replayed:boolean}
 export interface ItemOrigin {catalogId:number;itemId:number;itemVersion:string;origin:'MES_CREATED'|'UNRECORDED';createdAt:string|null;createdBy?:string|null;createdBySubject?:string|null}
 export interface SourceSummary {itemVersion:string;sourceQuantity:string|null;sourceAccessionFlag:boolean|null;sourceSeries?:string|null;sourceDepartmentCode?:string|null;sourceCollectionCode?:string|null;sourceRecordedBy?:string|null;sourceDeterminedBy?:string|null}
@@ -93,7 +93,7 @@ export function scopedApi(catalogId: number, token: string) {
     async function request(path: string, signal: AbortSignal, init: RequestInit = {}) {
         if (signal.aborted) throw new Error('Request cancelled');
         const response = await fetch(resolveApiUrl(path), { ...init, signal, cache: 'no-store', redirect: 'error', credentials: 'omit',
-            headers: { Authorization: `Bearer ${effectiveToken(token)}`, ...(localAuthEnabled()?{'X-CURATAS-CSRF':'1'}:{}), ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...init.headers } });
+            headers: { Authorization: `Bearer ${effectiveToken(token)}`, ...(localAuthEnabled()?{'X-CURATAS-CSRF':'1'}:{}), ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}), ...init.headers } });
         if (signal.aborted) throw new Error('Request cancelled');
         if (!response.ok) {if([401,403,404].includes(response.status))window.dispatchEvent(new CustomEvent('curatas:scoped-denied',{detail:{status:response.status}})); throw new ScopedError(response.status);} return response;
     }
@@ -112,11 +112,11 @@ export function scopedApi(catalogId: number, token: string) {
     }
     function media(v: any, parent: number, id?: string): Media {
         if (integer(v.catalogId) !== catalogId || integer(v.itemId) !== parent || (id !== undefined && uuid(v.id) !== id) || !['IMAGE', 'ATTACHMENT'].includes(v.kind)
-            || !/^[A-Za-z0-9][A-Za-z0-9._ -]{0,119}$/.test(v.name) || !['image/png','image/jpeg','application/pdf','application/octet-stream'].includes(v.mimeType)
+            || !/^[\p{L}\p{N}][\p{L}\p{N}\p{M}._ -]{0,119}$/u.test(v.name) || !['image/png','image/jpeg','application/pdf','application/octet-stream'].includes(v.mimeType)
             || (v.kind === 'IMAGE' && !['image/png','image/jpeg'].includes(v.mimeType)) || !Array.isArray(v.variants) || !v.variants.includes('content') || v.variants.some((x: string) => !['content','thumbnail'].includes(x))
             || (v.variants.includes('thumbnail') && v.kind !== 'IMAGE')) throw new Error('Invalid media response');
         const size = integer(v.byteSize); if (size > 134217728) throw new Error('Media too large');
-        return { id: uuid(v.id), catalogId, itemId: parent, kind: v.kind, name: v.name, mimeType: v.mimeType, byteSize: size, variants: [...v.variants] };
+        return { id: uuid(v.id), catalogId, itemId: parent, kind: v.kind, name: v.name, mimeType: v.mimeType, byteSize: size, variants: [...v.variants],...(Object.hasOwn(v,'caption')?{caption:nullable(v.caption)}:{}) };
     }
     function tag(response: Response, expected: unknown) { const value = response.headers.get('ETag') || ''; if (strongTag(value) !== `"${version(expected)}"`) throw new Error('Missing or mismatched ETag'); return value; }
     function sourceInventory(input:any):Record<string,string|null>{
@@ -366,7 +366,7 @@ export function scopedApi(catalogId: number, token: string) {
             return body?.itemVersion!==undefined?tag(response,body.itemVersion):response.headers.get('ETag')||'';
         },
         saveCuratorRecords:async(id:number,etag:string,input:CurrentSectionWrites,signal:AbortSignal)=>{
-            const sections=Object.keys(input);if(!sections.length||sections.some(k=>!['inventory','professional','storage','item','dimensions'].includes(k)))throw new Error('Invalid current sections');
+            const sections=Object.keys(input);if(!sections.length||sections.some(k=>!['inventory','professional','storage','additional','item','dimensions'].includes(k)))throw new Error('Invalid current sections');
             const values:Record<string,any>={};
             for(const section of sections as (keyof CurrentSectionWrites)[]){
                 if(section==='dimensions'){const rows=input.dimensions?.rows;if(!rows?.length||rows.length>20)throw new Error('Uložte jednu až dvacet změněných měr.');const ids=new Set<number>();for(const row of rows){if(Object.keys(row).length!==5||!['id','type','value','unit','note'].every(k=>Object.hasOwn(row,k))||row.id!==null&&(ids.has(integer(row.id))||!ids.add(row.id))||typeof row.type!=='string'||!row.type.trim()||row.type.length>255)throw new Error('Neplatná současná míra.');decimal(row.value);for(const key of ['unit','note'] as const)if(row[key]!==null&&(typeof row[key]!=='string'||row[key]!.includes('\0')||row[key]!.length>(key==='note'?50:255)))throw new Error('Poznámka má nejvýše50 znaků; jednotka nejvýše255.');}values.dimensions={rows};continue;}
@@ -401,9 +401,10 @@ export function scopedApi(catalogId: number, token: string) {
                 sourceSeries:nullable(body.sourceSeries??null),sourceDepartmentCode:nullable(body.sourceDepartmentCode??null),sourceCollectionCode:nullable(body.sourceCollectionCode??null),sourceRecordedBy:nullable(body.sourceRecordedBy??null),sourceDeterminedBy:nullable(body.sourceDeterminedBy??null)};
         },
         createItem:async(requestId:string,input:NewItemFields,signal:AbortSignal)=>{
-            if(Object.keys(input).length<3||Object.keys(input).some(k=>!['title','inventoryNumber','accessionNumber','professional','inventory','storage'].includes(k)))throw new Error('Invalid creation fields');
+            if(Object.keys(input).length<3||Object.keys(input).some(k=>!['title','inventoryNumber','accessionNumber','professional','inventory','storage','additional'].includes(k)))throw new Error('Invalid creation fields');
             for(const key of ['title','inventoryNumber','accessionNumber'] as const){const value=input[key];if(key==='accessionNumber'&&value===null)continue;if(typeof value!=='string'||!value.trim()||value.length>(key==='title'?4096:255)||value.includes('\0'))throw new Error('Invalid creation field');}
             if(input.professional){const keys=curatorSectionFields.professional;if(Object.keys(input.professional).length!==keys.length||keys.some(k=>!Object.hasOwn(input.professional!,k))||Object.values(input.professional).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid creation professional fields');}
+            if(input.additional){const keys=curatorSectionFields.additional;if(Object.keys(input.additional).length!==keys.length||keys.some(k=>!Object.hasOwn(input.additional!,k))||Object.values(input.additional).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid additional fields');}
             if(input.storage){const keys=curatorSectionFields.storage;if(Object.keys(input.storage).length!==keys.length||keys.some(k=>!Object.hasOwn(input.storage!,k))||Object.values(input.storage).some(v=>v!==null&&(typeof v!=='string'||v.includes('\0')||v.length>512)))throw new Error('Invalid private storage fields');}
             if(input.inventory){const v=input.inventory;if(Object.keys(v).length!==2||!Object.hasOwn(v,'quantity')||!Object.hasOwn(v,'otherNumber')||(v.quantity!==null&&(!Number.isInteger(v.quantity)||v.quantity<0||v.quantity>2147483647))||(v.otherNumber!==null&&typeof v.otherNumber!=='string'))throw new Error('Invalid creation inventory fields');}
             return creation(root,requestId,signal,{method:'POST',headers:{'Idempotency-Key':uuid(requestId)},body:JSON.stringify(input)});
@@ -486,6 +487,19 @@ export function scopedApi(catalogId: number, token: string) {
         },
         createDimension: (parent: number, etag: string, input: { type: string; value: string; unit: string | null }, signal: AbortSignal) => dimensionWrite(parent, null, etag, input, signal),
         patchDimension: (parent: number, id: number, etag: string, input: { type: string; value: string; unit: string | null }, signal: AbortSignal) => dimensionWrite(parent, id, etag, input, signal),
+        uploadMedia:async(parent:number,etag:string,file:File,kind:'IMAGE'|'ATTACHMENT',caption:string|null,signal:AbortSignal)=>{
+            if(!(file instanceof File)||!file.size||file.size>(kind==='IMAGE'?5*1024*1024:134217728)||!/^[\p{L}\p{N}][\p{L}\p{N}\p{M}._ -]{0,119}$/u.test(file.name)||!['IMAGE','ATTACHMENT'].includes(kind)||caption!==null&&(typeof caption!=='string'||caption.length>4096||caption.includes('\\0')))throw new Error('Neplatný soubor, název nebo popis; fotografie nejvýše5MiB, příloha128MiB.');
+            const form=new FormData();form.append('file',file);form.append('kind',kind);if(caption!==null)form.append('caption',caption);
+            const {body,response,wire}=await read(`${itemPath(parent)}/media`,signal,{method:'POST',headers:{'If-Match':strongTag(etag)},body:form});
+            if(!hasPrivateNoStore(response.headers)||integer(body.catalogId)!==catalogId||integer(body.itemId)!==parent||version(body.itemVersion)!==String(BigInt(etag.slice(1,-1))+1n)||wire.media?.caption!==caption)throw new Error('Invalid private upload receipt');
+            const saved=media(body.media,parent);if(saved.name!==file.name||saved.byteSize!==file.size||saved.kind!==kind)throw new Error('Invalid media upload metadata');return {value:saved,etag:tag(response,body.itemVersion)};
+        },
+        saveMediaCaption:async(parent:number,id:string,etag:string,caption:string|null,signal:AbortSignal)=>{
+            if(caption!==null&&(typeof caption!=='string'||caption.length>4096||caption.includes('\\0')))throw new Error('Neplatný popis média.');
+            const {body,response,wire}=await read(`${itemPath(parent)}/media/${uuid(id)}/caption`,signal,{method:'PATCH',headers:{'If-Match':strongTag(etag)},body:JSON.stringify({caption})});
+            if(!hasPrivateNoStore(response.headers)||integer(body.catalogId)!==catalogId||integer(body.itemId)!==parent||version(body.itemVersion)!==String(BigInt(etag.slice(1,-1))+1n)||wire.media?.caption!==caption)throw new Error('Invalid private caption receipt');
+            return {value:media(body.media,parent,id),etag:tag(response,body.itemVersion)};
+        },
         media: async (parent: number, signal: AbortSignal, after?: string): Promise<Page<Media, string>> => {
             const { body } = await read(`${itemPath(parent)}/media?limit=50${after ? '&afterId=' + uuid(after) : ''}`, signal);
             if(!Array.isArray(body.items)||body.items.length>50)throw new Error('Invalid media page');

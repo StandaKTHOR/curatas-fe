@@ -39,3 +39,10 @@ it('includes approved private current storage without adopting historical fields
  const fields=originalCreationFields({title:'GENERATED',inventoryNumber:'GEN-STORAGE',locationBuilding:'GENERATED PRIVATE',locationRoom:'',permanentLocation:null,legacy_data:{storage:'SOURCE'}});
  expect(fields.storage).toEqual({locationBuilding:'GENERATED PRIVATE',locationRoom:null,permanentLocation:null});expect(JSON.stringify(fields)).not.toContain('SOURCE');
 });
+
+it('does not invent additional defaults but includes explicitly entered original scalars',()=>{
+ bindOriginalCatalog({...catalog,professionalWriteEnabled:true,capabilities:[...catalog.capabilities,'item.professional.write']},'GENERATED');
+ const base={title:'Generated',inventoryNumber:'GEN-ADD',accessionNumber:'',coordinateSystem:'WGS-84'};
+ expect(originalCreationFields(base).additional).toBeUndefined();
+ expect(originalCreationFields({...base,insuranceValue:'0',findingLocality:'Místo'}).additional).toMatchObject({insuranceValue:'0',findingLocality:'Místo',coordinateSystem:null});
+});

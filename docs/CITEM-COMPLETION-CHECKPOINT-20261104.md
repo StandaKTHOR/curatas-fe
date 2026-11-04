@@ -20,3 +20,7 @@ Native generated PG17: compiler3 + search5 + creation/edit5 passed (search5 reru
 
 ## Resume
 Continue C/D audit and missing approved contracts, E filtered XLSX/print/personal worksets, F upload/admin integration, G full tests/CSS guard/browser fixtures/manual release. No remote commands, QA migrations or grant application. Never replace old b9 release/archive. New forward migrations must be separate and tested only in owned local fixtures.
+
+
+## Latest continuation — supersedes early pending rows above
+A/B/C/E have progressed through committed dimensions, acquisitions and lifecycle. Current HEAD FE0b2a7b3 / BE9260309, same separate completion branches/worktrees. Uncommitted next increment is additional original form fields + current filter semantics + private media HTTP upload/captions (V56/V57, approval-only008 runtime grants) + copying these current values/captions independently. Latest native16/16 passed, creation/edit9/9 passed separately. Full FE running (completion-full-fe-additional-media.json); no completion ZIP yet. Pending: complete new clone/browser checks, final FE/BE grouped regression, all20 screenshots and actual QA operator scenarios, separate release with manifests/manual deployment/rollback. Protected b9 candidate/archive unchanged. No remote work. Precise expert blockers remain inventory allocation, historical Plus meaning/editing, unapproved source authority mappings; these do not block independent implementation.

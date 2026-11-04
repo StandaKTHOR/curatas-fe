@@ -16,6 +16,10 @@ export function validateAdvancedFilter(raw:string,approvedFields:readonly string
    if(['IS_EMPTY','IS_NOT_EMPTY'].includes(condition.operator))continue;
    if(typeof condition.value!=='string'||condition.value.length>255)throw new Error('Neplatná hodnota filtru.');
    if(['GREATER_THAN','LESS_THAN','BETWEEN'].includes(condition.operator)){
+    if(['datingFrom','datingTo'].includes(condition.field)){
+     const valid=(v:unknown)=>typeof v==='string'&&/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v)&&v.slice(0,4)!=='0000'&&Number.isFinite(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
+     if(!valid(condition.value)||condition.operator==='BETWEEN'&&(!valid(condition.valueTo)||condition.value>condition.valueTo))throw new Error('Neplatný rozsah revidovaných ISO dat.');continue;
+    }
     if(!numeric.has(condition.field)||! /^-?[0-9]{1,36}$/.test(condition.value))throw new Error('Číselné porovnání není pro pole/hodnotu povolené.');
     if(condition.operator==='BETWEEN'&&(typeof condition.valueTo!=='string'||! /^-?[0-9]{1,36}$/.test(condition.valueTo)||BigInt(condition.value)>BigInt(condition.valueTo)))throw new Error('Neplatný číselný rozsah filtru.');
    }

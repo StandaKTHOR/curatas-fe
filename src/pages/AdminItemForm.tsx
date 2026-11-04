@@ -1,3 +1,4 @@
+import {ScopedError} from '../features/scoped/scopedApi';
 import {useOriginalSourcePlus} from '../features/catalog/useOriginalSourcePlus';
 import OwnedHistory from '../features/catalog/OwnedHistory';
 import CloneOrigin from '../features/catalog/CloneOrigin';
@@ -8,7 +9,7 @@ import AuthorityAndRangeBindings from '../features/catalog/AuthorityAndRangeBind
 import CreationOrigin from '../features/catalog/CreationOrigin';
 import {originalCanCreate,originalCreationFields,createOriginalItem,originalCreationOutcome,applyOriginalCreationBoundary,CreationValidationError} from '../features/catalog/originalCreate';
 import {useOriginalMedia} from '../features/catalog/useOriginalMedia';
-import {originalCanEdit,originalEditHref,saveOriginalCurrent,applyOriginalEditBoundary,type OriginalEditDomain} from '../features/catalog/originalEdit';
+import {originalCanEdit,originalEditHref,saveOriginalCurrent,applyOriginalEditBoundary,additionalFields,type OriginalEditDomain} from '../features/catalog/originalEdit';
 import OriginalSourceBridge from '../features/catalog/OriginalSourceBridge';
 import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
 import { uncertainWrite, uncertainCreateMessage } from '../lib/writeOutcome';
@@ -439,6 +440,9 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         if (!id || !attFile) return;
         setAttUploading(true);
         try {
+            if(originalIntegrationEnabled()){
+                await mutateScopedMedia((api,tag,signal)=>api.uploadMedia(Number(id),tag,attFile,'ATTACHMENT',attCaption,signal));setAttFile(null);setAttCaption('');const field=document.getElementById('attachmentFile') as HTMLInputElement|null;if(field)field.value='';setSuccessMessage('Soukromá příloha byla uložena; seznam se znovu načítá.');return;
+            }
             await uploadAttachment(Number(id), attFile, attCaption);
             setAttFile(null);
             setAttCaption('');
@@ -587,7 +591,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         // Scoped current fields use scalar control names, not legacy aggregate payload keys
         // such as authors/materials. The original guard must see those actual edits too.
         const keys=originalIntegrationEnabled()
-            ? (!id?['title','inventoryNumber','accessionNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']:['title','inventoryNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']).concat('locationBuilding','locationRoom','permanentLocation','dimensions')
+            ? (!id?['title','inventoryNumber','accessionNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']:['title','inventoryNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']).concat('locationBuilding','locationRoom','permanentLocation','dimensions',...additionalFields)
             : Object.keys(buildItemPayload({})).filter(key => key !== 'auditComment' && key !== 'clearFund').concat('authorRole');
         const clone = Object.fromEntries(keys.sort().map(key => [key, f[key] ?? '']));
         return JSON.stringify(clone, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
@@ -868,12 +872,26 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         } catch (err) { setGlobalError((err as Error).message); }
     };
 
+    const scopedCanWriteMedia=()=>{
+        try{return !isViewMode&&!loading&&!scopedNeedsReload&&!!id&&originalCanEdit('professional')&&originalSession().catalog.mediaUploadEnabled===true&&!!editSessionRef.current&&!editSessionRef.current.busy;}catch{return false;}
+    };
+    const mutateScopedMedia=async(operation:(api:ReturnType<typeof originalSession>['api'],tag:string,signal:AbortSignal)=>Promise<{etag:string}>)=>{
+        if(!scopedCanWriteMedia())throw new Error('Zápis soukromých médií není pro tento předmět dostupný.');
+        const session=editSessionRef.current!,{api,signal}=originalSession();session.busy=true;
+        try{const saved=await operation(api,session.etag,signal);if(signal.aborted)throw new Error('Katalog se změnil.');session.etag=saved.etag;const snapshot=(session as any).scopedCurrent;if(snapshot)snapshot.etag=saved.etag;scopedMedia.reload();}
+        catch(error){if(!(error instanceof ScopedError)||error.status===412)setScopedNeedsReload(true);throw error;}
+        finally{session.busy=false;}
+    };
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !id) return;
 
         setUploading(true);
         try {
+            if(originalIntegrationEnabled()){
+                await mutateScopedMedia((api,tag,signal)=>api.uploadMedia(Number(id),tag,file,'IMAGE',null,signal));
+                setSuccessMessage('Soukromá fotografie byla uložena; seznam se znovu načítá.');e.target.value='';return;
+            }
             const res = await uploadItemImage(Number(id), file);
             await loadImages(id);
             const fresh = await getAdminItem(id);
@@ -1233,13 +1251,13 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             >
                                 🖨️ Tisk karty
                             </GovButton>
-                            <input type="file" id="photo-up" disabled={originalIntegrationEnabled()||isViewMode} hidden onChange={handleFileChange} accept="image/*" />
+                            <input type="file" id="photo-up" data-scoped-media disabled={isViewMode||originalIntegrationEnabled()&&!scopedCanWriteMedia()} hidden onChange={handleFileChange} accept="image/*" />
                             <GovButton
                                 nativeType="button"
                                 type="outlined"
                                 color="neutral"
                                 size="s"
-                                disabled={uploading || isViewMode || originalIntegrationEnabled()}
+                                data-scoped-media disabled={uploading || isViewMode || originalIntegrationEnabled()&&!scopedCanWriteMedia()}
                                 onClick={() => document.getElementById('photo-up')?.click()}
                             >
                                 {uploading ? 'Nahrávám...' : '📸 Nahrát foto'}
@@ -2063,7 +2081,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                         type="outlined"
                                         color="neutral"
                                         size="s"
-                                        disabled={uploading}
+                                        data-scoped-media disabled={uploading||originalIntegrationEnabled()&&!scopedCanWriteMedia()}
                                         onClick={() => document.getElementById('photo-up')?.click()}
                                     >
                                         {uploading ? 'Nahrávám...' : '📸 + Nahrát fotografii'}
@@ -2514,7 +2532,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                     <div className="space-y-1">
                                                         <label htmlFor="attachmentFile">Soubor</label>
                                                         <input
-                                                            id="attachmentFile"
+                                                            id="attachmentFile" data-scoped-media disabled={attUploading||originalIntegrationEnabled()&&!scopedCanWriteMedia()}
                                                             type="file"
                                                             onChange={e => setAttFile(e.target.files?.[0] || null)}
                                                             className="w-full text-xs text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-[#00204a] file:text-white hover:file:bg-[#003366] cursor-pointer"
@@ -2524,7 +2542,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                     <div className="space-y-1">
                                                         <label htmlFor="attachmentCaption">Popis souboru</label>
                                                         <input
-                                                            id="attachmentCaption"
+                                                            id="attachmentCaption" data-scoped-media disabled={attUploading||originalIntegrationEnabled()&&!scopedCanWriteMedia()}
                                                             value={attCaption}
                                                             onChange={(e: any) => setAttCaption(e.target.value)}
                                                             placeholder="např. Restaurátorská zpráva 2024"
@@ -2536,7 +2554,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                     type="solid"
                                                     color="primary"
                                                     size="s"
-                                                    disabled={!attFile || attUploading}
+                                                    data-scoped-media disabled={!attFile || attUploading||originalIntegrationEnabled()&&!scopedCanWriteMedia()}
                                                     onClick={handleUploadAttachment}
                                                 >
                                                     {attUploading ? 'Nahrávám přílohu...' : 'Nahrát přílohu'}
@@ -2565,7 +2583,9 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                                                             <span>{att.fileSize ? (att.fileSize / 1024).toFixed(1) : 0} KB</span>
                                                                         </p>
                                                                         {!isViewMode && id && <AttachmentCaptionEditor itemId={Number(id)} attachmentId={att.id}
-                                                                                caption={att.caption} onSaved={async () => {await loadAttachments();await synchronizeMediaVersion(await getAdminItem(id));}}/>}
+                                                                                caption={att.caption} disabled={originalIntegrationEnabled()&&!scopedCanWriteMedia()}
+                                                                                saveCaption={originalIntegrationEnabled()?async text=>{await mutateScopedMedia((api,tag,signal)=>api.saveMediaCaption(Number(id),att.id,tag,text,signal));}:undefined}
+                                                                                onSaved={async () => {if(originalIntegrationEnabled())scopedMedia.reload();else{await loadAttachments();await synchronizeMediaVersion(await getAdminItem(id));}}}/>}
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex items-center gap-1.5">

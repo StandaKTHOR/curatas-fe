@@ -3,7 +3,7 @@ import {validateAdvancedFilter} from './advancedFilterContract';
 export const demusListFields=['Rada_S','PorC_S','Lomeni_S','HPorC_S','StatSpr_S','Spravce_S','Odd_S','Podsb_S','Pocet_S','Ozn_S','JineC_S','Karta_S','Opsana_S','Overena_S','Zapsal_S','DatZap_S','Skupina_S','Urcil_S','Fond_S','Predmet_S','Titul_S','DatZm_S'] as const;
 export const curatorInventoryFields=['currentQuantity','currentOtherNumber'] as const;
 export const curatorSourceFilterKeys=['inventoryExact','quantityMin','quantityMax','quantityState','accessionFlag','series','department','collection','recordedBy','determinedBy','choiceKind','choiceRecordId'] as const;
-export const curatorFields=['inventoryNumber','accessionNumber','title','author','datingText','material','technique','objectType','originPlace','subCollection','locationBuilding','locationRoom','permanentLocation',...demusListFields,...curatorInventoryFields] as const;
+export const curatorFields=['inventoryNumber','accessionNumber','title','author','datingText','material','technique','objectType','originPlace','subCollection','locationBuilding','locationRoom','permanentLocation','countryOfOrigin','objectCondition','datingFrom','datingTo','findingLocality','signature','markant',...demusListFields,...curatorInventoryFields] as const;
 export const curatorCurrentFields=['authorText','datingText','materialText','techniqueText','objectType','originPlace'] as const;
 export const curatorCurrentInventoryFields=['quantity','otherNumber'] as const;
 
