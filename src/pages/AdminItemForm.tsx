@@ -70,7 +70,7 @@ import AcquisitionSection from '../components/AcquisitionSection';
 import SafeImage, { isBackendImage } from '../components/SafeImage';
 import MuseumCardPrint from '../components/MuseumCardPrint';
 import DemusLegacyDataView from '../components/DemusLegacyDataView';
-import PermanentIdentificationHeader from '../components/PermanentIdentificationHeader';
+import PermanentIdentificationHeader from '../features/catalog/OriginalPermanentIdentificationHeader';
 
 
 
@@ -1279,6 +1279,8 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
 
             {/* PERMANENTNÍ IDENTIFIKAČNÍ HLAVIČKA DLE CITEM (STICKY) */}
             <PermanentIdentificationHeader
+                itemId={id ? Number(id) : undefined}
+                readHistorical={originalIntegrationEnabled() && isViewMode}
                 hasToolbar
                 fond={currentFundLabel}
                 predmet={form.objectType}
