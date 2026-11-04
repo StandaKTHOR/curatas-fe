@@ -56,3 +56,12 @@ it('refuses a direct reference DELETE in the QA artifact before transport',async
  await expect(scopedApi(71,'generated-test-session').assignReference(101,'MATERIAL','00000000-0000-4000-8000-000000000001','"0"',new AbortController().signal,true)).rejects.toThrow('QA nepovoluje');
  expect(fetch).not.toHaveBeenCalled();
 });
+
+it.each(['title','current','source','inventory'])('rejects a JSON number masquerading as curator text in %s while retaining lossless numeric identities',async key=>{
+ const value=row();if(key==='title')(value.item as any).title=123;
+ if(key==='current')value.current.authorText=123 as any;
+ if(key==='source')(value.source as any).Rada_S=123;
+ if(key==='inventory')value.currentInventory.otherNumber=123 as any;
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({...expected,totalElements:1,totalPages:1,semantics:curatorPageSemantics,items:[value]}),{headers:{'Cache-Control':'no-store, no-store'}})));
+ await expect(scopedApi(71,'generated').curatorPage(0,50,'inventoryNumber,asc',{},new AbortController().signal)).rejects.toThrow('JSON type');
+});

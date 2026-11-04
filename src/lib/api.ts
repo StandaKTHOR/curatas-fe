@@ -1,4 +1,4 @@
-import {originalIntegrationEnabled,originalList,originalCatalogList,originalDetail,originalPrint,originalExcel,originalWorksets,originalWorksetCreate,unsupported} from '../features/catalog/originalAdapter';
+import {originalIntegrationEnabled,originalList,originalCatalogList,originalDetail,originalPrint,originalExcel,originalWorksets,originalWorksetCreate,originalAcquisitions,originalAcquisitionSave,unsupported} from '../features/catalog/originalAdapter';
 import { requireEditSession, type ItemEditSession } from './editSession';
 import {LabelDto} from "@/components/LabelPrinter";
 import {PrintItemRow} from "@/components/ItemListPrint";
@@ -123,10 +123,11 @@ export interface MuseumAcquisition {
     circumstances: string | null;
     documentNumber: string | null;
     message: string | null;
-    orderNumber: number | null;
+    orderNumber: number | string | null;
+    sourceReadOnly?:boolean;
     legacyData: Record<string, unknown> | null;
 }
-export type MuseumAcquisitionInput = Omit<MuseumAcquisition, 'id' | 'legacyData'>;
+export type MuseumAcquisitionInput = Omit<MuseumAcquisition, 'id' | 'legacyData' | 'sourceReadOnly'>;
 
 const getAuthHeader = (): HeadersInit => {
     const token = localStorage.getItem('token');
@@ -204,6 +205,7 @@ export async function getDemusLineage(category: 'items' | 'dictionaries' | 'part
 export const deleteMuseumRecord = (itemId: number, kind: MuseumRecordKind, recordId: number, session?: ItemEditSession) =>
     museumRequest<void>(itemId, `/${kind}/${recordId}`, { method: 'DELETE' }, session);
 export async function listMuseumAcquisitions(itemId: number, session?: ItemEditSession) {
+    if(originalIntegrationEnabled())return originalAcquisitions(itemId,session);
     if (session && await getItemVersion(itemId) !== session.etag) throw new ApiError(412, 'Verze akvizic neodpovídá otevřenému předmětu. Obnovte záznam.');
     const rows = await museumRequest<MuseumAcquisition[]>(itemId, '/acquisitions');
     if (session && await getItemVersion(itemId) !== session.etag) throw new ApiError(412, 'Akvizice se změnily během načítání. Obnovte záznam.');
@@ -211,9 +213,9 @@ export async function listMuseumAcquisitions(itemId: number, session?: ItemEditS
     return rows;
 }
 export const createMuseumAcquisition = (itemId: number, input: MuseumAcquisitionInput, session?: ItemEditSession) =>
-    museumRequest<MuseumAcquisition>(itemId, '/acquisitions', { method: 'POST', body: JSON.stringify(input) }, session);
+    originalIntegrationEnabled()?originalAcquisitionSave(itemId,undefined,input,session):museumRequest<MuseumAcquisition>(itemId, '/acquisitions', { method: 'POST', body: JSON.stringify(input) }, session);
 export const updateMuseumAcquisition = (itemId: number, id: number, input: MuseumAcquisitionInput, session?: ItemEditSession) =>
-    museumRequest<MuseumAcquisition>(itemId, `/acquisitions/${id}`, { method: 'PATCH', body: JSON.stringify(input) }, session);
+    originalIntegrationEnabled()?originalAcquisitionSave(itemId,id,input,session):museumRequest<MuseumAcquisition>(itemId, `/acquisitions/${id}`, { method: 'PATCH', body: JSON.stringify(input) }, session);
 export const deleteMuseumAcquisition = (itemId: number, id: number, session?: ItemEditSession) =>
     museumRequest<void>(itemId, `/acquisitions/${id}`, { method: 'DELETE' }, session);
 

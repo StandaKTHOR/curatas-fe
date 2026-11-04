@@ -442,13 +442,13 @@ export default function AdminItems() {
                             <td>{item.author || item.authors?.join(', ') || '—'}</td><td>{item.datingText || '—'}</td>
                             <td>{item.material || item.materials?.join(', ') || '—'}</td><td>{item.technique || '—'}</td>
                             {demusTableColumns.map(col => { const cell = formatDemusCell(item, col); return <td key={col.id} title={cell.title} data-source-field={col.id} data-value-state={cell.state} data-current-assertion={cell.hasCurrent ? 'present' : 'absent'}>{cell.text}</td>; })}
-                            <td>{item.published ? 'Zveřejněno' : 'Neveřejné'}</td>
+                            <td>{item.catalogingStatus==='VYRAZENO'?'Vyřazeno':item.published ? 'Zveřejněno' : 'Neveřejné'}</td>
                             <td className="demus-row-actions">
                                 <button type="button" aria-label="Upravit předmět" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')&&!originalCanEdit('inventory')} title="Současná odborná sekce podle oprávnění" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(item.id,originalCanEdit('professional')?'professional':'inventory'):`/admin/items/edit/${item.id}`,{state:{fromSearch:location.search,catalogIds:(data?.content||[]).map((v:any)=>v.id),returnPath:'/admin/items'}})}><FaEdit/></button>
                                 <button type="button" aria-label="Tisk štítku" title="Tisk štítku" onClick={() => handlePrint(item.id)}><FaPrint/></button>
                                 <button type="button" aria-label="Tisk muzejní karty" title="Tisk muzejní karty" onClick={() => setCardPrintModal({isOpen:true,item})}><FaIdCard/></button>
                                 <button type="button" aria-label="Klonovat předmět" disabled={originalIntegrationEnabled()&&!originalCanClone()} title="Nezávislé klonování podle katalogového oprávnění" onClick={() => setCloneModal({isOpen:true,item})}><FaCopy/></button>
-                                <button type="button" aria-label="Vyřadit z evidence" disabled={originalIntegrationEnabled()} title="Scoped operace zatím není napojena" onClick={() => setDeaccessionModal({isOpen:true,item})}><FaTrash/></button>
+                                <button type="button" aria-label="Vyřadit z evidence" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Vyřazení podle katalogového oprávnění" onClick={() => originalIntegrationEnabled()?navigate(originalEditHref(item.id,'professional')+'&tab=deaccession',{state:{fromSearch:location.search}}):setDeaccessionModal({isOpen:true,item})}><FaTrash/></button>
                             </td>
                         </tr>)}</tbody>
                     </table>

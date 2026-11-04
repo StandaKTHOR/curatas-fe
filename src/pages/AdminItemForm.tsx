@@ -212,10 +212,10 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
     const [initialNumbers, setInitialNumbers] = useState({ inventory: '', accession: '' });
     const [isDraggingAtt, setIsDraggingAtt] = useState(false);
 
-    const [activeTab, setActiveTab] = useState('identity');
+    const [activeTab, setActiveTab] = useState(new URLSearchParams(location.search).get('tab')==='deaccession'?'museum':'identity');
     const [museumSubTab, setMuseumSubTab] = useState<
         'documentation' | 'classification' | 'determination' | 'deaccession' | 'manipulation' | 'action' | 'iso' | 'demus' | 'attachments' | 'audit' | 'origin' | 'reference' | 'plus' | 'vocabularies'
-    >('documentation');
+    >(new URLSearchParams(location.search).get('tab')==='deaccession'?'deaccession':'documentation');
 
     const scopedMedia=useOriginalMedia(Number(id),activeTab==='photos'||activeTab==='museum'&&museumSubTab==='attachments');
     const sourcePlus=useOriginalSourcePlus(Number(id),activeTab==='museum'&&museumSubTab==='plus');

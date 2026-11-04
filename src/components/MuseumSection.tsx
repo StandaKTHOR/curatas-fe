@@ -1,3 +1,4 @@
+import type {LifecycleState} from '../features/scoped/scopedApi';
 import ThreeLevelDictionarySelect from './ThreeLevelDictionarySelect';
 import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
 import {originalCanEdit} from '../features/catalog/originalEdit';
@@ -51,10 +52,10 @@ function flatten(nodes: TreeNode[], prefix = ''): { id: number; label: string; r
     });
 }
 
-export function TreeChoice({ type, value, onChange, label, allowEmpty=true, invalid=false }: {
+export function TreeChoice({ type, value, onChange, label, allowEmpty=true, invalid=false, unavailableReason }: {
     type: string; value: number | null;
     onChange: (id: number | null, choice?: { id: number; label: string; rawLabel?: string; code: string | null }) => void; label: string;
-    allowEmpty?:boolean; invalid?:boolean;
+    allowEmpty?:boolean; invalid?:boolean; unavailableReason?:string;
 }) {
     const [nodes, setNodes] = useState<TreeNode[]>([]);
     const [search, setSearch] = useState('');
@@ -89,13 +90,13 @@ export function TreeChoice({ type, value, onChange, label, allowEmpty=true, inva
             <span>{label}</span>
             <button
                 type="button"
-                onClick={() => setIsAddModalOpen(true)}
+                disabled={!!unavailableReason} onClick={() => setIsAddModalOpen(true)}
                 className="text-xs font-bold text-blue-600 hover:text-blue-800 underline"
             >
                 + Nový
             </button>
         </div>
-        <input aria-label={`Hledat: ${label}`} className="w-full rounded border border-gray-300 px-3 py-2 font-normal text-xs" value={search}
+        <input disabled={!!unavailableReason} aria-label={`Hledat: ${label}`} className="w-full rounded border border-gray-300 px-3 py-2 font-normal text-xs" value={search}
             onChange={e => setSearch(e.target.value)}
             onKeyDown={e => {
                 if (e.key === 'Enter') {
@@ -104,7 +105,7 @@ export function TreeChoice({ type, value, onChange, label, allowEmpty=true, inva
                 }
             }}
             placeholder="Hledat v hierarchii" />
-        <select aria-label={label} aria-invalid={invalid} className="w-full rounded border border-gray-300 bg-white px-3 py-2 font-normal text-xs"
+        <select disabled={!!unavailableReason} aria-label={label} aria-invalid={invalid} className="w-full rounded border border-gray-300 bg-white px-3 py-2 font-normal text-xs"
             value={value ?? ''} onChange={e => {
                 const id = e.target.value ? Number(e.target.value) : null;
                 onChange(id, choices.find(choice => choice.id === id));
@@ -113,7 +114,7 @@ export function TreeChoice({ type, value, onChange, label, allowEmpty=true, inva
             {value && !choices.some(x => x.id === value) && <option value={value} disabled>Stávající vazba #{value} (není v načteném číselníku)</option>}
             {choices.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
         </select>
-        {error && <span className="text-red-700 text-xs block">{error}</span>}
+        {(error||unavailableReason) && <span className="text-red-700 text-xs block">{error||unavailableReason}</span>}
 
         <AddDictionaryModal
             isOpen={isAddModalOpen}
@@ -148,23 +149,25 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
     const [partyQuery, setPartyQuery] = useState('');
     const [partyMatches, setPartyMatches] = useState<{ id: number; firstName: string | null; lastName: string }[]>([]);
     const [message, setMessage] = useState('');
-    const [deaccession, setDeaccession] = useState({ reason: '', deaccessionDate: '', documentNumber: '' });
+    const [deaccession, setDeaccession] = useState<{reason:string;deaccessionDate:string;documentNumber:string}>(drafts?.current[section]?.deaccession??{ reason: '', deaccessionDate: '', documentNumber: '' });
+    const [lifecycleState,setLifecycleState]=useState<LifecycleState|null>(null);
     const [scopedEtag, setScopedEtag] = useState('');
     const [scopedValues, setScopedValues] = useState<Record<string, string | null> | null>(null);
     const editFormRef = useRef<HTMLDivElement>(null);
     const kind = recordKinds[section];
     const curatorSection = scopedSpecialistSections[section];
     const canRepeat = originalIntegrationEnabled() && Boolean(kind && kind !== 'DEACCESSION') && originalSession().catalog.professionalRecordsEnabled === true;
-    const canScopedWrite = Boolean(curatorSection || canRepeat) && !readOnly && originalIntegrationEnabled() && originalCanEdit('professional');
+    const canScopedWrite = Boolean(curatorSection || canRepeat || kind==='DEACCESSION') && !readOnly && originalIntegrationEnabled() && originalCanEdit('professional');
     useEffect(() => {
+        const lifecycleDirty=originalIntegrationEnabled()&&kind==='DEACCESSION'&&JSON.stringify(deaccession)!==JSON.stringify({reason:lifecycleState?.deaccession?.reason??'',deaccessionDate:lifecycleState?.deaccession?.deaccessionDate??'',documentNumber:lifecycleState?.deaccession?.documentNumber??''});
         const scopedDirty = originalIntegrationEnabled() && curatorSection && record?.id === 0 && scopedValues
             ? Object.keys(scopedValues).some(k => String(payload[k] ?? '') !== String(scopedValues[k] ?? ''))
             : false;
-        if (drafts) drafts.current[section] = {changes, record, payload, dictionaryId, partyId,
+        if (drafts) drafts.current[section] = {changes, record, payload, dictionaryId, partyId,deaccession,
             materialId,techniqueId,clearParty,clearDictionary,uncertain,
-            dirty: uncertain || Object.keys(changes).length > 0 || (originalIntegrationEnabled() && curatorSection && record?.id === 0 ? scopedDirty : Boolean(kind && Object.keys(professionalDelta(kind,payload,record)).length>0)) || clearParty || clearDictionary ||
+            dirty: uncertain || lifecycleDirty || Object.keys(changes).length > 0 || (originalIntegrationEnabled() && curatorSection && record?.id === 0 ? scopedDirty : Boolean(kind && Object.keys(professionalDelta(kind,payload,record)).length>0)) || clearParty || clearDictionary ||
                 (record ? partyId!==record.partyId||dictionaryId!==record.dictionaryId||materialId!==(record.materialDictionaryId??null)||techniqueId!==(record.techniqueDictionaryId??null) : !!partyId||!!dictionaryId||!!materialId||!!techniqueId)};
-    }, [changes, record, payload, dictionaryId, partyId, section, drafts,kind,materialId,techniqueId,clearParty,clearDictionary,uncertain,curatorSection,scopedValues]);
+    }, [changes, record, payload, dictionaryId, partyId, section, drafts,kind,materialId,techniqueId,clearParty,clearDictionary,uncertain,curatorSection,scopedValues,deaccession,lifecycleState]);
 
     useEffect(() => {
         if (!itemId || (snapshotRequired && !editSession)) return;
@@ -186,9 +189,10 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                 return()=>{alive=false;};
             }
             if(!kind||!catalog.professionalRecordsEnabled){setMessage(`Sekce ${section}: původní zdrojové záznamy ani nepodporované zápisy nejsou součástí tohoto scoped kontraktu. Chybějící přístup neznamená prázdnou evidenci.`);return;}
-            api.professionalRecords(itemId,signal).then(result=>{
+            Promise.all([api.professionalRecords(itemId,signal),kind==='DEACCESSION'?api.lifecycle(itemId,signal):Promise.resolve(null)]).then(([result,lifecycle])=>{
                 if(!alive||signal.aborted)return;
                 if((editSession as any)?.scopedCurrent&&result.etag!==(editSession as any).scopedCurrent.etag)throw new Error('Verze podzáznamů se změnila. Obnovte kartu.');
+                if(lifecycle){if(lifecycle.etag!==result.etag)throw new Error('Verze provozního stavu se změnila. Obnovte kartu.');setLifecycleState(lifecycle.value);if(!drafts?.current[section]?.dirty&&lifecycle.value.deaccession)setDeaccession({reason:lifecycle.value.deaccession.reason,deaccessionDate:lifecycle.value.deaccession.deaccessionDate,documentNumber:lifecycle.value.deaccession.documentNumber??''});}
                 setScopedEtag(result.etag);
                 setDetail({itemId,markant:null,signature:null,legacyArchived:null,legacyCard:null,legacyCopied:null,legacyVerified:null,legacyMarked:null,localityLegacyCode:null,fundLegacyCode:null,groupLegacyCode:null,subjectLegacyCode:null,materialDictionaryId:null,techniqueDictionaryId:null,localityDictionaryId:null,fundDictionaryId:null,groupDictionaryId:null,subjectDictionaryId:null,legacyCreatedBy:null,legacyCreatedAt:null,legacyUpdatedBy:null,legacyUpdatedAt:null,records:result.items});
                 setMessage('Současné vlastní odborné podzáznamy. Historické raw údaje zde nejsou přepsány ani vydávány za současná tvrzení. Zápis současných záznamů vyžaduje oprávnění item.professional.write; původní zdrojové řádky se nemění.');
@@ -419,7 +423,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
         } catch (e) { setMessage((e as Error).message); }
     };
 
-    return <fieldset data-scoped-reference-editor={originalIntegrationEnabled() && (curatorSection || canRepeat) ? '' : undefined} disabled={readOnly || saving || (originalIntegrationEnabled() && !canScopedWrite)} className="space-y-5 demus-section">
+    return <fieldset data-scoped-reference-editor={originalIntegrationEnabled() && (curatorSection || canRepeat || kind==='DEACCESSION') ? '' : undefined} disabled={readOnly || saving || (originalIntegrationEnabled() && (!canScopedWrite||kind==='DEACCESSION'&&lifecycleState?.status==='VYRAZENO'&&lifecycleState.active===false))} className="space-y-5 demus-section">
         {fields && <div className="grid grid-cols-1 gap-4 rounded border border-gray-200 p-5 md:grid-cols-2">{fields}
             {section !== 'history' && <div className="col-span-full">{saveButton}</div>}</div>}
         {kind && <div className="space-y-4">
@@ -445,7 +449,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
             </table></div>
             {kind === 'DEACCESSION' && <div className="rounded border border-gray-200 bg-gray-50 p-4 space-y-3">
                 <h4 className="font-semibold">Vyřazení předmětu z evidence</h4>
-                <p className="text-sm">Tato akce používá stávající lifecycle a zapíše auditní událost.</p>
+                <p className="text-sm">Tato akce používá stávající lifecycle a zapíše auditní událost.{originalIntegrationEnabled()&&lifecycleState?` Provozní stav: ${lifecycleState.status??'neuveden'}.`:''}</p>
                 {(['reason', 'deaccessionDate', 'documentNumber'] as const).map(key => <label key={key} className="block text-sm font-semibold">
                     {{ reason: 'Důvod', deaccessionDate: 'Datum vyřazení', documentNumber: 'Číslo dokumentu' }[key]}
                     <input type={key === 'deaccessionDate' ? 'date' : 'text'} value={deaccession[key]}
@@ -453,8 +457,15 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                         className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 font-normal" />
                 </label>)}
                 <button type="button" className="rounded bg-[#00204a] px-4 py-2 text-sm font-semibold text-white"
-                    disabled={!deaccession.reason.trim()} onClick={async () => {
+                    disabled={!deaccession.reason.trim()||saving||originalIntegrationEnabled()&&lifecycleState?.status==='VYRAZENO'&&lifecycleState.active===false} onClick={async () => {
                         if (!window.confirm('Opravdu vyřadit předmět z evidence?')) return;
+                        if(originalIntegrationEnabled()){
+                            if(!canScopedWrite||editSession?.busy||saving)return;setSaving(true);if(editSession)editSession.busy=true;let committed=false;
+                            try{const {api,signal}=originalSession();const tag=(editSession as any)?.scopedCurrent?.etag||editSession?.etag||scopedEtag;const saved=await api.deaccession(itemId,tag,{reason:deaccession.reason,deaccessionDate:deaccession.deaccessionDate||null,documentNumber:deaccession.documentNumber||null},signal);
+                                committed=true;setScopedEtag(saved.etag);setLifecycleState(saved.value);if(saved.value.deaccession){const values={reason:saved.value.deaccession.reason,deaccessionDate:saved.value.deaccession.deaccessionDate,documentNumber:saved.value.deaccession.documentNumber??''};setDeaccession(values);if(drafts?.current[section])drafts.current[section]={...drafts.current[section],deaccession:values,dirty:false};}if(editSession){editSession.etag=saved.etag;if((editSession as any).scopedCurrent)(editSession as any).scopedCurrent.etag=saved.etag;}
+                                await onSave?.();setMessage('Předmět byl vyřazen z evidence; záznam a historické údaje zůstávají zachované.');
+                            }catch(e){setMessage((committed?'Vyřazení bylo potvrzeno; obnovení karty selhalo: ':'')+(e as Error).message);}finally{setSaving(false);if(editSession)editSession.busy=false;}return;
+                        }
                         try { await deaccessionItem(itemId, { reason: deaccession.reason,
                             deaccessionDate: deaccession.deaccessionDate || undefined,
                             documentNumber: deaccession.documentNumber || undefined });

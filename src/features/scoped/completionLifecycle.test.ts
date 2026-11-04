@@ -1,0 +1,11 @@
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+import {scopedApi} from './scopedApi';
+const signal=()=>new AbortController().signal;
+const state={active:false,published:false,status:'VYRAZENO',deaccession:{reason:'GENERATED Ž',deaccessionDate:'2026-11-04',documentNumber:null}};
+const body=(change:Record<string,unknown>={})=>({catalogId:1,itemId:7,itemVersion:1,state,semantics:'CURRENT_OPERATIONAL_STATE_NOT_SOURCE',...change});
+const response=(data:unknown)=>new Response(JSON.stringify(data),{headers:{'Cache-Control':'no-store, no-store',ETag:'"1"'}});
+beforeEach(()=>vi.stubEnv('VITE_LOCAL_AUTH_ENABLED','false'));afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
+it('reads current operational state separately from historical source without changing cache validation',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response(body())));expect((await scopedApi(1,'generated').lifecycle(7,signal())).value).toEqual(state);});
+it('uses authenticated POST with If-Match and requires a persisted deaccession state and incremented version',async()=>{const fetch=vi.fn().mockResolvedValue(response(body()));vi.stubGlobal('fetch',fetch);expect((await scopedApi(1,'generated').deaccession(7,'"0"',{reason:'GENERATED Ž'},signal())).etag).toBe('"1"');expect(fetch.mock.calls[0][0]).toContain('/catalogs/1/items/7/deaccession');expect(fetch.mock.calls[0][1].headers['If-Match']).toBe('"0"');expect(fetch.mock.calls[0][1].method).toBe('POST');});
+it.each([{catalogId:2},{itemId:8},{semantics:'SOURCE'},{state:{...state,active:'false'}},{state:{...state,deaccession:{...state.deaccession,reason:123}}}])('rejects invalid/foreign state %j',async change=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response(body(change))));await expect(scopedApi(1,'generated').lifecycle(7,signal())).rejects.toThrow();});
+it.each([{...state,active:true},{...state,published:true},{...state,deaccession:null},{...state,status:'ACTIVE'}])('refuses an unconfirmed200 state %j',async changed=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response(body({state:changed}))));await expect(scopedApi(1,'generated').deaccession(7,'"0"',{reason:'GENERATED Ž'},signal())).rejects.toThrow();});

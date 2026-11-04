@@ -41,6 +41,7 @@ export interface DictionaryValue {id:string;catalogId:number;type:string;label:s
 export interface Versioned<T> { value: T; etag: string }
 export interface CurrentDimensionWrite {id:number|null;type:string;value:string;unit:string|null;note:string|null}
 export type CurrentSectionWrites=Partial<Record<'inventory'|'professional'|'storage'|'item',Record<string,string|null>>> & {dimensions?:{rows:CurrentDimensionWrite[]}};
+export interface LifecycleState {active:boolean|null;published:boolean|null;status:string|null;deaccession:{reason:string;deaccessionDate:string;documentNumber:string|null}|null}
 export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string|null;professional?:Record<string,string|null>;inventory?:{quantity:number|null;otherNumber:string|null};storage?:Record<string,string|null>}
 export interface Creation {item:Item;origin:'MES_CREATED';requestId:string;replayed:boolean}
 export interface ItemOrigin {catalogId:number;itemId:number;itemVersion:string;origin:'MES_CREATED'|'UNRECORDED';createdAt:string|null;createdBy?:string|null;createdBySubject?:string|null}
@@ -97,8 +98,8 @@ export function scopedApi(catalogId: number, token: string) {
         if (!response.ok) {if([401,403,404].includes(response.status))window.dispatchEvent(new CustomEvent('curatas:scoped-denied',{detail:{status:response.status}})); throw new ScopedError(response.status);} return response;
     }
     async function read(path: string, signal: AbortSignal, init?: RequestInit) {
-        const response = await request(path, signal, init); const body = exactJson(await response.text());
-        if (signal.aborted) throw new Error('Request cancelled'); return { body, response };
+        const response = await request(path, signal, init); const raw=await response.text();const body=exactJson(raw),wire=JSON.parse(raw);
+        if (signal.aborted) throw new Error('Request cancelled'); return { body, response,wire };
     }
     function item(v: any, id?: number): Item {
         if (integer(v.catalogId) !== catalogId || (id !== undefined && integer(v.id) !== id)) throw new Error('Foreign item response');
@@ -149,19 +150,41 @@ export function scopedApi(catalogId: number, token: string) {
             ||!hasPrivateNoStore(response.headers)||(init&&response.headers.get('Location')!==itemPath(created.id)))throw new Error('Invalid clone receipt');
         return {value:{item:created,clonedFromItemId:integer(body.clonedFromItemId),requestId:body.requestId,replayed:body.replayed,copied:body.copied},etag:tag(response,created.version)};
     }
+    function lifecycle(body:any,response:Response,id:number,wire:any){
+        if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_OPERATIONAL_STATE_NOT_SOURCE'||!hasPrivateNoStore(response.headers))throw new Error('Neplatný kontrakt provozního stavu.');
+        const text=(value:unknown)=>value===null||typeof value==='string';
+        if(!wire?.state||!text(wire.state.status)||wire.state.deaccession!==null&&(!wire.state.deaccession||typeof wire.state.deaccession.reason!=='string'||typeof wire.state.deaccession.deaccessionDate!=='string'||!text(wire.state.deaccession.documentNumber)))throw new Error('Neplatné JSON typy provozního stavu.');
+        const state=body.state;if(!state||Object.keys(state).length!==4||!['active','published','status','deaccession'].every(k=>Object.hasOwn(state,k))||![true,false,null].includes(state.active)||![true,false,null].includes(state.published))throw new Error('Neplatný provozní stav.');
+        const status=nullable(state.status);let deaccession:LifecycleState['deaccession']=null;
+        if(state.deaccession!==null){const v=state.deaccession;if(!v||Object.keys(v).length!==3||!['reason','deaccessionDate','documentNumber'].every(k=>Object.hasOwn(v,k))||typeof v.reason!=='string'||!v.reason.trim()||v.reason.length>4096||typeof v.deaccessionDate!=='string'||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(v.deaccessionDate))throw new Error('Neplatný záznam vyřazení.');deaccession={reason:v.reason,deaccessionDate:v.deaccessionDate,documentNumber:nullable(v.documentNumber)};}
+        return {value:{active:state.active as boolean|null,published:state.published as boolean|null,status,deaccession},etag:tag(response,body.itemVersion)};
+    }
+    function acquisition(v:any):import('../../lib/api').MuseumAcquisition{
+        if(typeof v.sourceReadOnly!=='boolean')throw new Error('Chybí stav zdrojové akvizice.');
+        const date=nullable(v.acquisitionDate);if(date!==null&&(!v.sourceReadOnly&&!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)||date.length>64))throw new Error('Neplatné datum akvizice.');
+        const order=nullable(v.orderNumber);if(order!==null&&(!/^-?(0|[1-9][0-9]*)$/.test(order)||BigInt(order)<-9223372036854775808n||BigInt(order)>9223372036854775807n))throw new Error('Neplatné pořadí akvizice.');
+        return {id:integer(v.id),accessionNumber:nullable(v.accessionNumber),acquisitionMethod:nullable(v.acquisitionMethod),methodDictionaryId:v.methodDictionaryId===null?null:integer(v.methodDictionaryId),acquisitionDate:date,acquiredFrom:nullable(v.acquiredFrom),circumstances:nullable(v.circumstances),documentNumber:nullable(v.documentNumber),message:nullable(v.message),orderNumber:order,sourceReadOnly:v.sourceReadOnly,legacyData:null};
+    }
     function workset(body:any){
         if(integer(body.catalogId)!==catalogId||!Number.isFinite(Date.parse(body.createdAt))||!Number.isFinite(Date.parse(body.updatedAt)))throw new Error('Neplatná osobní pracovní sada.');
         integer(body.ownerUserId);const count=integer(body.itemCount,true);if(count>10000)throw new Error('Překročen rozsah pracovní sady.');
         return {id:uuid(body.id),name:text(body.name),description:body.description===null?'':text(body.description),itemCount:count,createdAt:body.createdAt as string,updatedAt:body.updatedAt as string};
     }
-    function curatorRows(rows:any[]){
-        const items:{item:Item;current:Record<string,string|null>;currentPresent:boolean;currentInventory:Record<string,string|null>;source:Record<string,string|null>;hasPhoto:boolean|null;hasAttachment:boolean|null}[]=rows.map((row:any)=>{
+    function curatorRows(rows:any[],wireRows:any[]){
+        if(!Array.isArray(wireRows)||wireRows.length!==rows.length)throw new Error('Invalid curator wire DTO');
+        const scalar=(value:unknown)=>value===null||typeof value==='string';
+        for(const row of wireRows){
+            if(!row?.item||['title','inventoryNumber','accessionNumber'].some(key=>!scalar(row.item[key]))||!row.current||curatorCurrentFields.some(key=>!scalar(row.current[key]))||!row.source||Object.keys(inventoryColumns).some(key=>!scalar(row.source[key]))||row.currentInventory!==undefined&&row.currentInventory!==null&&curatorCurrentInventoryFields.some(key=>!scalar(row.currentInventory[key])))throw new Error('Invalid curator text JSON type');
+        }
+        const items:{item:Item;current:Record<string,string|null>;currentPresent:boolean;currentInventory:Record<string,string|null>;source:Record<string,string|null>;hasPhoto:boolean|null;hasAttachment:boolean|null;lifecycle?:Omit<LifecycleState,'deaccession'>}[]=rows.map((row:any)=>{
                 const current:Record<string,string|null>={};
                 if(!row.current||Object.keys(row.current).length!==curatorCurrentFields.length||Object.keys(row.current).some(k=>!curatorCurrentFields.includes(k as typeof curatorCurrentFields[number]))||typeof row.currentPresent!=='boolean')throw new Error('Invalid current projection');
                 for(const key of curatorCurrentFields)current[key]=nullable(row.current[key]);
                 if(!row.currentPresent&&Object.values(current).some(v=>v!==null))throw new Error('Invalid current assertion state');
                 if(![true,false,null].includes(row.hasPhoto)||![true,false,null].includes(row.hasAttachment))throw new Error('Invalid media presence');
-                const currentInventory:Record<string,string|null>={quantity:null,otherNumber:null};if(row.currentInventory!==undefined&&row.currentInventory!==null){if(typeof row.currentInventory!=='object'||Array.isArray(row.currentInventory)||Object.keys(row.currentInventory).length!==curatorCurrentInventoryFields.length||Object.keys(row.currentInventory).some(k=>!curatorCurrentInventoryFields.includes(k as typeof curatorCurrentInventoryFields[number])))throw new Error('Invalid current inventory projection');for(const key of curatorCurrentInventoryFields)currentInventory[key]=nullable(row.currentInventory[key]);}return {item:item(row.item),current,currentPresent:row.currentPresent,currentInventory,source:sourceInventory(row.source),hasPhoto:row.hasPhoto as boolean|null,hasAttachment:row.hasAttachment as boolean|null};
+                let lifecycle:Omit<LifecycleState,'deaccession'>|undefined;
+                if(row.lifecycle!==undefined){const state=row.lifecycle;if(!state||Object.keys(state).length!==3||!['active','published','status'].every(k=>Object.hasOwn(state,k))||!['true','false',null].includes(state.active)||!['true','false',null].includes(state.published))throw new Error('Invalid lifecycle flags');lifecycle={active:state.active===null?null:state.active==='true',published:state.published===null?null:state.published==='true',status:nullable(state.status)};}
+                const currentInventory:Record<string,string|null>={quantity:null,otherNumber:null};if(row.currentInventory!==undefined&&row.currentInventory!==null){if(typeof row.currentInventory!=='object'||Array.isArray(row.currentInventory)||Object.keys(row.currentInventory).length!==curatorCurrentInventoryFields.length||Object.keys(row.currentInventory).some(k=>!curatorCurrentInventoryFields.includes(k as typeof curatorCurrentInventoryFields[number])))throw new Error('Invalid current inventory projection');for(const key of curatorCurrentInventoryFields)currentInventory[key]=nullable(row.currentInventory[key]);}return {item:item(row.item),lifecycle,current,currentPresent:row.currentPresent,currentInventory,source:sourceInventory(row.source),hasPhoto:row.hasPhoto as boolean|null,hasAttachment:row.hasAttachment as boolean|null};
             });
         if(new Set(items.map(row=>row.item.id)).size!==items.length)throw new Error('Duplicate curator identity');
         return items;
@@ -233,20 +256,20 @@ export function scopedApi(catalogId: number, token: string) {
         curatorPage:async(page:number,size:number,sort:string,filters:Record<string,unknown>,signal:AbortSignal)=>{
             const query=curatorQuery(page,size,sort,filters);
             const bodyParams:Record<string,string>={};query.forEach((value,key)=>{bodyParams[key]=value;});
-            const {body,response}=query.has('advancedFilter')
+            const {body,response,wire}=query.has('advancedFilter')
                 ?await read(`${root}/curator-page/query`,signal,{method:'POST',body:JSON.stringify(bodyParams)})
                 :await read(`${root}/curator-page?${query}`,signal);
             const {totalElements,totalPages}=validateCuratorPage(body,response.headers,{catalogId,page,pageSize:size,sort});
-            const items=curatorRows(body.items);
+            const items=curatorRows(body.items,wire.items);
             return {items,totalElements,totalPages,page,pageSize:size,hasMore:page+1<totalPages};
         },
         curatorPrint:async(sort:string,filters:Record<string,unknown>,signal:AbortSignal)=>{
             const query=curatorQuery(0,100,sort,filters);query.delete('page');query.delete('size');
             const params:Record<string,string>={};query.forEach((v,k)=>{params[k]=v;});
-            const {body,response}=await read(`${root}/curator-print`,signal,{method:'POST',body:JSON.stringify(params)});
+            const {body,response,wire}=await read(`${root}/curator-print`,signal,{method:'POST',body:JSON.stringify(params)});
             const {totalElements}=validateCuratorPage(body,response.headers,{catalogId,page:0,pageSize:10000,sort});
             if(totalElements>10000)throw new Error('Překročen limit úplného tiskového výstupu.');
-            return {items:curatorRows(body.items),totalElements};
+            return {items:curatorRows(body.items,wire.items),totalElements};
         },
         curatorExcel:async(sort:string,filters:Record<string,unknown>,signal:AbortSignal,columns?:string[])=>{
             const query=curatorQuery(0,100,sort,filters);query.delete('page');query.delete('size');
@@ -255,6 +278,32 @@ export function scopedApi(catalogId: number, token: string) {
             const response=await request(`${root}/curator-export.xlsx`,signal,{method:'POST',body:JSON.stringify(params)});
             if(!hasPrivateNoStore(response.headers)||response.headers.get('X-CURATAS-Catalog-Id')!==String(catalogId)||response.headers.get('Content-Type')?.split(';')[0]!=='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')throw new Error('Neplatný kontrakt XLSX exportu.');
             const blob=await response.blob();if(signal.aborted)throw new Error('Request cancelled');return blob;
+        },
+        lifecycle:async(id:number,signal:AbortSignal)=>{const {body,response,wire}=await read(`${itemPath(id)}/lifecycle`,signal);return lifecycle(body,response,id,wire);},
+        deaccession:async(id:number,etag:string,input:{reason:string;deaccessionDate?:string|null;documentNumber?:string|null},signal:AbortSignal)=>{
+            if(Object.keys(input).some(k=>!['reason','deaccessionDate','documentNumber'].includes(k))||typeof input.reason!=='string'||!input.reason.trim()||input.reason.length>4096)throw new Error('Důvod vyřazení je povinný.');
+            for(const key of ['documentNumber','deaccessionDate'] as const){const value=input[key];if(value!==undefined&&value!==null&&(typeof value!=='string'||value.includes('\0')||value.length>(key==='documentNumber'?255:10)||key==='deaccessionDate'&&!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)))throw new Error('Neplatné datum nebo doklad vyřazení.');}
+            const {body,response,wire}=await read(`${itemPath(id)}/deaccession`,signal,{method:'POST',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(input)});const result=lifecycle(body,response,id,wire);
+            if(result.etag!==`"${BigInt(etag.slice(1,-1))+1n}"`||result.value.active!==false||result.value.published!==false||result.value.status!=='VYRAZENO'||!result.value.deaccession||result.value.deaccession.reason!==input.reason||input.deaccessionDate&&result.value.deaccession.deaccessionDate!==input.deaccessionDate||result.value.deaccession.documentNumber!==(input.documentNumber??null))throw new Error('Vyřazení nebylo potvrzeno platným stavem a verzí.');return result;
+        },
+        acquisitions:async(id:number,signal:AbortSignal)=>{
+            const {body,response}=await read(`${itemPath(id)}/acquisitions`,signal);
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_AND_READ_ONLY_HISTORICAL_ACQUISITIONS'||!Array.isArray(body.items)||body.items.length>1000||!hasPrivateNoStore(response.headers))throw new Error('Neplatný kontrakt akvizic.');
+            const items=body.items.map(acquisition);if(items.some((r:{id:number},i:number)=>i>0&&r.id<=items[i-1].id))throw new Error('Neuspořádané akvizice.');return {value:items,etag:tag(response,body.itemVersion)};
+        },
+        saveAcquisition:async(id:number,recordId:number|undefined,etag:string,input:import('../../lib/api').MuseumAcquisitionInput,signal:AbortSignal)=>{
+            const allowed=['accessionNumber','acquisitionMethod','methodDictionaryId','acquisitionDate','acquiredFrom','circumstances','documentNumber','message','orderNumber'];
+            if(!Object.keys(input).length||Object.keys(input).some(k=>!allowed.includes(k)))throw new Error('Nepovolené pole akvizice.');
+            const payload:Record<string,unknown>={...input};
+            for(const [key,value] of Object.entries(input)){
+                if(value===null)continue;
+                if(key==='methodDictionaryId'){integer(value);continue;}
+                if(key==='orderNumber'){const text=String(value);if(!/^-?(0|[1-9][0-9]*)$/.test(text)||BigInt(text)<-9223372036854775808n||BigInt(text)>9223372036854775807n||typeof value==='number'&&!Number.isSafeInteger(value))throw new Error('Neplatné celé pořadí akvizice.');payload[key]=text;continue;}
+                if(typeof value!=='string'||value.includes('\0')||value.length>(key==='circumstances'?4096:255))throw new Error('Neplatná hodnota akvizice.');
+            }
+            const {body,response}=await read(`${itemPath(id)}/acquisitions${recordId===undefined?'':'/'+integer(recordId)}`,signal,{method:recordId===undefined?'POST':'PATCH',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(payload)});
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.origin!=='CURRENT_CURATOR_STATEMENT_NOT_SOURCE'||!hasPrivateNoStore(response.headers))throw new Error('Neplatné potvrzení akvizice.');
+            const value=acquisition(body.acquisition);if(value.sourceReadOnly||recordId!==undefined&&value.id!==recordId)throw new Error('Neplatná identita uložené akvizice.');return {value,etag:tag(response,body.itemVersion)};
         },
         sourcePlus:async(id:number,signal:AbortSignal,after='')=>{
             if(after&&!/^[a-f0-9]{64}$/.test(after))throw new Error('Neplatná zdrojová stránka.');

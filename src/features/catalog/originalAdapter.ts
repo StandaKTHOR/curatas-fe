@@ -62,7 +62,7 @@ export async function originalDemusIdentity(id:number):Promise<import('../../lib
   sourceQuantity:count(summary.sourceQuantity),quantity:count(current.value.quantity)};
 }
 type CuratorRow=Awaited<ReturnType<ReturnType<typeof scopedApi>['curatorPage']>>['items'][number];
-const originalRow=(row:CuratorRow)=>({...row.item,author:row.current.authorText,datingText:row.current.datingText,
+const originalRow=(row:CuratorRow)=>({...row.item,...(row.lifecycle?{isActive:row.lifecycle.active,published:row.lifecycle.published,catalogingStatus:row.lifecycle.status}:{}),author:row.current.authorText,datingText:row.current.datingText,
   material:row.current.materialText,technique:row.current.techniqueText,objectType:row.current.objectType,originPlace:row.current.originPlace,
   currentAssertionState:row.currentPresent?'PRESENT':'ABSENT',quantity:row.currentInventory?.quantity===null||row.currentInventory?.quantity===undefined?null:Number(row.currentInventory.quantity),otherNumber:row.currentInventory?.otherNumber??null,sourceInventory:row.source,
   subCollection:row.source.Podsb_S,fundLegacyCode:row.source.Fond_S,hasPhoto:row.hasPhoto,hasAttachment:row.hasAttachment});
@@ -97,4 +97,15 @@ export async function originalExcel(params:Record<string,unknown>){
 export async function originalWorksets(){const {api,signal}=originalSession();return api.worksets(signal);}
 export async function originalWorksetCreate(data:{name:string;description?:string;itemIds?:number[];filter?:Record<string,unknown>;requestId?:string}){
  const {api,signal}=originalSession();const {requestId,...input}=data;return api.createWorkset(requestId??crypto.randomUUID(),input,signal);
+}
+
+export async function originalAcquisitions(itemId:number,session?:import('../../lib/editSession').ItemEditSession){
+ const {api,signal}=originalSession();const result=await api.acquisitions(itemId,signal);
+ if(session&&result.etag!==session.etag)throw new Error('Verze akvizic se změnila. Obnovte kartu.');
+ if(session)session.acquisitionSnapshot=result.value;return result.value;
+}
+export async function originalAcquisitionSave(itemId:number,recordId:number|undefined,input:import('../../lib/api').MuseumAcquisitionInput,session?:import('../../lib/editSession').ItemEditSession){
+ const {api,signal,catalog}=originalSession();
+ if(!session||session.itemId!==itemId||session.busy||!catalog.professionalWriteEnabled||!catalog.capabilities?.includes('item.professional.write'))throw new Error('Chybí oprávnění nebo aktuální verze akvizice.');
+ session.busy=true;try{const result=await api.saveAcquisition(itemId,recordId,session.etag,input,signal);session.etag=result.etag;if((session as any).scopedCurrent)(session as any).scopedCurrent.etag=result.etag;return result.value;}finally{session.busy=false;}
 }

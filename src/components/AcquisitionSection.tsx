@@ -1,3 +1,6 @@
+import {originalIntegrationEnabled} from '../features/catalog/originalAdapter';
+import {originalCanEdit} from '../features/catalog/originalEdit';
+import {ScopedError} from '../features/scoped/scopedApi';
 import { uncertainWrite, uncertainCreateMessage } from '../lib/writeOutcome';
 import type { ItemEditSession } from '../lib/editSession';
 import YearDateInput from './YearDateInput';
@@ -35,6 +38,7 @@ export default function AcquisitionSection({ itemId, editSession, readOnly = fal
 
     const select = (row: MuseumAcquisition | null) => {
         if (uncertain) {setMessage(uncertainCreateMessage); return;}
+        if(originalIntegrationEnabled()&&row?.sourceReadOnly){setMessage('Historická akvizice zůstává pouze pro čtení.');return;}
         setEditing(row);
         setForm(row ? {
             accessionNumber: row.accessionNumber, acquisitionMethod: row.acquisitionMethod,
@@ -67,7 +71,7 @@ export default function AcquisitionSection({ itemId, editSession, readOnly = fal
         } catch (e) {
             if (committed) {
                 setMessage('Akvizice byla uložena; obnovení dat selhalo: ' + (e as Error).message);
-            } else if (!editing && uncertainWrite(e)) {
+            } else if (!editing && uncertainWrite(e) && !(e instanceof ScopedError&&e.status>=400&&e.status<500)) {
                 setUncertain(true);
                 if (drafts) drafts.current.acquisition = {editing, form, dirty: true, uncertain: true};
                 setMessage(uncertainCreateMessage + ' ' + (e as Error).message);
@@ -93,17 +97,17 @@ export default function AcquisitionSection({ itemId, editSession, readOnly = fal
     const field = (key: keyof MuseumAcquisitionInput, label: string, type = 'text') => <label key={key} className="block text-sm font-semibold">
         {label}<input type={type} className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 font-normal"
             value={String(form[key] ?? '')} onChange={e => setForm(old => ({ ...old, [key]: key === 'orderNumber'
-                ? (e.target.value ? Number(e.target.value) : null) : e.target.value || null }))} />
+                ? (e.target.value ? originalIntegrationEnabled()?e.target.value:Number(e.target.value) : null) : e.target.value || null }))} />
     </label>;
-    return <fieldset disabled={readOnly || saving} className="space-y-4 demus-section">
+    return <fieldset data-scoped-reference-editor={originalIntegrationEnabled()?'':undefined} disabled={readOnly || saving || originalIntegrationEnabled()&&!originalCanEdit('professional')} className="space-y-4 demus-section">
         <h3 className="font-bold">Akvizice předmětu</h3>
         <p className="text-sm text-gray-600">Jeden předmět může mít více akvizic. Původní hodnoty DEMUS zůstávají uložené u importovaných řádků.</p>
         {rows.map(row => <div key={row.id} className="rounded border border-gray-200 p-3 text-sm">
             <div className="flex justify-between"><strong>{row.accessionNumber || `Akvizice #${row.id}`}</strong><span>
-                <button type="button" onClick={() => select(row)} className="text-blue-700 underline">Upravit</button>
-                {!row.legacyData && <button type="button" onClick={() => remove(row)} className="ml-3 text-red-700 underline">Odebrat</button>}
+                <button type="button" disabled={originalIntegrationEnabled()&&row.sourceReadOnly} onClick={() => select(row)} className="text-blue-700 underline">Upravit</button>
+                {!row.legacyData && <button type="button" disabled={originalIntegrationEnabled()} title={originalIntegrationEnabled()?'QA nepovoluje odstranění akvizice.':undefined} onClick={() => remove(row)} className="ml-3 text-red-700 underline">Odebrat</button>}
             </span></div>
-            <p>{row.acquisitionDate || 'Bez data'} · {row.acquisitionMethod || 'Bez způsobu'} · {row.acquiredFrom || 'Bez předchozího vlastníka'}</p>
+            <p>{originalIntegrationEnabled()?(row.sourceReadOnly?'Historický zdroj — pouze pro čtení · ':'Současná akvizice · '):''}{row.acquisitionDate || 'Bez data'} · {row.acquisitionMethod || 'Bez způsobu'} · {row.acquiredFrom || 'Bez předchozího vlastníka'}</p>
             {row.legacyData && <details><summary className="cursor-pointer">Všechna původní pole</summary>
                 <pre className="overflow-x-auto text-xs">{JSON.stringify(row.legacyData, null, 2)}</pre></details>}
         </div>)}
@@ -111,7 +115,7 @@ export default function AcquisitionSection({ itemId, editSession, readOnly = fal
             <h4 className="font-semibold">{editing ? `Úprava akvizice #${editing.id}` : 'Nová akvizice'}</h4>
             <div className="grid gap-3 md:grid-cols-2">
                 {field('accessionNumber', 'Přírůstkové číslo')}{field('acquisitionMethod', 'Způsob akvizice / DEMUS kód')}
-                <TreeChoice type="ACQUISITION_METHOD" label="Způsob akvizice – číselník"
+                <TreeChoice unavailableReason={originalIntegrationEnabled()?'Novou vazbu způsobu nabytí nelze přiřadit bez schváleného katalogového mapování; lze zadat současný text. Stávající vazba se zachovává.':undefined} type="ACQUISITION_METHOD" label="Způsob akvizice – číselník"
                     value={form.methodDictionaryId} onChange={(id, choice) => setForm(old => ({ ...old,
                         methodDictionaryId: id, acquisitionMethod: choice?.code ?? old.acquisitionMethod }))} />
                 <YearDateInput id="acquisition-record-date" label="Datum akvizice" value={form.acquisitionDate || ''}
