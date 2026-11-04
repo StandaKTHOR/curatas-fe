@@ -1,6 +1,7 @@
 import {originalPrintCardFields} from '../features/catalog/originalAdapter';
 import {ScopedError} from '../features/scoped/scopedApi';
 import {useOriginalSourcePlus} from '../features/catalog/useOriginalSourcePlus';
+import {useOriginalHistoricalData,historicalControl,demusText,currentBinding} from '../features/catalog/useOriginalHistoricalData';
 import OwnedHistory from '../features/catalog/OwnedHistory';
 import CloneOrigin from '../features/catalog/CloneOrigin';
 import {originalItemHref} from '../features/catalog/originalAdapter';
@@ -643,6 +644,12 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         const returnSearch = (location.state as any)?.fromSearch ?? sessionStorage.getItem(returnPath==='/'?'catalogSearch':'adminItemsSearch') ?? '';
         navigate(`${returnPath}${returnSearch}`);
     };
+
+    const historical = useOriginalHistoricalData(id?Number(id):undefined,editSessionRef.current,originalIntegrationEnabled());
+    const historicalFields=historical?.fields;
+    const historicalFund=currentBinding(historical?.authorities.fundRecordId)||historicalControl(null,historicalFields?.Fond_S,true).value;
+    const historicalType=currentBinding(historical?.authorities.objectTypeRecordId)||historicalControl(null,historicalFields?.Predmet_S,true).value;
+    const sourceControl=(current:unknown,key:string)=>historicalControl(current,historicalFields?.[key],isViewMode);
 
     const currentFundLabel = useMemo(() => {
         if (form.fundDictionaryId) {
@@ -1427,7 +1434,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             <label htmlFor="title">Název sbírkového předmětu (nebo typ)</label>
                             <input
                                 id="title"
-                                value={form.title || ''}
+                                {...sourceControl(form.title,'Predmet_S')}
                                 onChange={(e: any) => setForm({ ...form, title: e.target.value })}
                             />
                             {fieldErrors.title && <p className="text-xs font-bold text-red-600">{fieldErrors.title}</p>}
@@ -1436,16 +1443,16 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                         {id && <div className="grid grid-cols-2 gap-2 text-xs border p-2">
                             <p>Založil v MESonline: {form.createdByUser || '—'}</p><p>Datum založení v MESonline: {form.createdAt || '—'}</p>
                             <p>Změnil v MESonline: {form.modifiedByUser || '—'}</p><p>Poslední změna v MESonline: {form.lastModifiedAt || '—'}</p>
-                            <p>Zapsal v DEMUS: {form.legacyCreatedBy || '—'}</p><p>Datum zápisu v DEMUS: {form.legacyCreatedAt || '—'}</p>
-                            <p>Změnil v DEMUS: {form.legacyUpdatedBy || '—'}</p><p>Datum změny v DEMUS: {form.legacyUpdatedAt || '—'}</p>
+                            <p>Zapsal v DEMUS: {historicalFields?demusText(historicalFields.Zapsal_S):form.legacyCreatedBy || '—'} · Určil v DEMUS: {historicalFields?demusText(historicalFields.Urcil_S):'—'}</p><p>Datum zápisu v DEMUS: {historicalFields?demusText(historicalFields.DatZap_S):form.legacyCreatedAt || '—'}</p>
+                            <p>Změnil v DEMUS: {form.legacyUpdatedBy || '—'}</p><p>Datum změny v DEMUS: {historicalFields?demusText(historicalFields.DatZm_S):form.legacyUpdatedAt || '—'}</p>
                         </div>}
-                        <div className="space-y-1"><label htmlFor="quantity">Současný katalogový počet</label>
+                        <div className="space-y-1"><label htmlFor="quantity">{form.quantity==null&&historicalFields?.Pocet_S!=null?`Současný katalogový počet · historický počet: ${demusText(historicalFields.Pocet_S)}`:'Současný katalogový počet'}</label>
                             <input id="quantity" type="number" step="1" value={form.quantity??''}
                                 onChange={e=>setForm((prev:any)=>({...prev,quantity:e.target.value===''?null:Number(e.target.value)}))}/>
                             {fieldErrors.quantity&&<p role="alert">{fieldErrors.quantity}</p>}
                         </div>
                         {originalIntegrationEnabled()&&<div className="space-y-1"><label htmlFor="current-other-number">Současné jiné číslo (kurátorský údaj)</label><input id="current-other-number" type="text" readOnly={isViewMode||!originalCanEdit('inventory')} value={form.otherNumber??''} onChange={e=>setForm((prev:any)=>({...prev,otherNumber:e.target.value}))}/>{form.otherNumber===null&&<span>NULL</span>}</div>}
-                        {originalIntegrationEnabled()&&!isViewMode&&scopedDomain==='professional'&&<label className="space-y-1">Současný typ — volný text<input id="current-object-type" type="text" value={form.objectType??''} onChange={e=>setForm((prev:any)=>({...prev,objectType:e.target.value}))}/></label>}
+                        {originalIntegrationEnabled()&&!isViewMode&&scopedDomain==='professional'&&<label className="space-y-1">Současný typ — volný text<input id="current-object-type" type="text" value={form.objectType??''} placeholder={historicalType||undefined} onChange={e=>setForm((prev:any)=>({...prev,objectType:e.target.value}))}/></label>}
                         {/* FOND A PODSBÍRKA DLE CITEM – NEZÁVISLÁ POLA */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
@@ -1473,7 +1480,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                         });
                                     }}
                                 >
-                                    <option value="">— Bez přiřazeného fondu —</option>
+                                    <option value="">{historicalFund||'— Bez přiřazeného fondu —'}</option>
                                     {form.fundDictionaryId && !fundSelectOptions.some((o: any) => o.id === String(form.fundDictionaryId)) && (
                                         <option value={String(form.fundDictionaryId)}>
                                             {form.fundLegacyCode ? `[${form.fundLegacyCode}] Fond #${form.fundDictionaryId}` : `Fond #${form.fundDictionaryId}`}
@@ -1498,8 +1505,8 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 <input
                                     id="subCollection"
                                     aria-label="Podsbírka"
-                                    placeholder="např. Výtvarné umění"
-                                    value={form.subCollection || ''}
+                                    placeholder={sourceControl(form.subCollection,'Podsb_S').placeholder??'např. Výtvarné umění'}
+                                    value={sourceControl(form.subCollection,'Podsb_S').value}
                                     onChange={(e: any) => setForm({ ...form, subCollection: e.target.value })}
                                 />
                             </div>
@@ -1523,7 +1530,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                     value={form.objectType || ''}
                                     onChange={e => setForm({ ...form, objectType: e.target.value })}
                                 >
-                                    <option value="">-- Vyberte typ --</option>
+                                    <option value="">{historicalType||'-- Vyberte typ --'}</option>
                                     {form.objectType && !dicts.objectTypes?.includes(form.objectType) && (
                                         <option value={form.objectType}>{form.objectType}</option>
                                     )}
