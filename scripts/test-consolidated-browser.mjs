@@ -20,7 +20,7 @@ try{
  page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message));
  page.on('response',r=>{const url=new URL(r.url());if(url.pathname.startsWith('/api/'))requests.push({path:url.pathname,method:r.request().method(),status:r.status(),cacheControl:r.headers()['cache-control']});});
  const base=`http://127.0.0.1:${input.port}`;
- async function login(username){await page.goto(base+'/login');await page.locator('input[type="text"]').fill(username);await page.locator('input[type="password"]').fill(input.password);await page.getByRole('button',{name:'Autorizovaný vstup'}).click();await page.getByLabel('Katalog',{exact:true}).selectOption('1');}
+ async function login(username){await page.goto(base+'/login');await page.locator('input[type="text"]').fill(username);await page.locator('input[type="password"]').fill(input.password);await page.getByRole('button',{name:'Autorizovaný vstup'}).click();await page.getByLabel('Katalog',{exact:true}).selectOption('1');await expect(page.getByLabel('Katalog',{exact:true})).toHaveValue('1');}
  await login(input.username);checks.push({name:'actual-local-auth-login-and-catalog',pass:true});
  await page.getByRole('table',{name:'Sbírky — tabulkové zobrazení'}).waitFor();
  if(!requests.some(r=>r.path.endsWith('/curator-page')&&r.cacheControl==='no-store, no-store'))throw Error('Combined proxy/origin cache field was not exercised');
@@ -80,7 +80,7 @@ try{
  await page.getByRole('link',{name:'Připomínky',exact:true}).click();await page.getByPlaceholder('Napište podrobnější popis připomínky (min. 10 znaků)...').fill('GENERATED browser připomínka od kurátora');await page.getByRole('button',{name:'Odeslat připomínku',exact:true}).click();await page.getByText(/Připomínka byla úspěšně odeslána/).waitFor();checks.push({name:'curator-feedback-actually-persisted-in-catalog-queue',pass:true});
  // Admin account remains separate; curator cannot acquire account-management privileges.
  await page.getByRole('button',{name:'Odhlásit se',exact:true}).click();await login(input.username);
- await page.goto(base+'/feedback');await page.getByText('Přijaté připomínky katalogu (správce)',{exact:true}).click();await page.getByRole('button',{name:'Načíst připomínky katalogu',exact:true}).click();await page.getByText(/GENERATED browser připomínka od kurátora/).waitFor();checks.push({name:'admin-reads-scoped-feedback-receiver-queue',pass:true});
+ await page.goto(base+'/feedback?catalog=1');await page.getByText('Přijaté připomínky katalogu (správce)',{exact:true}).click();await page.getByRole('button',{name:'Načíst připomínky katalogu',exact:true}).click();await page.getByText(/GENERATED browser připomínka od kurátora/).waitFor();checks.push({name:'admin-reads-scoped-feedback-receiver-queue',pass:true});
  if(input.cloneSource){
   await page.goto(base+'/admin/items/view/'+input.cloneSource+'?catalog=1');await expect(page.locator('#title')).toHaveValue('GENERATED ITEM');
   await page.setViewportSize({width:390,height:844});

@@ -47,7 +47,7 @@ function AppContent() {
                 {token && <NavLink to="/admin/items">Sbírky — evidence předmětů</NavLink>}
                 {token && selectedCatalog?.capabilities?.some(c => (['catalog.grant.manage', 'catalog.access.delegate', 'catalog.audit.read'].includes(c)||import.meta.env.VITE_MANAGED_AUTHORITIES_ENABLED==='true'&&c==='dictionary.write')) && <NavLink to="/admin">Správa uživatelů a přístupů</NavLink>}
                 {admin && <NavLink to="/admin/import">{importTexts.title}</NavLink>}
-                <NavLink to="/feedback">Připomínky</NavLink>
+                <NavLink to={selectedCatalog?`/feedback?catalog=${selectedCatalog.id}`:'/feedback'}>Připomínky</NavLink>
                 {token && <label>Katalog <select aria-label="Katalog" disabled={catalogLoading} value={selectedCatalog?.id??''}
                     onChange={e=>{const id=e.target.value?Number(e.target.value):null;void selectCatalog(id).then(ok=>{if(ok)navigate(id?`/admin/items?catalog=${id}`:'/admin/items');});}}>
                     <option value="">Vyberte katalog</option>{catalogs.map(c=><option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
