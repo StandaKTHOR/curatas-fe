@@ -1,3 +1,5 @@
+> Current completion acceptance is tracked in [CITEM-COMPLETION-MATRIX-20261104.md](CITEM-COMPLETION-MATRIX-20261104.md). FE614/614, native current contracts69/69 and auth/edit37/37 pass locally. Remaining expert decisions and operator-only QA acceptance are explicit; older baseline rows below do not describe the full new completion scope.
+
 # Original UAT integration acceptance matrix — 4 November 2026
 
 Completion development update: see [field/operation matrix](CITEM-COMPLETION-MATRIX-20261104.md). The baseline rows below describe protected b9; new AST/createdAt, atomic multi-section writes, repeated records, storage, outputs and personal sets now have separate local integration evidence. Entire completion batch is NOT DONE and NOT QA VERIFIED.

@@ -1,6 +1,22 @@
-# Completion development status — 2026-11-04
+# CITEM completion candidate status — 2026-11-04
 
-See [actual operation matrix](CITEM-COMPLETION-MATRIX-20261104.md) and [checkpoint](CITEM-COMPLETION-CHECKPOINT-20261104.md). New completion work is isolated from protected b9. Full FE535/535 and original design75/75 passed before final Plus increment; final integration/release remains unfinished. No deployment.
+PARTIALLY DONE against the complete A-G request: approved implemented operations are locally integrated; expert-dependent extensions and actual QA acceptance remain outstanding. No QA VERIFIED claim or remote deployment.
+
+Actual scope: scoped AND/OR/NOT filtering with catalog fence, stable createdAt and exact original navigation; atomic creation/combined core and current-section save, quantity0/NULL, exact decimals/dimensions, shared If-Match/audit; nine repeated professional record kinds, current storage/additional fields; acquisition writes and non-delete deaccession; source Plus/read-only DEMUS lineage; reviewed three-level material/technique and source-qualified reference bindings; all-filter XLSX/list print/personal worksets; private image/attachment upload/download/caption and independent reviewed-profile clone; original admin reset/activation/profiles/revoke/audit. Existing original React components and all20 tabs retained. No CSS, class/layout or tab-order redesign.
+
+Latest validation: FE614/614 PASS; TypeScript PASS; lint0errors/23 existing warnings; production build PASS; original design guard75/75; original compiled CSS SHA2568aaf645251805d6da8174a0bb0a7d47ba6f0d855cdc3c8c30e91b027d964a5bc. Current native contract run69/69 and original authentication/edit HTTP+HTTPS37/37 passed. Final ordinary BE307 plus complete-ACL1:308/308 PASS; clone/ACL42 tests:41 passed/1 default-profile skip; legacy49 tests:48 passed/1 optional historic browser skip. All20 current original browser workflow passed. These groups overlap and are not a unique aggregate count. Compiled migration helper self-check PASS/no DB connection. The immutable release receipt/commits/checksums are generated after clean commits and recorded in qa-completion-latest.json and BUILD.json, not inferred from compilation.
+
+Full operation-by-tab evidence and exact limitations: [CITEM matrix](CITEM-COMPLETION-MATRIX-20261104.md). Approved original UI is db026f32cf3d0f9cf28ea6271e29c9d0443febc3. Isolated worktrees are ../fe and ../be on codex/citem-completion-20261104; final Git IDs are in package BUILD.json. Protected b9b76cced16b release/worktrees/archive remain unchanged.
+
+Outstanding: inventory-number allocation rule; unapproved source/Plus meanings and acquisition-authority mappings; extending the clone transfer profile beyond reviewed child kinds; additional museum print templates (original A4 available, A5 not claimed). Preserve explicit409 instead of silently omitting children. The user accepted original sticky-header overlap with extreme3600-character titles at ordinary height as a documented limitation; no CSS fix. Long-title regression uses1366x2400, normal20-tab browser1366x900.
+
+Operator must separately approve and execute forward V49-V57, exact runtime SQL010+009 and QA-only activation. V1-V48/raw/source/history preserved by local upgrade tests and operator before/after hash checks. New drop-in retains current release/tunnel/sandbox; frontend has atomic rollback. Old V48 backend cannot run against V57: full binary recovery requires separately approved DBA restoration/reconciliation; frontend-only rollback retains new compatible backend. See backend ops/completion/OPERATOR.md or release OPERATOR.md.
+
+No actual-data screenshot comparison/complete8155 workflow acceptance is claimed: agent has no access to the operator tunnel/DNS. Safe generated screenshots and source/CSS guards are included. Previous actual HTTP metadata/50DTO audit confirms the no-store root cause only. Manual first/last page, filters/sort/detail/all20tabs and approved labeled QA test-item write scenarios are specified in OPERATOR.md.
+
+---
+
+## Historical b9 frontend-only baseline (superseded for completion scope)
 
 # Original public UAT → QA frontend status — 4 November 2026
 
