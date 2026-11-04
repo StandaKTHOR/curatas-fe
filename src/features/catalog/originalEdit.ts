@@ -22,18 +22,18 @@ export function currentSectionDraft(domain:OriginalEditDomain,baseline:Record<st
 export async function saveOriginalCurrent(id:number,domain:OriginalEditDomain,session:any,form:Record<string,unknown>){
  const {api,signal,catalog}=originalSession();const snapshot=session?.scopedCurrent;
  if(!originalCanEdit(domain)||session?.itemId!==id||snapshot?.catalogId!==catalog.id||snapshot.etag!==session.etag||session.busy)throw new Error('Chybí oprávnění nebo původní verze této sekce, případně probíhá jiný zápis.');
- const other=domain==='professional'?'inventory':'professional';
- if(currentSectionDraft(other,snapshot[other],form).changed)throw new Error('Jiná současná sekce má neuložený draft. Vraťte se do jejího režimu; sekce se neukládají společně.');
- const draft=currentSectionDraft(domain,snapshot[domain],form);
- if(!draft.changed)return {saved:false};
+ const changed:Partial<Record<OriginalEditDomain|'item',Record<string,string|null>>>={};
+ for(const section of ['inventory','professional'] as const){const draft=currentSectionDraft(section,snapshot[section],form);if(draft.changed){if(!originalCanEdit(section))throw new Error('Chybí oprávnění pro změněnou současnou sekci.');changed[section]=draft.values;}}
+ if(snapshot.core){const core:Record<string,string|null>={};for(const key of ['title','inventoryNumber']){const value=form[key]===null?null:String(form[key]??'');if(String(snapshot.core[key]??'')!==String(value??''))core[key]=value;}if(Object.keys(core).length){if(!originalCanEdit('inventory'))throw new Error('Chybí oprávnění k inventární identitě.');changed.item=core;}}
+ const sections=Object.keys(changed) as (OriginalEditDomain|'item')[];if(!sections.length)return {saved:false};
  session.busy=true;
- try{await api.saveCuratorRecord!(id,domain,session.etag,draft.values,signal);}finally{session.busy=false;}
+ try{if(sections.length===1&&sections[0]!=='item')await api.saveCuratorRecord!(id,sections[0],session.etag,changed[sections[0]]!,signal);else await api.saveCuratorRecords(id,session.etag,changed,signal);}finally{session.busy=false;}
  return {saved:true};
 }
 /** A nonvisual bridge for the original aggregate form. Server ACL remains authoritative.
  * Unsupported native/custom controls stay in their original places but are disabled. */
-export function applyOriginalEditBoundary(root:HTMLElement|null,domain:OriginalEditDomain,enabled:boolean,loading:boolean){
- const allowed=new Set(domain==='professional'?['current-object-type','description','author','datingText','originPlace','current-material-text','current-technique-text','materialNote']:['quantity','current-other-number']);
+export function applyOriginalEditBoundary(root:HTMLElement|null,_domain:OriginalEditDomain,enabled:boolean,loading:boolean){
+ const allowed=new Set([...(originalCanEdit('professional')?['current-object-type','description','author','datingText','originPlace','current-material-text','current-technique-text','materialNote']:[]),...(originalCanEdit('inventory')?['quantity','current-other-number','title','inventoryNumber']:[])]);
  root?.querySelectorAll<HTMLElement>('input,textarea,select,button,gov-button,gov-form-input,gov-form-select').forEach(node=>{
   // This scoped editor owns its capability/read-only/busy boundary and shared item ETag.
   if(node.closest('[data-scoped-reference-editor]'))return;

@@ -31,14 +31,16 @@ export default function AdminItems() {
     const [exporting, setExporting] = useState(false);
     const [searchParams, setSearchParams] = useSearchParams();
     const location = useLocation();
+    const ownSearch = useRef<string|null>(null);
+    const observedSearch = useRef(location.search);
 
     const [page, setPage] = useState<number>(() => {
         const p = searchParams.get('page');
         return p !== null ? Math.max(0, parseInt(p, 10)) : 0;
     });
     const [searchTerm, setSearchTerm] = useState<string>(() => searchParams.get('q') || '');
-    const [sortField, setSortField] = useState<string>(() => searchParams.get('sortField') || (originalIntegrationEnabled()?'inventoryNumber':'createdAt'));
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(() => (searchParams.get('sortDirection') as 'asc' | 'desc') || (originalIntegrationEnabled()?'asc':'desc'));
+    const [sortField, setSortField] = useState<string>(() => searchParams.get('sortField') || 'createdAt');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(() => (searchParams.get('sortDirection') as 'asc' | 'desc') || 'desc');
     const [selectedWorkset, setSelectedWorkset] = useState<string>(() => searchParams.get('worksetId') || '');
 
     const [showAdvanced, setShowAdvanced] = useState(false);
@@ -103,6 +105,22 @@ export default function AdminItems() {
         ...(originalIntegrationEnabled()?Object.fromEntries([...demusTableColumns.map(c=>c.id),'Fond_S','Predmet_S','datingText','currentQuantity','currentOtherNumber'].map(k=>[k,searchParams.get(k)||''])):{})
     }));
 
+    useEffect(()=>{
+        if(observedSearch.current===location.search)return;
+        observedSearch.current=location.search;
+        if(ownSearch.current===location.search){ownSearch.current=null;return;}
+        requestRevision.current++;
+        const query=new URLSearchParams(location.search);
+        setPage(Math.max(0,Number(query.get('page')||0)));
+        setSearchTerm(query.get('q')||'');setSortField(query.get('sortField')||'createdAt');
+        setSortDirection(query.get('sortDirection')==='asc'?'asc':'desc');
+        setSelectedWorkset(query.get('worksetId')||'');
+        setFilters(previous=>Object.fromEntries(Object.keys(previous).map(key=>[key,query.get(key)||''])) as typeof previous);
+        try{setAdvancedFilterGroup(JSON.parse(query.get('advancedFilter')||'null')||createEmptyGroup('AND'));}
+        catch{setAdvancedFilterGroup(createEmptyGroup('AND'));setLoadError('Neplatný pokročilý filtr v URL.');}
+        setIsAdvancedFilterActive(query.has('advancedFilter'));
+    },[location.search]);
+
     const loadData = () => {
         const queryParams: any = {
             page,
@@ -126,7 +144,8 @@ export default function AdminItems() {
         if(originalIntegrationEnabled())newParams.set('catalog',String(originalSession().catalog.id));
         const searchStr = '?' + newParams.toString();
         if (location.search !== searchStr) {
-            setSearchParams(newParams, { replace: true });
+            ownSearch.current=searchStr;
+            setSearchParams(newParams);
         }
         sessionStorage.setItem('adminItemsSearch', searchStr);
 
@@ -315,7 +334,7 @@ export default function AdminItems() {
                         </select>
                     )}
                     <button
-                        disabled={originalIntegrationEnabled()} onClick={() => setShowAdvancedBuilder(!showAdvancedBuilder)}
+                        onClick={() => setShowAdvancedBuilder(!showAdvancedBuilder)}
                         className={`genric-btn ${showAdvancedBuilder || isAdvancedFilterActive ? 'warning' : 'default-border'} radius px-4 text-[10px] uppercase font-black transition-all flex items-center gap-2`}
                         title="Otevřít stavitel pokročilých podmínek (AND/OR/NOT)"
                     >
@@ -336,7 +355,6 @@ export default function AdminItems() {
                         onApply={() => {
                             setIsAdvancedFilterActive(true);
                             setPage(0);
-                            loadData();
                         }}
                         onReset={() => {
                             setAdvancedFilterGroup(createEmptyGroup('AND'));
@@ -427,7 +445,7 @@ export default function AdminItems() {
                             {demusTableColumns.map(col => { const cell = formatDemusCell(item, col); return <td key={col.id} title={cell.title} data-source-field={col.id} data-value-state={cell.state} data-current-assertion={cell.hasCurrent ? 'present' : 'absent'}>{cell.text}</td>; })}
                             <td>{item.published ? 'Zveřejněno' : 'Neveřejné'}</td>
                             <td className="demus-row-actions">
-                                <button type="button" aria-label="Upravit předmět" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')} title="Současná odborná sekce podle oprávnění" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(item.id,'professional'):`/admin/items/edit/${item.id}`,{state:{fromSearch:location.search,catalogIds:(data?.content||[]).map((v:any)=>v.id),returnPath:'/admin/items'}})}><FaEdit/></button>
+                                <button type="button" aria-label="Upravit předmět" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')&&!originalCanEdit('inventory')} title="Současná odborná sekce podle oprávnění" onClick={() => navigate(originalIntegrationEnabled()?originalEditHref(item.id,originalCanEdit('professional')?'professional':'inventory'):`/admin/items/edit/${item.id}`,{state:{fromSearch:location.search,catalogIds:(data?.content||[]).map((v:any)=>v.id),returnPath:'/admin/items'}})}><FaEdit/></button>
                                 <button type="button" aria-label="Tisk štítku" title="Tisk štítku" onClick={() => handlePrint(item.id)}><FaPrint/></button>
                                 <button type="button" aria-label="Tisk muzejní karty" title="Tisk muzejní karty" onClick={() => setCardPrintModal({isOpen:true,item})}><FaIdCard/></button>
                                 <button type="button" aria-label="Klonovat předmět" disabled={originalIntegrationEnabled()&&!originalCanClone()} title="Nezávislé klonování podle katalogového oprávnění" onClick={() => setCloneModal({isOpen:true,item})}><FaCopy/></button>

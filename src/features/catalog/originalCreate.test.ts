@@ -25,3 +25,11 @@ it('enables only original creation controls without restyling or exposing unrela
  applyOriginalCreationBoundary(form,true);expect(form.querySelector<HTMLInputElement>('#title')!.disabled).toBe(false);expect(form.querySelector<HTMLInputElement>('#description')!.disabled).toBe(true);expect(form.querySelector('button')!.disabled).toBe(true);expect(form.getAttribute('style')).toBeNull();
  applyOriginalCreationBoundary(form,false);expect(form.querySelector<HTMLInputElement>('#title')!.disabled).toBe(true);
 });
+it('includes approved current sections in one creation payload and preserves explicit zero without source identity',()=>{
+ bindOriginalCatalog({...catalog,capabilities:[...catalog.capabilities,'item.professional.write','item.inventory.write'],professionalWriteEnabled:true,inventoryWriteEnabled:true},'GENERATED');
+ const value=originalCreationFields({title:'GENERATED',inventoryNumber:'GEN-0',accessionNumber:'',quantity:0,otherNumber:'X',description:'GENERATED Ž',author:'Author',legacyData:{never:'sent'},sourceLocalId:'not-new'});
+ expect(value.inventory).toEqual({quantity:0,otherNumber:'X'});expect(value.professional).toMatchObject({description:'GENERATED Ž',authorText:'Author',originPlace:null});
+ expect(value).not.toHaveProperty('legacyData');expect(value).not.toHaveProperty('sourceLocalId');
+ const form=document.createElement('form');form.innerHTML='<input id="description"><input id="quantity"><input id="fundDictionaryId">';
+ applyOriginalCreationBoundary(form,true);expect(form.querySelector<HTMLInputElement>('#description')!.disabled).toBe(false);expect(form.querySelector<HTMLInputElement>('#quantity')!.disabled).toBe(false);expect(form.querySelector<HTMLInputElement>('#fundDictionaryId')!.disabled).toBe(true);
+});

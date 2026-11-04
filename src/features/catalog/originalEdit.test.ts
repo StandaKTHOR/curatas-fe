@@ -26,12 +26,15 @@ it.each(['flag','permission'])('refuses a write before transport when %s is miss
 it('refuses another catalog snapshot and never retries a stale write',async()=>{
  const f=vi.fn().mockResolvedValue(new Response('',{status:412}));vi.stubGlobal('fetch',f);const wrong=session();wrong.scopedCurrent.catalogId=72;await expect(saveOriginalCurrent(101,'professional',wrong,{...form(),author:'x'})).rejects.toThrow();expect(f).not.toHaveBeenCalled();await expect(saveOriginalCurrent(101,'professional',session(),{...form(),author:'x'})).rejects.toMatchObject({status:412});expect(f).toHaveBeenCalledTimes(1);
 });
-it('refuses combining inventory and professional drafts into an unreviewed aggregate save',async()=>{
- const f=vi.fn();vi.stubGlobal('fetch',f);await expect(saveOriginalCurrent(101,'professional',session(),{...form(),quantity:7,author:'x'})).rejects.toThrow('Jiná');expect(f).not.toHaveBeenCalled();
+it('saves permitted inventory and professional drafts in one scoped transaction with one original If-Match',async()=>{
+ const f=vi.fn().mockResolvedValue(new Response(JSON.stringify({catalogId:71,itemId:101,itemVersion:2,sections:['inventory','professional']}),{headers:{ETag:'"2"','Cache-Control':'no-store, no-store'}}));vi.stubGlobal('fetch',f);
+ await expect(saveOriginalCurrent(101,'professional',session(),{...form(),quantity:7,author:'x'})).resolves.toEqual({saved:true});
+ expect(f).toHaveBeenCalledTimes(1);expect(f.mock.calls[0][0]).toContain('/items/101/curator-records');expect(f.mock.calls[0][1].headers['If-Match']).toBe('"0"');
+ expect(JSON.parse(f.mock.calls[0][1].body)).toEqual({inventory:{quantity:7,otherNumber:null},professional:{...p,authorText:'x'}});
 });
-it('locks legacy controls and enables only the selected domain and existing save control',()=>{
+it('locks legacy controls and enables only explicitly permitted current fields and existing save control',()=>{
  const root=document.createElement('form');root.innerHTML='<input id="author"><input id="quantity"><input id="inventoryNumber"><input id="latitude"><button data-scoped-save>Save</button><button data-scoped-navigation>Back</button><button id="clone">Clone</button>';
- applyOriginalEditBoundary(root,'professional',true,false);expect((root.querySelector('#author') as HTMLInputElement).disabled).toBe(false);for(const id of ['quantity','inventoryNumber','latitude','clone'])expect((root.querySelector('#'+id) as HTMLInputElement).disabled).toBe(true);expect((root.querySelector('[data-scoped-save]') as HTMLButtonElement).disabled).toBe(false);expect((root.querySelector('[data-scoped-navigation]') as HTMLButtonElement).disabled).toBe(false);
+ applyOriginalEditBoundary(root,'professional',true,false);expect((root.querySelector('#author') as HTMLInputElement).disabled).toBe(false);for(const id of ['quantity','inventoryNumber'])expect((root.querySelector('#'+id) as HTMLInputElement).disabled).toBe(false);for(const id of ['latitude','clone'])expect((root.querySelector('#'+id) as HTMLInputElement).disabled).toBe(true);expect((root.querySelector('[data-scoped-save]') as HTMLButtonElement).disabled).toBe(false);expect((root.querySelector('[data-scoped-navigation]') as HTMLButtonElement).disabled).toBe(false);
  applyOriginalEditBoundary(root,'professional',false,false);expect((root.querySelector('#author') as HTMLInputElement).disabled).toBe(true);expect((root.querySelector('[data-scoped-save]') as HTMLButtonElement).disabled).toBe(true);
 });
 it('rejects incomplete section snapshots instead of filling missing metadata',()=>{expect(()=>currentSectionDraft('professional',{authorText:null},form())).toThrow('snapshot');});

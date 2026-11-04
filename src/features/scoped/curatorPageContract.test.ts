@@ -48,7 +48,7 @@ describe('API transport and item schema',()=>{
  it('rejects duplicate item identities',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response(metadata({items:[row(),row()],totalElements:2,totalPages:1}))));await expect(load()).rejects.toThrow('Duplicate curator identity');});
  it.each([401,403,404,500])('preserves HTTP %s without retry/fake empty page',async status=>{const fetch=vi.fn().mockResolvedValue(new Response('',{status}));vi.stubGlobal('fetch',fetch);await expect(load()).rejects.toMatchObject({status});expect(fetch).toHaveBeenCalledTimes(1);});
  it.each([0,-1,1.5,Number.MAX_SAFE_INTEGER+1])('rejects invalid catalog selection %s before transport',catalog=>{const fetch=vi.fn();vi.stubGlobal('fetch',fetch);expect(()=>scopedApi(catalog,'generated-test-session')).toThrow();expect(fetch).not.toHaveBeenCalled();});
- it.each([{page:-1},{size:101},{sort:'createdAt,desc'},{sort:'inventoryNumber,sideways'}])('rejects unsupported query inputs %j',async change=>{const fetch=vi.fn();vi.stubGlobal('fetch',fetch);await expect(scopedApi(71,'generated-test-session').curatorPage(change.page??0,change.size??50,change.sort??'inventoryNumber,asc',{},new AbortController().signal)).rejects.toThrow();expect(fetch).not.toHaveBeenCalled();});
+ it.each([{page:-1},{size:101},{sort:'privateField,desc'},{sort:'inventoryNumber,sideways'}])('rejects unsupported query inputs %j',async change=>{const fetch=vi.fn();vi.stubGlobal('fetch',fetch);await expect(scopedApi(71,'generated-test-session').curatorPage(change.page??0,change.size??50,change.sort??'inventoryNumber,asc',{},new AbortController().signal)).rejects.toThrow();expect(fetch).not.toHaveBeenCalled();});
 });
 
 it('refuses a direct reference DELETE in the QA artifact before transport',async()=>{

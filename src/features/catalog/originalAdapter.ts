@@ -4,7 +4,7 @@ import type {AvailableCatalog} from './catalogApi';
 let context:{catalog:AvailableCatalog;token:string;controller:AbortController}|null=null;
 export const originalIntegrationEnabled=()=>import.meta.env.MODE!=='test'||import.meta.env.VITE_ORIGINAL_SCOPED_TEST==='true';
 export function bindOriginalCatalog(catalog:AvailableCatalog|null,token:string|null){
- if(context?.catalog.id===catalog?.id&&context?.token===token)return;
+ if(context?.catalog.id===catalog?.id&&context?.token===token&&JSON.stringify(context?.catalog)===JSON.stringify(catalog))return;
  context?.controller.abort();context=catalog&&token?{catalog,token,controller:new AbortController()}:null;
 }
 export function originalSession(){
@@ -22,7 +22,7 @@ export function currentForm(item:any,professional:any,inventory:any){
   objectType:v.objectType,description:v.description,originPlace:v.originPlace,materialNote:v.materialNote,
   quantity:inventory.value.quantity===null?null:Number(inventory.value.quantity),otherNumber:inventory.value.otherNumber,
   currentAssertionState:professional.present?'PRESENT':'ABSENT'};
- Object.defineProperty(view,'_editSession',{value:{itemId:item.value.id,etag:item.etag,scopedCurrent:{catalogId:item.value.catalogId,etag:item.etag,professional:{...professional.value},inventory:{...inventory.value}}}});
+ Object.defineProperty(view,'_editSession',{value:{itemId:item.value.id,etag:item.etag,scopedCurrent:{catalogId:item.value.catalogId,etag:item.etag,professional:{...professional.value},inventory:{...inventory.value},core:{title:item.value.title,inventoryNumber:item.value.inventoryNumber}}}});
  return view as typeof view & {_editSession:any};
 }
 export async function originalDetail(id:string){

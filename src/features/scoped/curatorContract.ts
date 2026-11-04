@@ -1,3 +1,4 @@
+import {validateAdvancedFilter} from './advancedFilterContract';
 /** Exact read contract in backend CuratorCatalogService; no legacy field aliases. */
 export const demusListFields=['Rada_S','PorC_S','Lomeni_S','HPorC_S','StatSpr_S','Spravce_S','Odd_S','Podsb_S','Pocet_S','Ozn_S','JineC_S','Karta_S','Opsana_S','Overena_S','Zapsal_S','DatZap_S','Skupina_S','Urcil_S','Fond_S','Predmet_S','Titul_S','DatZm_S'] as const;
 export const curatorInventoryFields=['currentQuantity','currentOtherNumber'] as const;
@@ -67,10 +68,11 @@ export function formatDemusCell(item:any,col:DemusTableColumn){
 export function curatorQuery(page:number,size:number,sort:string,filters:Record<string,unknown>={}){
  if(!Number.isSafeInteger(page)||page<0||!Number.isSafeInteger(size)||size<1||size>100||page*size>20000)throw new Error('Neplatná stránka katalogu.');
  const [field,direction,...extra]=sort.split(',');
- if(extra.length||!curatorFields.includes(field as typeof curatorFields[number])||!['asc','desc'].includes(direction))throw new Error('Řazení není dostupné v existujícím scoped kontraktu.');
+ if(extra.length||!(field==='createdAt'||curatorFields.includes(field as typeof curatorFields[number]))||!['asc','desc'].includes(direction))throw new Error('Řazení není dostupné v existujícím scoped kontraktu.');
  const q=new URLSearchParams({page:String(page),size:String(size),sort});
  for(const [key,value] of Object.entries(filters)){
   if(value===undefined||value===null||value==='')continue;
+  if(key==='advancedFilter'){if(typeof value!=='string')throw new Error('Neplatný AST filtr.');q.set(key,validateAdvancedFilter(value,curatorFields));continue;}
   const allowed=key==='q'||curatorFields.includes(key as typeof curatorFields[number])||curatorSourceFilterKeys.includes(key as typeof curatorSourceFilterKeys[number]);
   if(!allowed)throw new Error(`Filtr ${key} není dostupný v existujícím scoped kontraktu.`);
   if(typeof value!=='string'||value.length>100)throw new Error('Neplatný filtr katalogu.');

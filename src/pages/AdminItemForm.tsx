@@ -587,7 +587,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         // Scoped current fields use scalar control names, not legacy aggregate payload keys
         // such as authors/materials. The original guard must see those actual edits too.
         const keys=originalIntegrationEnabled()
-            ? (!id?['title','inventoryNumber','accessionNumber']:['objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber'])
+            ? (!id?['title','inventoryNumber','accessionNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber']:['title','inventoryNumber','objectType','description','author','datingText','originPlace','material','technique','materialNote','quantity','otherNumber'])
             : Object.keys(buildItemPayload({})).filter(key => key !== 'auditComment' && key !== 'clearFund').concat('authorRole');
         const clone = Object.fromEntries(keys.sort().map(key => [key, f[key] ?? '']));
         return JSON.stringify(clone, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
@@ -1423,7 +1423,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 onChange={e=>setForm((prev:any)=>({...prev,quantity:e.target.value===''?null:Number(e.target.value)}))}/>
                             {fieldErrors.quantity&&<p role="alert">{fieldErrors.quantity}</p>}
                         </div>
-                        {originalIntegrationEnabled()&&<div className="space-y-1"><label htmlFor="current-other-number">Současné jiné číslo (kurátorský údaj)</label><input id="current-other-number" type="text" readOnly={isViewMode||scopedDomain!=='inventory'} value={form.otherNumber??''} onChange={e=>setForm((prev:any)=>({...prev,otherNumber:e.target.value}))}/>{form.otherNumber===null&&<span>NULL</span>}</div>}
+                        {originalIntegrationEnabled()&&<div className="space-y-1"><label htmlFor="current-other-number">Současné jiné číslo (kurátorský údaj)</label><input id="current-other-number" type="text" readOnly={isViewMode||!originalCanEdit('inventory')} value={form.otherNumber??''} onChange={e=>setForm((prev:any)=>({...prev,otherNumber:e.target.value}))}/>{form.otherNumber===null&&<span>NULL</span>}</div>}
                         {originalIntegrationEnabled()&&!isViewMode&&scopedDomain==='professional'&&<label className="space-y-1">Současný typ — volný text<input id="current-object-type" type="text" value={form.objectType??''} onChange={e=>setForm((prev:any)=>({...prev,objectType:e.target.value}))}/></label>}
                         {/* FOND A PODSBÍRKA DLE CITEM – NEZÁVISLÁ POLA */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

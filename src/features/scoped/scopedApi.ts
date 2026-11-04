@@ -38,7 +38,7 @@ export interface Dimension { id: number; itemId: number; catalogId: number; type
 export interface Media { id: string; itemId: number; catalogId: number; kind: 'IMAGE' | 'ATTACHMENT'; name: string; mimeType: string; byteSize: number; variants: ('content' | 'thumbnail')[] }
 export interface DictionaryValue {id:string;catalogId:number;type:string;label:string;code:string|null;parentId:string|null;version:string}
 export interface Versioned<T> { value: T; etag: string }
-export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string|null}
+export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string|null;professional?:Record<string,string|null>;inventory?:{quantity:number|null;otherNumber:string|null}}
 export interface Creation {item:Item;origin:'MES_CREATED';requestId:string;replayed:boolean}
 export interface ItemOrigin {catalogId:number;itemId:number;itemVersion:string;origin:'MES_CREATED'|'UNRECORDED';createdAt:string|null;createdBy?:string|null;createdBySubject?:string|null}
 export interface SourceSummary {itemVersion:string;sourceQuantity:string|null;sourceAccessionFlag:boolean|null;sourceSeries?:string|null;sourceDepartmentCode?:string|null;sourceCollectionCode?:string|null;sourceRecordedBy?:string|null;sourceDeterminedBy?:string|null}
@@ -187,7 +187,10 @@ export function scopedApi(catalogId: number, token: string) {
         },
         curatorPage:async(page:number,size:number,sort:string,filters:Record<string,unknown>,signal:AbortSignal)=>{
             const query=curatorQuery(page,size,sort,filters);
-            const {body,response}=await read(`${root}/curator-page?${query}`,signal);
+            const bodyParams:Record<string,string>={};query.forEach((value,key)=>{bodyParams[key]=value;});
+            const {body,response}=query.has('advancedFilter')
+                ?await read(`${root}/curator-page/query`,signal,{method:'POST',body:JSON.stringify(bodyParams)})
+                :await read(`${root}/curator-page?${query}`,signal);
             const {totalElements,totalPages}=validateCuratorPage(body,response.headers,{catalogId,page,pageSize:size,sort});
             const items:{item:Item;current:Record<string,string|null>;currentPresent:boolean;currentInventory:Record<string,string|null>;source:Record<string,string|null>;hasPhoto:boolean|null;hasAttachment:boolean|null}[]=body.items.map((row:any)=>{
                 const current:Record<string,string|null>={};
@@ -241,6 +244,19 @@ export function scopedApi(catalogId: number, token: string) {
             const {body,response}=await read(itemPath(id)+'/curator-record/'+section,signal,{method:'PUT',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(value)});
             return body?.itemVersion!==undefined?tag(response,body.itemVersion):response.headers.get('ETag')||'';
         },
+        saveCuratorRecords:async(id:number,etag:string,input:Partial<Record<'inventory'|'professional'|'item',Record<string,string|null>>>,signal:AbortSignal)=>{
+            const sections=Object.keys(input);if(!sections.length||sections.some(k=>!['inventory','professional','item'].includes(k)))throw new Error('Invalid current sections');
+            const values:Record<string,Record<string,string|number|null>>={};
+            for(const section of sections as ('inventory'|'professional'|'item')[]){
+                const value=input[section]!;if(section==='item'){if(!value||!Object.keys(value).length||Object.keys(value).some(k=>!['title','inventoryNumber'].includes(k))||Object.values(value).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid inventory identity patch');values.item={...value};continue;}const fields=curatorSectionFields[section];
+                if(!value||Object.keys(value).length!==fields.length||fields.some(k=>!Object.hasOwn(value,k))||Object.values(value).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid current section fields');
+                values[section]={...value};
+                if(section==='inventory'&&value.quantity!==null){if(!/^(0|[1-9][0-9]*)$/.test(value.quantity)||BigInt(value.quantity)>2147483647n)throw new Error('Počet musí být celé nezáporné číslo nebo NULL.');values[section].quantity=Number(value.quantity);}
+            }
+            const {body,response}=await read(itemPath(id)+'/curator-records',signal,{method:'PUT',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(values)});
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||!Array.isArray(body.sections)||JSON.stringify([...body.sections].sort())!==JSON.stringify(sections.sort())||!hasPrivateNoStore(response.headers))throw new Error('Invalid current sections receipt');
+            return tag(response,body.itemVersion);
+        },
         curatorMeasurement:async(id:number,signal:AbortSignal)=>{
             const {body,response}=await read(itemPath(id)+'/curator-measurement',signal);
             if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.origin!=='CURATOR_STATEMENT_NOT_SOURCE')throw new Error('Foreign curator statement');
@@ -263,8 +279,10 @@ export function scopedApi(catalogId: number, token: string) {
                 sourceSeries:nullable(body.sourceSeries??null),sourceDepartmentCode:nullable(body.sourceDepartmentCode??null),sourceCollectionCode:nullable(body.sourceCollectionCode??null),sourceRecordedBy:nullable(body.sourceRecordedBy??null),sourceDeterminedBy:nullable(body.sourceDeterminedBy??null)};
         },
         createItem:async(requestId:string,input:NewItemFields,signal:AbortSignal)=>{
-            if(Object.keys(input).length!==3||Object.keys(input).some(k=>!['title','inventoryNumber','accessionNumber'].includes(k)))throw new Error('Invalid creation fields');
+            if(Object.keys(input).length<3||Object.keys(input).some(k=>!['title','inventoryNumber','accessionNumber','professional','inventory'].includes(k)))throw new Error('Invalid creation fields');
             for(const key of ['title','inventoryNumber','accessionNumber'] as const){const value=input[key];if(key==='accessionNumber'&&value===null)continue;if(typeof value!=='string'||!value.trim()||value.length>(key==='title'?4096:255)||value.includes('\0'))throw new Error('Invalid creation field');}
+            if(input.professional){const keys=curatorSectionFields.professional;if(Object.keys(input.professional).length!==keys.length||keys.some(k=>!Object.hasOwn(input.professional!,k))||Object.values(input.professional).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid creation professional fields');}
+            if(input.inventory){const v=input.inventory;if(Object.keys(v).length!==2||!Object.hasOwn(v,'quantity')||!Object.hasOwn(v,'otherNumber')||(v.quantity!==null&&(!Number.isInteger(v.quantity)||v.quantity<0||v.quantity>2147483647))||(v.otherNumber!==null&&typeof v.otherNumber!=='string'))throw new Error('Invalid creation inventory fields');}
             return creation(root,requestId,signal,{method:'POST',headers:{'Idempotency-Key':uuid(requestId)},body:JSON.stringify(input)});
         },
         creationOutcome:(requestId:string,signal:AbortSignal)=>creation(`${root}/creation-requests/${uuid(requestId)}`,requestId,signal),
