@@ -85,6 +85,8 @@ def main():
             version = int(name.split('__')[0][1:])
             if version<=48:
                 require(data==base.read(key),'Existing migration byte drift: '+name)
+            else:
+                require(data==subprocess.check_output(['git','show','HEAD:src/main/resources/db/migration/'+name],cwd=BE),'New migration must use canonical committed bytes: '+name)
             target = output/'migrations'/name
             target.parent.mkdir(exist_ok=True)
             target.write_bytes(data)
@@ -129,7 +131,7 @@ def main():
     write(sub/'BUILD.json',{'kind':'MES_GREEN_FRONTEND_STAGED_ONLY','releaseId':release,'frontendCommit':fc,'frontendBuild':build,'target':{'frontend':'/var/www/mes-green-20261104','catalogId':1,'backendPort':8086,'database':'mes_green_20261104'}})
     manifest(sub,[p for p in (sub/'frontend').rglob('*') if p.is_file()],sub/'FRONTEND.SHA256SUMS')
     manifest(sub,[p for p in sub.rglob('*') if p.is_file()],sub/'SHA256SUMS')
-    for name in ['final-p0-fe-all.json',*NATIVE_LOGS,'final-p0-typecheck.log','final-p0-lint.log','final-p0-green-helper-selfcheck.log','final-p0-green-staging-tests.log','final-p0-build.log','consolidated-unit-selector.txt']:
+    for name in ['final-p0-fe-all.json',*NATIVE_LOGS,'final-p0-typecheck.log','final-p0-lint.log','final-p0-green-helper-selfcheck.log','final-p0-green-staging-tests.log','final-p0-green-fingerprint-tests.log','final-p0-green-shell-check.log','final-p0-readonly-capture-syntax.log','final-p0-build.log','consolidated-unit-selector.txt']:
         copy(EVIDENCE/name,output/'verification'/name)
     copy(FE/'artifacts/uat-design-guard.json',output/'verification/uat-design-guard.json')
     for path in browsers[0].parent.iterdir():
