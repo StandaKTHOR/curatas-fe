@@ -11,7 +11,7 @@ type Picker={q:string;after?:string;previous:(string|undefined)[];next:string|nu
 /** Bounded server search/paging. New-item UUID selections are explicit drafts, committed atomically with creation. */
 export function useManagedAuthorities(itemId:number|undefined,etag:string|undefined,blocked:boolean,onSaved:(etag:string)=>void,draft?:Draft){
  let scope:ReturnType<typeof originalSession>|null=null;try{if(managedAuthoritiesEnabled())scope=originalSession();}catch{/* closed session */}
- const key=scope&&(itemId||draft)?`${scope.catalog.id}:${itemId??'new'}:${etag??''}`:'';
+ const key=scope&&(itemId?!!etag:!!draft)?`${scope.catalog.id}:${itemId??'new'}:${etag??''}`:'';
  const latest=useRef({key,signal:scope?.signal,blocked,onSaved,draft});latest.current={key,signal:scope?.signal,blocked,onSaved,draft};
  const [state,setState]=useState<{key:string;signal:AbortSignal;etag:string;pages:Partial<Record<ManagedDictionaryType,Picker>>;refs:Ref[];writable:Set<string>}|null>(null);
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[revision,setRevision]=useState(0);
@@ -23,7 +23,7 @@ export function useManagedAuthorities(itemId:number|undefined,etag:string|undefi
   if(!scope||!key)return;const {api,signal,catalog}=scope;let alive=true;setState(null);setError('');setBusy(false);queries.current={};
   if(!catalog.capabilities?.includes('dictionary.read')){setError('Výběr současných autorit vyžaduje dictionary.read.');return;}
   async function load(){try{
-   const refs=itemId?await api.references(itemId,signal):{etag:'',items:[] as Ref[]};if(itemId&&refs.etag!==etag)throw new Error('Verze současných autorit se změnila. Obnovte kartu.');
+   const refs=itemId?await api.references(itemId,signal):{etag:'',items:[] as Ref[]};if(itemId&&refs.etag!==etag)throw new Error(`Verze současných autorit se změnila (${etag} → ${refs.etag}). Obnovte kartu.`);
    const pages:Partial<Record<ManagedDictionaryType,Picker>>={},writable=new Set<string>();
    for(const type of kinds){const meta=await api.dictionaryMetadata(type,signal);if(meta.operations.includes('create'))writable.add(type);const page=await api.dictionaryValues(type,signal);pages[type]={q:'',previous:[],next:page.nextAfterId,items:page.items};}
    if(!itemId)for(const [type,id] of Object.entries(latest.current.draft?.values??{})){const value=await api.dictionaryValue(type as ManagedDictionaryType,id!,signal);refs.items.push(value.value);}
