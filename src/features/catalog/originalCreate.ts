@@ -39,7 +39,7 @@ export async function originalCreationOutcome(requestId:string){
 export function applyOriginalCreationBoundary(root:HTMLElement|null,enabled:boolean){
  root?.querySelectorAll<HTMLElement>('input,textarea,select,button,gov-button,gov-form-input,gov-form-select').forEach(node=>{
   if(node.hasAttribute('data-scoped-navigation'))return;
-  const approvedProfessional=originalCanEdit('professional')&&[...additionalFields,'current-object-type','description','author','datingText','originPlace','current-material-text','current-technique-text','materialNote'].includes(node.id);
+  const approvedProfessional=originalCanEdit('professional')&&(node.hasAttribute('data-scoped-dating')||[...additionalFields,'current-object-type','description','author','datingText','originPlace','current-material-text','current-technique-text','materialNote'].includes(node.id));
   const approvedInventory=originalCanEdit('inventory')&&['quantity','current-other-number','locationBuilding','locationRoom','permanentLocation'].includes(node.id);
   if(node.closest('[data-scoped-reference-editor]')&&originalCanEdit('professional'))return;
   const active=enabled&&(['title','accessionNumber'].includes(node.id)||node.getAttribute('aria-label')?.startsWith('Inventární číslo:')||node.hasAttribute('data-scoped-save')||approvedProfessional||approvedInventory);

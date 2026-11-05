@@ -4,6 +4,11 @@ import {bindOriginalCatalog} from './originalAdapter';
 const catalog={id:1,code:'GEN',name:'Generated',version:0,institution:{id:1,code:'G',name:'Generated'},capabilities:['catalog.read','item.read','item.create'],creationEnabled:true};
 beforeEach(()=>{vi.stubEnv('VITE_LOCAL_AUTH_ENABLED','false');bindOriginalCatalog(catalog,'GENERATED');});
 afterEach(()=>{bindOriginalCatalog(null,null);vi.unstubAllGlobals();vi.unstubAllEnvs();});
+it('allows century text only with current professional capability and blocks it during creation or permission denial',()=>{
+ const root=document.createElement('form');root.innerHTML='<button data-scoped-dating>19. stol.</button>';const button=root.querySelector('button')!;
+ applyOriginalCreationBoundary(root,true);expect(button.disabled).toBe(true);
+ bindOriginalCatalog({...catalog,professionalWriteEnabled:true,capabilities:[...catalog.capabilities,'item.professional.write']},'writer');applyOriginalCreationBoundary(root,true);expect(button.disabled).toBe(false);applyOriginalCreationBoundary(root,false);expect(button.disabled).toBe(true);
+});
 it('preserves entered components/Unicode and sends explicit NULL for optional empty accession only',()=>{
  expect(originalCreationFields({title:'  Ω  ',inventoryNumber:'G-0001/Ž',accessionNumber:'',legacyData:{private:true},id:99})).toEqual({title:'  Ω  ',inventoryNumber:'G-0001/Ž',accessionNumber:null});
 });

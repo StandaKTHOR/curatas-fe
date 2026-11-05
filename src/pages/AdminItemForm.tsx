@@ -962,7 +962,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
 
         if(originalIntegrationEnabled()){
             if(!id){
-                try{originalCreationFields(form);}catch(error){if(error instanceof CreationValidationError){setFieldErrors({[error.field]:error.message});setActiveTab('identity');}setGlobalError((error as Error).message);return;}
+                try{originalCreationFields(form);}catch(error){if(error instanceof CreationValidationError){setFieldErrors({[error.field]:error.message});setActiveTab('identity');window.setTimeout(()=>{const control=error.field==='inventoryNumber'?document.querySelector<HTMLInputElement>('input[aria-label="Inventární číslo: Hlavní číslo"]'):document.getElementById(error.field);control?.focus();},0);}setGlobalError((error as Error).message);return;}
                 mainSaveRef.current=true;setLoading(true);creationKeyRef.current??=crypto.randomUUID();
                 try{const result=await createOriginalItem(creationKeyRef.current,form);initialFormSnapshotRef.current='';mainSaveRef.current=false;navigate(`/admin/items/view/${result.value.item.id}?catalog=${result.value.item.catalogId}`,{replace:true,state:{...location.state,creationNotice:'Předmět byl založen a znovu načten ze scoped katalogu.'}});}
                 catch(error){const status=(error as {status?:number}).status;if(!status||status>=500)setCreateUncertain(true);setGlobalError(status===409?'Založení koliduje s existující identitou nebo číselnou řadou. Zkontrolujte inventární a přírůstkové číslo; jsou-li nová, správce musí ověřit sekvenci. Původní záznam nebyl přepsán.':(error as Error).message);}
@@ -1213,6 +1213,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         );
     }
 
+    const saveDisabled=originalIntegrationEnabled()?loading||auditSaving||scopedNeedsReload||(id?(!originalCanEdit(scopedDomain)||!(editSessionRef.current as any)?.scopedCurrent):!originalCanCreate()||createUncertain):loading||auditSaving||!validity.accession||!validity.inventory;
     const dimensionRows=form.dimensions;
     return (
         <div className="space-y-3 animate-in fade-in duration-300">
@@ -1243,7 +1244,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                         <GovButton nativeType="button" type="outlined" color="neutral" size="s" data-scoped-navigation="true" disabled={pagePosition===pageIds.length-1} onClick={()=>openNeighbour(1)} title="Následující předmět na načtené stránce seznamu">Následující předmět</GovButton>
                     </>}
                     {!isViewMode && <button type="submit" form="item-editor" className="demus-save"
-                        data-scoped-save="true" disabled={originalIntegrationEnabled()?loading||auditSaving||scopedNeedsReload||(id?(!originalCanEdit(scopedDomain)||!(editSessionRef.current as any)?.scopedCurrent):!originalCanCreate()||createUncertain):loading || auditSaving || !validity.accession || !validity.inventory}>
+                        data-scoped-save="true" disabled={saveDisabled}>
                         {loading ? 'Ukládám…' : 'Uložit'}
                     </button>}
                     {isViewMode && (
@@ -1882,28 +1883,28 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 <div className="flex flex-wrap gap-1 text-[10px]">
                                     <button
                                         type="button"
-                                        onClick={() => setCenturyDating(1701, 1800, '18. století')}
+                                        data-scoped-dating="true" onClick={() => setCenturyDating(1701, 1800, '18. století')}
                                         className="px-2 py-0.5 bg-white border rounded hover:bg-gray-100"
                                     >
                                         18. stol.
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setCenturyDating(1801, 1900, '19. století')}
+                                        data-scoped-dating="true" onClick={() => setCenturyDating(1801, 1900, '19. století')}
                                         className="px-2 py-0.5 bg-white border rounded hover:bg-gray-100"
                                     >
                                         19. stol.
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setCenturyDating(1901, 1950, '1. polovina 20. století')}
+                                        data-scoped-dating="true" onClick={() => setCenturyDating(1901, 1950, '1. polovina 20. století')}
                                         className="px-2 py-0.5 bg-white border rounded hover:bg-gray-100"
                                     >
                                         1. pol. 20. stol.
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setCenturyDating(1951, 2000, '2. polovina 20. století')}
+                                        data-scoped-dating="true" onClick={() => setCenturyDating(1951, 2000, '2. polovina 20. století')}
                                         className="px-2 py-0.5 bg-white border rounded hover:bg-gray-100"
                                     >
                                         2. pol. 20. stol.
@@ -2756,7 +2757,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                         ) : (
                             <GovButton
                                 nativeType="submit"
-                                data-scoped-save="true" disabled={originalIntegrationEnabled()?loading||scopedNeedsReload||!originalCanEdit(scopedDomain)||!(editSessionRef.current as any)?.scopedCurrent:loading || !validity.accession || !validity.inventory}
+                                data-scoped-save="true" disabled={saveDisabled}
                                 type="solid"
                                 color="primary"
                                 size="s"

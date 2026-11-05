@@ -8,6 +8,14 @@ const session=()=>({itemId:101,etag:'"0"',scopedCurrent:{catalogId:71,etag:'"0"'
 const form=()=>({objectType:'',description:'old',author:'',datingText:'',originPlace:'',material:'',technique:'',materialNote:'',quantity:0,otherNumber:null});
 beforeEach(()=>{vi.stubEnv('VITE_LOCAL_AUTH_ENABLED','false');bindOriginalCatalog(catalog,'t');});
 afterEach(()=>{bindOriginalCatalog(null,null);vi.unstubAllGlobals();vi.unstubAllEnvs();});
+it('allows century text shortcuts only for an enabled current professional editor',()=>{
+ const root=document.createElement('form');root.innerHTML='<button data-scoped-dating>19. stol.</button><button>Unsupported action</button>';
+ const shortcut=root.querySelector<HTMLButtonElement>('[data-scoped-dating]')!;
+ applyOriginalEditBoundary(root,'professional',true,false);expect(shortcut.disabled).toBe(false);expect(root.querySelectorAll('button')[1].disabled).toBe(true);
+ applyOriginalEditBoundary(root,'professional',true,true);expect(shortcut.disabled).toBe(true);
+ applyOriginalEditBoundary(root,'professional',false,false);expect(shortcut.disabled).toBe(true);
+ bindOriginalCatalog({...catalog,capabilities:['catalog.read','item.read','item.inventory.write']},'reader');applyOriginalEditBoundary(root,'inventory',true,false);expect(shortcut.disabled).toBe(true);
+});
 it('preserves unchanged NULLs, accepts explicit empty text, and never takes source fields',()=>{
  const draft=currentSectionDraft('professional',p,{...form(),description:'',author:'  Žlutý autor ',sourceInventory:{Autor_S:'HISTORICAL'},legacyData:{secret:'PRIVATE'}});
  expect(draft.values.authorText).toBe('  Žlutý autor ');expect(draft.values.description).toBe('');expect(draft.values.materialText).toBeNull();expect(Object.keys(draft.values)).toEqual(Object.keys(p));expect(JSON.stringify(draft.values)).not.toContain('HISTORICAL');

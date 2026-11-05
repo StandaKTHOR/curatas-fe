@@ -59,7 +59,7 @@ export function applyOriginalEditBoundary(root:HTMLElement|null,_domain:Original
   // This scoped editor owns its capability/read-only/busy boundary and shared item ETag.
   if(node.closest('[data-scoped-reference-editor],[data-scoped-media]'))return;
   if(node.hasAttribute('data-scoped-navigation')||node.hasAttribute('data-scoped-read'))return;
-  const active=enabled&&!loading&&(allowed.has(node.id)||originalCanEdit('inventory')&&node.getAttribute('aria-label')?.startsWith('Inventární číslo:')||node.hasAttribute('data-scoped-save')||originalCanEdit('professional')&&node.getAttribute('data-scoped-dimension')==='editable');
+  const active=enabled&&!loading&&(allowed.has(node.id)||originalCanEdit('professional')&&node.hasAttribute('data-scoped-dating')||originalCanEdit('inventory')&&node.getAttribute('aria-label')?.startsWith('Inventární číslo:')||node.hasAttribute('data-scoped-save')||originalCanEdit('professional')&&node.getAttribute('data-scoped-dimension')==='editable');
   (node as HTMLInputElement).disabled=!active;
   if(active)node.removeAttribute('disabled');else node.setAttribute('disabled','');
  });
