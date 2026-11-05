@@ -1342,7 +1342,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
             />
 
             {managed.enabled&&managed.error&&<p role="alert">{managed.error}</p>}
-            {id&&originalIntegrationEnabled()&&<CreationOrigin itemId={Number(id)}/>}
+            {id&&originalIntegrationEnabled()&&<CreationOrigin itemId={Number(id)} parentEtag={editSessionRef.current?.etag}/>}
             {id && <InventoryIdentityPanel key={originalIntegrationEnabled()?editSessionRef.current?.etag:undefined} itemId={Number(id)} inventoryNumber={form.inventoryNumber || ''}
                 canEdit={!isViewMode && !loading && !auditSaving && form.inventoryNumber === initialNumbers.inventory} onSaved={async () => {
                     const fresh = await getAdminItem(id);

@@ -22,7 +22,7 @@ try{
    const posts=requests.filter(r=>r.method==='POST'&&r.path==='/api/v2/catalogs/1/items').length;
    await save.dblclick();await page.waitForURL(/\/admin\/items\/(view|edit)\/[0-9]+/);const id=Number(new URL(page.url()).pathname.split('/').at(-1));createdIds.push(id);await page.getByText('Předmět byl založen a znovu načten ze scoped katalogu.',{exact:true}).waitFor();
    if(requests.filter(r=>r.method==='POST'&&r.path==='/api/v2/catalogs/1/items').length!==posts+1)throw Error('Duplicate creation POST');
-   await page.reload();await expect(page.locator('#description')).toHaveValue('GENERATED současný popis Ž');await expect(page.locator('#inventoryNumber')).toHaveValue(number);check(label+': one POST, actual ID, GET and reload persistence');
+   await page.reload();await expect(page.locator('#description')).toHaveValue('GENERATED současný popis Ž');await expect(page.locator('#inventoryNumber')).toHaveValue(number);await expect(page.getByRole('definition').filter({hasText:'GENERATED 2'})).toHaveCount(2);check(label+': one POST, actual ID, GET, creation/modification actor and reload persistence');
    const n=dialogs.length;await page.getByRole('button',{name:'← Zpět na seznam',exact:true}).click();await page.getByRole('table',{name:'Sbírky — tabulkové zobrazení'}).waitFor();if(dialogs.length!==n)throw Error('False dirty state after saved item reload');check(label+': return without false unsaved warning');
   }
  }
@@ -43,7 +43,7 @@ try{
   await page.getByRole('button',{name:'Pokročilý filtr (aktivní)',exact:true}).click();await page.getByRole('button',{name:'Resetovat pokročilý filtr',exact:true}).click();await expect(table.locator('tbody tr')).not.toHaveCount(1);if(new URL(page.url()).searchParams.has('advancedFilter'))throw Error('Reset retained filter');check('Reset reloads complete generated list, without stale closure request');
   const pageNumber=page.getByRole('textbox',{name:'Číslo stránky evidence'}).first();await pageNumber.fill('');await expect(pageNumber).toHaveValue('');await pageNumber.fill('1');await pageNumber.press('Enter');await expect(pageNumber).toHaveValue('1');check('Page text can be cleared and committed with Enter');
   for(const key of ['legacyCreatedBy','determinedBy','fundLegacyCode','subCollection','inventory.series','inventory.ordinal']){
-   await page.getByRole('combobox',{name:'Pole pokročilé podmínky'}).selectOption(key);await page.getByPlaceholder('Hledaný výraz...').fill(key==='inventory.ordinal'?'999999':'GENERATED-NOT-EXIST');const response=page.waitForResponse(r=>r.url().includes('/curator-page?')&&r.request().url().includes('advancedFilter'));
+   await page.getByRole('combobox',{name:'Pole pokročilé podmínky'}).selectOption(key);await page.getByPlaceholder('Hledaný výraz...').fill(key==='inventory.ordinal'?'999999':'GENERATED-NOT-EXIST');const response=page.waitForResponse(r=>r.url().includes('/curator-page/query')&&r.request().method()==='POST');
    await page.getByRole('button',{name:'Filtrovat výsledky',exact:true}).click();const r=await response;if(r.status()!==200)throw Error('Unsupported offered field '+key);const body=await r.json();if(body.totalElements!==0||body.items.length!==0)throw Error('Unexpected filter semantics '+key);check('Real scoped historical filter '+key+' with exact empty result');
   }
  }
