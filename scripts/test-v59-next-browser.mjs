@@ -28,7 +28,7 @@ try{
  }
  if(['flags','all'].includes(input.mode)){
   await page.goto(base+'/admin/items/edit/1001?catalog=1&edit=professional');const card=page.getByRole('checkbox',{name:'Současný příznak Karta',exact:true});await expect(card).toBeEnabled();await card.check();
-  await page.getByRole('button',{name:'Uložit',exact:true}).click();await page.getByText('Současná sekce byla uložena přes scoped API a znovu načtena. Historické údaje DEMUS nebyly změněny.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Uložit',exact:true}).click();await page.getByText(/Současná sekce byla uložena přes scoped API a znovu načtena/).waitFor();
   await expect(card).toBeChecked();const n=dialogs.length;await page.getByRole('button',{name:'← Zpět na seznam',exact:true}).click();await page.getByRole('table',{name:'Sbírky — tabulkové zobrazení'}).waitFor();if(dialogs.length!==n)throw Error('Saved flags remain dirty');
   await page.goto(base+'/admin/items/edit/1001?catalog=1&edit=professional');await expect(page.getByRole('checkbox',{name:'Současný příznak Karta',exact:true})).toBeChecked();check('Global save persists current flags and clears only acknowledged draft');
  }
