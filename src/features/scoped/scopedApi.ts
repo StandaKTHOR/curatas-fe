@@ -57,6 +57,8 @@ export interface SourceDimension {recordId:string;sourceSha256:string;rowHash:st
 export interface Page<T, C> { items: T[]; nextAfterId: C | null }
 export interface SourceMatTech {recordId:string;sourceSha256:string;rowHash:string;occurrence:string;sourceOrder:string|null;material:string|null;technique:string|null;materialState:'EXACT_MATCH'|'MISSING'|'AMBIGUOUS';techniqueState:'EXACT_MATCH'|'MISSING'|'AMBIGUOUS'}
 export interface InventoryEvidence {itemVersion:string;inventoryNumber:string|null;sourceLocalId:string|null;sourceInventoryNumber:string|null;sourceComponents:Record<string,string|null>;aliases:{id:string;inventoryNumber:string|null;components:Record<string,string|null>}[];nextAfterId:string|null}
+/** Only an actual fetch transport failure, never a malformed API contract. */
+export class ScopedTransportError extends TypeError {}
 export class ScopedError extends Error {
     constructor(public readonly status: number) { super(errorText(status)); }
 }
@@ -98,8 +100,8 @@ export function scopedApi(catalogId: number, token: string) {
     const itemPath = (id: number) => `${root}/${integer(id)}`;
     async function request(path: string, signal: AbortSignal, init: RequestInit = {}) {
         if (signal.aborted) throw new Error('Request cancelled');
-        const response = await fetch(resolveApiUrl(path), { ...init, signal, cache: 'no-store', redirect: 'error', credentials: 'omit',
-            headers: { Authorization: `Bearer ${effectiveToken(token)}`, ...(localAuthEnabled()?{'X-CURATAS-CSRF':'1'}:{}), ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}), ...init.headers } });
+        const response = await (async()=>{try{return await fetch(resolveApiUrl(path), { ...init, signal, cache: 'no-store', redirect: 'error', credentials: 'omit',
+            headers: { Authorization: `Bearer ${effectiveToken(token)}`, ...(localAuthEnabled()?{'X-CURATAS-CSRF':'1'}:{}), ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}), ...init.headers } });}catch(e){if(e instanceof TypeError&&!signal.aborted)throw new ScopedTransportError(e.message,{cause:e});throw e;}})();
         if (signal.aborted) throw new Error('Request cancelled');
         if (!response.ok) {if([401,403,404].includes(response.status))window.dispatchEvent(new CustomEvent('curatas:scoped-denied',{detail:{status:response.status}})); throw new ScopedError(response.status);} return response;
     }

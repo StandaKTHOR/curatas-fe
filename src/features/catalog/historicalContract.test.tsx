@@ -69,3 +69,7 @@ it('retains validated repeated historical rows on next-page network failure and 
 it('clears previous historical rows when next page is a different parent revision',async()=>{
  const f=vi.fn().mockResolvedValueOnce(reply(page([row()],{nextAfterId:'a'.repeat(64)}))).mockResolvedValueOnce(reply(page([row('e')],{itemVersion:1}),'"1"'));vi.stubGlobal('fetch',f);const v=renderHook(()=>useHistoricalRows(3,'Urceni','"0"'));await waitFor(()=>expect(v.result.current.page?.items).toHaveLength(1));act(()=>v.result.current.more());await waitFor(()=>expect(v.result.current.page?.error).toContain('Verze předmětu'));expect(v.result.current.page?.items).toHaveLength(0);expect(v.result.current.page?.nextAfterId).toBeNull();
 });
+
+it('does not mistake a malformed null next-page DTO for a retryable network failure',async()=>{
+ const f=vi.fn().mockResolvedValueOnce(reply(page([row()],{nextAfterId:'a'.repeat(64)}))).mockResolvedValueOnce(reply(null));vi.stubGlobal('fetch',f);const v=renderHook(()=>useHistoricalRows(3,'Urceni','"0"'));await waitFor(()=>expect(v.result.current.page?.items).toHaveLength(1));act(()=>v.result.current.more());await waitFor(()=>expect(v.result.current.page?.error).not.toBe(''));expect(v.result.current.page?.items).toHaveLength(0);expect(v.result.current.page?.nextAfterId).toBeNull();
+});
