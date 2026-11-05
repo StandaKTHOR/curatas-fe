@@ -1619,9 +1619,11 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 <select
                                     id="objectCondition"
                                     className="w-full bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#00204a]"
-                                    value={form.objectCondition || 'Dobrý'}
+                                    value={form.objectCondition ?? ''}
                                     onChange={e => setForm({ ...form, objectCondition: e.target.value })}
                                 >
+                                    <option value="">— bez zadané současné hodnoty —</option>
+                                    {form.objectCondition&&!['Výborný','Dobrý','Poškozeno','Havarijní'].includes(form.objectCondition)&&<option value={form.objectCondition}>{form.objectCondition}</option>}
                                     <option>Výborný</option>
                                     <option>Dobrý</option>
                                     <option>Poškozeno</option>
