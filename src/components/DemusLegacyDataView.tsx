@@ -4,6 +4,7 @@ type Props = {
     legacyData?: Record<string, any> | null;
     title?: string;
     showRawJson?: boolean;
+    unavailableMessage?: string;
 };
 
 // Mapa známych DEMUS klíčů na přívětivé české labely
@@ -59,11 +60,11 @@ function formatVal(val: any): string {
     return String(val);
 }
 
-export default function DemusLegacyDataView({ legacyData, title = 'DEMUS – Historická a doplňková data', showRawJson = true }: Props) {
+export default function DemusLegacyDataView({ legacyData, title = 'DEMUS – Historická a doplňková data', showRawJson = true, unavailableMessage }: Props) {
     if (!legacyData || typeof legacyData !== 'object') {
         return (
             <div className="rounded border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500 italic">
-                Žádná historická DEMUS data nejsou k dispozici.
+                {unavailableMessage??'Žádná historická DEMUS data nejsou k dispozici.'}
             </div>
         );
     }
@@ -73,7 +74,7 @@ export default function DemusLegacyDataView({ legacyData, title = 'DEMUS – His
     if (entries.length === 0) {
         return (
             <div className="rounded border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500 italic">
-                Žádné vyplněné DEMUS údaje.
+                {unavailableMessage??'Žádné vyplněné DEMUS údaje.'}
             </div>
         );
     }

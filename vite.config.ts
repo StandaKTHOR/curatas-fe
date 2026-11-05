@@ -1,4 +1,5 @@
 import path from "path"
+import {fileURLToPath} from 'node:url'
 import react from "@vitejs/plugin-react"
 import { defineConfig, loadEnv } from "vite"
 
@@ -16,12 +17,13 @@ export default defineConfig(({ mode }) => {
     const appBase = normalizeAppBase(env.VITE_APP_BASE)
 
     return {
+        cacheDir: './.cache/vite',
         plugins: [react()],
         base: appBase,
         server: { port: 5173 },
         resolve: {
             alias: {
-                "@": path.resolve(__dirname, "./src"),
+                "@": path.resolve(fileURLToPath(new URL('.',import.meta.url)), "./src"),
             },
         },
     }

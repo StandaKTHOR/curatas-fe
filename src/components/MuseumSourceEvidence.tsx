@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import {originalIntegrationEnabled} from '../features/catalog/originalAdapter';
 import {getDemusLineage, type MuseumItemDetail, type LineagePage} from '../lib/api';
 
 export const evidenceValue=(value:unknown)=>value==null?'—':typeof value==='boolean'?(value?'Ano':'Ne'):String(value);
@@ -7,7 +8,7 @@ export function LineageBrowser({category,id}:{category:'items'|'dictionaries'|'p
     const [page,setPage]=useState<LineagePage|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(false);
     const load=async(offset:number)=>{setLoading(true);setError('');try{setPage(await getDemusLineage(category,id,offset,20));}catch(e){setError((e as Error).message);}finally{setLoading(false);}};
     return <div className="demus-lineage">
-        {!page && <button type="button" disabled={loading} onClick={()=>load(0)}>Otevřít zdrojovou historii</button>}
+        {!page && <button type="button" disabled={loading||originalIntegrationEnabled()} title={originalIntegrationEnabled()?'Úplný soukromý raw archiv nemá veřejný scoped kontrakt; dostupná evidence je zobrazena zvlášť.':undefined} onClick={()=>load(0)}>Otevřít zdrojovou historii</button>}
         {page && <><p>Zdrojová historie — výřez {page.offset+1} až {page.offset+page.records.length}; {page.hasMore?'další záznamy jsou dostupné':'konec výsledků API'}.</p>
             {page.records.map(row=><details key={row.sourceRecord}><summary>{row.sourceTable} · {row.sourceFiles?.join(', ')} · {row.sourceRecord}</summary>
                 <dl><dt>Hash řádku</dt><dd>{row.rowHash}</dd><dt>Výskyt</dt><dd>{row.occurrence}</dd></dl>

@@ -1,3 +1,4 @@
+import {originalIntegrationEnabled,originalList,originalCatalogList,originalDetail,originalPrint,originalExcel,originalWorksets,originalWorksetCreate,originalAcquisitions,originalAcquisitionSave,unsupported} from '../features/catalog/originalAdapter';
 import { requireEditSession, type ItemEditSession } from './editSession';
 import {LabelDto} from "@/components/LabelPrinter";
 import {PrintItemRow} from "@/components/ItemListPrint";
@@ -9,6 +10,7 @@ export const API_BASE = (import.meta.env.VITE_API_BASE || '').trim().replace(/\/
  */
 export function resolveApiUrl(path: string): string {
     if (!path) return '';
+    if(originalIntegrationEnabled() && !/^\/api\/(v2\/catalogs(?:\/|\?|$)|v2\/workspaces(?:\/|\?|$)|auth\/)/.test(path)) unsupported();
     if (path.startsWith('http://') || path.startsWith('https://')) {
         return path;
     }
@@ -121,10 +123,11 @@ export interface MuseumAcquisition {
     circumstances: string | null;
     documentNumber: string | null;
     message: string | null;
-    orderNumber: number | null;
+    orderNumber: number | string | null;
+    sourceReadOnly?:boolean;
     legacyData: Record<string, unknown> | null;
 }
-export type MuseumAcquisitionInput = Omit<MuseumAcquisition, 'id' | 'legacyData'>;
+export type MuseumAcquisitionInput = Omit<MuseumAcquisition, 'id' | 'legacyData' | 'sourceReadOnly'>;
 
 const getAuthHeader = (): HeadersInit => {
     const token = localStorage.getItem('token');
@@ -202,6 +205,7 @@ export async function getDemusLineage(category: 'items' | 'dictionaries' | 'part
 export const deleteMuseumRecord = (itemId: number, kind: MuseumRecordKind, recordId: number, session?: ItemEditSession) =>
     museumRequest<void>(itemId, `/${kind}/${recordId}`, { method: 'DELETE' }, session);
 export async function listMuseumAcquisitions(itemId: number, session?: ItemEditSession) {
+    if(originalIntegrationEnabled())return originalAcquisitions(itemId,session);
     if (session && await getItemVersion(itemId) !== session.etag) throw new ApiError(412, 'Verze akvizic neodpovídá otevřenému předmětu. Obnovte záznam.');
     const rows = await museumRequest<MuseumAcquisition[]>(itemId, '/acquisitions');
     if (session && await getItemVersion(itemId) !== session.etag) throw new ApiError(412, 'Akvizice se změnily během načítání. Obnovte záznam.');
@@ -209,9 +213,9 @@ export async function listMuseumAcquisitions(itemId: number, session?: ItemEditS
     return rows;
 }
 export const createMuseumAcquisition = (itemId: number, input: MuseumAcquisitionInput, session?: ItemEditSession) =>
-    museumRequest<MuseumAcquisition>(itemId, '/acquisitions', { method: 'POST', body: JSON.stringify(input) }, session);
+    originalIntegrationEnabled()?originalAcquisitionSave(itemId,undefined,input,session):museumRequest<MuseumAcquisition>(itemId, '/acquisitions', { method: 'POST', body: JSON.stringify(input) }, session);
 export const updateMuseumAcquisition = (itemId: number, id: number, input: MuseumAcquisitionInput, session?: ItemEditSession) =>
-    museumRequest<MuseumAcquisition>(itemId, `/acquisitions/${id}`, { method: 'PATCH', body: JSON.stringify(input) }, session);
+    originalIntegrationEnabled()?originalAcquisitionSave(itemId,id,input,session):museumRequest<MuseumAcquisition>(itemId, `/acquisitions/${id}`, { method: 'PATCH', body: JSON.stringify(input) }, session);
 export const deleteMuseumAcquisition = (itemId: number, id: number, session?: ItemEditSession) =>
     museumRequest<void>(itemId, `/acquisitions/${id}`, { method: 'DELETE' }, session);
 
@@ -233,6 +237,7 @@ export async function listPublicItems(params: {
     size?: number,
     sort?: string
 }) {
+    if(originalIntegrationEnabled())return originalCatalogList(params);
     const u = buildApiUrl('/public/v1/catalog/items');
 
     // Projdeme všechny klíče v objektu params
@@ -267,6 +272,7 @@ export async function listAdminItems(params: {
     sourceDatingFromYear?: string, sourceDatingToYear?: string, advancedFilter?: string,
     sortField?: string, sortDirection?: string, worksetId?: string
 }) {
+    if(originalIntegrationEnabled())return originalList(params);
     const u = buildApiUrl('/api/v1/items');
 
     Object.entries(params).forEach(([key, value]) => {
@@ -378,6 +384,7 @@ export async function getItemVersion(id: number): Promise<string> {
 }
 
 export async function getAdminItem(id: string) {
+    if(originalIntegrationEnabled())return originalDetail(id);
     const itemId = Number(id);
     const before = await getItemVersion(itemId);
     const response = await fetch(resolveApiUrl(`/api/v1/items/${id}`), { headers: getAuthHeader() });
@@ -471,6 +478,9 @@ export async function setPrimaryItemImage(itemId: number, imageId: number): Prom
 }
 
 export async function exportItemsToExcel(params: any) {
+    let blob:Blob;
+    if(originalIntegrationEnabled())blob=await originalExcel(params);
+    else {
     const u = buildApiUrl('/api/v1/items/export/excel');
 
     // Přidáme filtry do URL
@@ -487,7 +497,8 @@ export async function exportItemsToExcel(params: any) {
     if (!r.ok) throw new Error('Export selhal');
 
     // Zpracování binárních dat (blob)
-    const blob = await r.blob();
+    blob = await r.blob();
+    }
     const downloadUrl = window.URL.createObjectURL(blob);
 
     // Vytvoření a kliknutí na skrytý odkaz
@@ -595,6 +606,7 @@ export interface WorksetSummary {
 }
 
 export async function listWorksets(): Promise<WorksetSummary[]> {
+    if(originalIntegrationEnabled())return originalWorksets();
     const r = await fetch(resolveApiUrl('/api/v1/worksets'), {
         headers: getAuthHeader()
     });
@@ -602,7 +614,8 @@ export async function listWorksets(): Promise<WorksetSummary[]> {
     return r.json();
 }
 
-export async function createWorkset(data: { name: string; description?: string; itemIds?: number[] }): Promise<WorksetSummary> {
+export async function createWorkset(data: { name: string; description?: string; itemIds?: number[]; requestId?:string }): Promise<WorksetSummary> {
+    if(originalIntegrationEnabled())return originalWorksetCreate(data);
     const r = await fetch(resolveApiUrl('/api/v1/worksets'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
@@ -615,7 +628,8 @@ export async function createWorkset(data: { name: string; description?: string; 
     return r.json();
 }
 
-export async function createWorksetFromFilter(data: { name: string; description?: string; filter: any }): Promise<WorksetSummary> {
+export async function createWorksetFromFilter(data: { name: string; description?: string; filter: any; requestId?:string }): Promise<WorksetSummary> {
+    if(originalIntegrationEnabled())return originalWorksetCreate(data);
     const r = await fetch(resolveApiUrl('/api/v1/worksets/from-filter'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
@@ -726,6 +740,7 @@ export async function getPrintBasic(id: number) {
 }
 
 export async function searchPrintItems(params: any): Promise<PrintItemRow[]> {
+    if(originalIntegrationEnabled())return originalPrint(params) as unknown as PrintItemRow[];
     const response = await fetch(resolveApiUrl('/api/v1/items/search/print'), {
         method: 'POST',
         headers: {

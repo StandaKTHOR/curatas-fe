@@ -1,3 +1,4 @@
+import { effectiveToken } from '../localAuth/localAuthClient';
 import { resolveApiUrl } from '../../lib/api';
 
 export interface AvailableCatalog {
@@ -10,6 +11,12 @@ export interface AvailableCatalog {
     accessType?: 'OWN' | 'SHARED' | 'UNCLASSIFIED';
     capabilities?: string[];
     creationEnabled?: boolean;
+    cloneEnabled?: boolean;
+    cloneReadEnabled?: boolean;
+    professionalRecordsEnabled?: boolean;
+    mediaUploadEnabled?:boolean;
+    inventoryWriteEnabled?: boolean;
+    professionalWriteEnabled?: boolean;
 }
 export interface CatalogPage { items: AvailableCatalog[]; nextAfterId: number | null }
 export class CatalogApiError extends Error {
@@ -17,7 +24,7 @@ export class CatalogApiError extends Error {
 }
 async function read<T>(path: string, token: string, signal: AbortSignal): Promise<T> {
     const response = await fetch(resolveApiUrl(path), {
-        headers: { Authorization: `Bearer ${token}` }, signal, cache: 'no-store', redirect: 'error', credentials: 'omit',
+        headers: { Authorization: `Bearer ${effectiveToken(token)}` }, signal, cache: 'no-store', redirect: 'error', credentials: 'omit',
     });
     if (!response.ok) throw new CatalogApiError(response.status);
     const body: T = await response.json();
@@ -25,7 +32,7 @@ async function read<T>(path: string, token: string, signal: AbortSignal): Promis
     return body;
 }
 const workspaceMode = () => import.meta.env.VITE_SCOPED_WORKSPACE_ENABLED === 'true';
-const capabilities = new Set(['catalog.read','item.read','item.write','item.create','dictionary.read','dictionary.write','catalog.grant.manage']);
+const capabilities = new Set(['catalog.read','item.read','item.write','item.inventory.write','item.professional.write','item.create','dictionary.read','dictionary.write','catalog.grant.manage','catalog.access.delegate','catalog.audit.read','catalog.import']);
 function workspace(value: AvailableCatalog): AvailableCatalog {
     if (!value || !Number.isSafeInteger(value.id) || value.id < 1 || value.catalogId !== value.id
         || !Number.isSafeInteger(value.version) || value.version < 0 || typeof value.name !== 'string' || typeof value.code !== 'string'
@@ -34,6 +41,7 @@ function workspace(value: AvailableCatalog): AvailableCatalog {
         || !['OWN','SHARED','UNCLASSIFIED'].includes(value.accessType ?? '') || !Array.isArray(value.capabilities)
         || !value.capabilities.includes('catalog.read') || value.capabilities.some(c => !capabilities.has(c))
         || (value.creationEnabled !== undefined && typeof value.creationEnabled !== 'boolean')) throw new CatalogApiError(502);
+    for(const flag of [value.inventoryWriteEnabled,value.professionalWriteEnabled,value.cloneEnabled,value.cloneReadEnabled,value.professionalRecordsEnabled,value.mediaUploadEnabled])if(flag!==undefined&&typeof flag!=='boolean')throw new CatalogApiError(502);
     return value;
 }
 const prefix = () => workspaceMode() ? '/api/v2/workspaces' : '/api/v2/catalogs';

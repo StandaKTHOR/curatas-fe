@@ -10,12 +10,16 @@ vi.mock('../lib/api', async original => ({...await original<typeof import('../li
     listAttachments:vi.fn(),listItemImages:vi.fn(),checkUniqueness:vi.fn(),getNextAvailableNumbers:vi.fn(),
     updateItem:vi.fn(),patchMuseumItem:vi.fn(),createItem:vi.fn(),listProfessionalRecords:vi.fn(),listMuseumAcquisitions:vi.fn(),
 }));
+const historical=vi.hoisted(()=>({data:null as any}));
+vi.mock('../features/catalog/useOriginalHistoricalData',async original=>({...await original<typeof import('../features/catalog/useOriginalHistoricalData')>(),useOriginalHistoricalData:()=>historical.data}));
+const fullHistory=vi.hoisted(()=>({data:null as any}));
+vi.mock('../features/catalog/useHistoricalRows',async original=>({...await original<typeof import('../features/catalog/useHistoricalRows')>(),useHistoricalRows:(_id:number,table:string)=>({enabled: table==='Sbirky'&&!!fullHistory.data,page:table==='Sbirky'?fullHistory.data:null,more:()=>{}})}));
 let saved: any;
 let version: number;
 const museum = () => ({itemId:7,records:[],legacyArchived:saved.legacyArchived});
 const snapshot = () => ({...saved,_editSession:{itemId:7,etag:'"'+version+'"',museumSnapshot:museum()}});
 beforeEach(() => {
-    vi.resetAllMocks(); invalidateHierarchy(); sessionStorage.clear(); version=3;
+    vi.resetAllMocks(); historical.data=null; fullHistory.data=null; invalidateHierarchy(); sessionStorage.clear(); version=3;
     saved={id:7,inventoryNumber:'BATCH-7',accessionNumber:'',title:'Původní název',objectType:'Test',
         description:'',published:false,legacyArchived:false,dimensions:[],parties:[],imageUrls:[],legacyData:{},
         createdByUser:'creator',createdAt:'2026-10-13T10:00:00Z',modifiedByUser:'curator',lastModifiedAt:'2026-10-14T10:00:00Z'};
@@ -40,6 +44,7 @@ function mount(start='/admin/items/edit/7') {
     const router=createMemoryRouter([
         {path:'/admin/items/edit/:id',element:<><Link to="/other">Jiné menu</Link><AdminItemForm/></>},
         {path:'/admin/items/new',element:<AdminItemForm/>},
+        {path:'/admin/items/view/:id',element:<AdminItemForm readOnly/>},
         {path:'/admin/items',element:<p>Seznam</p>}, {path:'/other',element:<p>Jiná stránka</p>},
     ],{initialEntries:['/other',start],initialIndex:1});
     render(<RouterProvider router={router}/>);return router;
@@ -183,4 +188,45 @@ it('BATCH 2.2 never repeats CREATE when the saved editor refresh fails',async()=
     await userEvent.type(screen.getByLabelText(/Název sbírkového předmětu/),'Proof');await save();
     await waitFor(()=>expect(router.state.location.pathname).toBe('/admin/items/edit/7'));await screen.findByText(/GET failed/);
     expect(api.createItem).toHaveBeenCalledTimes(1);expect(screen.queryByText(/Předmět byl úspěšně založen/)).not.toBeInTheDocument();
+});
+it('renders DEMUS evidence in the actual original read-only form without selecting a current fund ID',async()=>{
+ saved.title='';saved.objectType='';saved.subCollection='';saved.quantity=null;
+ historical.data={fields:{Predmet_S:'kredenc kuchyňská',Fond_S:'nábytek',Podsb_S:'SOURCE_CODE',Pocet_S:'0',Zapsal_S:'Čeřovský',Urcil_S:'Žluťoučký',DatZap_S:'1899-12-30',DatZm_S:'1900-01-01'},authorities:{}};
+ mount('/admin/items/view/7');await waitFor(()=>expect(screen.getByLabelText(/Název sbírkového předmětu/)).toHaveValue('kredenc kuchyňská (DEMUS)'));
+ expect(screen.getByLabelText(/Název sbírkového předmětu/)).toHaveValue('kredenc kuchyňská (DEMUS)');
+ expect(screen.getByLabelText('Fond',{exact:true})).toHaveValue('');
+ expect(screen.getAllByRole('option',{name:'nábytek (DEMUS)'})).toHaveLength(1);
+ expect(screen.getByLabelText('Podsbírka')).toHaveValue('SOURCE_CODE (DEMUS)');
+ expect(screen.getByLabelText(/Současný katalogový počet/)).toHaveValue(null);
+ expect(screen.getByText(/historický počet: 0 \(DEMUS\)/)).toBeInTheDocument();
+ expect(screen.getByText(/Zapsal v DEMUS: Čeřovský \(DEMUS\).*Určil v DEMUS: Žluťoučký/)).toBeInTheDocument();
+ expect(screen.getByText('Datum zápisu v DEMUS: 1899-12-30 (DEMUS)')).toBeInTheDocument();
+ expect(api.updateItem).not.toHaveBeenCalled();
+});
+it('keeps DEMUS as an edit placeholder, does not dirty a current draft and prioritizes current values',async()=>{
+ saved.title='';saved.objectType='';saved.subCollection='';saved.quantity=0;
+ historical.data={fields:{Predmet_S:'židle',Fond_S:'nábytek',Podsb_S:'SOURCE_CODE',Pocet_S:'9'},authorities:{}};
+ const router=mount();await screen.findByDisplayValue('BATCH-7');
+ const name=screen.getByLabelText(/Název sbírkového předmětu/);
+ expect(name).toHaveValue('');expect(name).toHaveAttribute('placeholder','židle (DEMUS)');
+ expect(screen.getByLabelText('Podsbírka')).toHaveValue('');
+ expect(screen.getByLabelText(/Současný katalogový počet/)).toHaveValue(0);
+ expect(screen.queryByText(/historický počet: 9/)).not.toBeInTheDocument();
+ expect(unload()).toBe(false);await save();expect(api.updateItem).not.toHaveBeenCalled();
+ await userEvent.type(name,'Současná židle');expect(name).toHaveValue('Současná židle');expect(name).not.toHaveAttribute('placeholder');
+ expect(unload()).toBe(true);expect(router.state.location.pathname).toBe('/admin/items/edit/7');
+});
+
+it('shows newly exposed source author/dating/description only as read evidence in the existing controls',async()=>{
+ fullHistory.data={state:'AVAILABLE',items:[{fields:{Autor_S:{kind:'TEXT',value:'Historický autor'},Datace_S:{kind:'TEXT',value:'počátek 20. století'},Popis_S:{kind:'TEXT',value:'Původní český popis'},PoznMT_S:{kind:'TEXT',value:'Původní technologie'}}}]};
+ mount('/admin/items/view/7');await screen.findByDisplayValue('Původní název');
+ expect(document.getElementById('author')).toHaveValue('Historický autor (DEMUS)');expect(document.getElementById('datingText')).toHaveValue('počátek 20. století (DEMUS)');expect(document.getElementById('description')).toHaveValue('Původní český popis (DEMUS)');
+ expect(api.updateItem).not.toHaveBeenCalled();expect(unload()).toBe(false);
+});
+it('never saves root historical fields when editing a different current field',async()=>{
+ fullHistory.data={state:'AVAILABLE',items:[{fields:{Autor_S:{kind:'TEXT',value:'HISTORICAL AUTHOR ONLY'},Datace_S:{kind:'TEXT',value:'HISTORICAL DATING ONLY'},Popis_S:{kind:'TEXT',value:'HISTORICAL DESCRIPTION ONLY'}}}]};
+ mount();await screen.findByDisplayValue('Původní název');
+ expect(document.getElementById('author')).toHaveValue('');expect(document.getElementById('author')).toHaveAttribute('placeholder','HISTORICAL AUTHOR ONLY (DEMUS)');expect(document.getElementById('description')).toHaveValue('');expect(unload()).toBe(false);
+ await userEvent.click(screen.getByLabelText('Zveřejněno'));await save();await screen.findByText(/Změny byly úspěšně uloženy/);
+ expect(JSON.stringify(vi.mocked(api.updateItem).mock.calls[0][1])).not.toContain('HISTORICAL');expect(vi.mocked(api.updateItem).mock.calls[0][1]).not.toHaveProperty('description');expect(vi.mocked(api.updateItem).mock.calls[0][1]).not.toHaveProperty('author');
 });

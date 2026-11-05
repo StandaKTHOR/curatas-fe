@@ -1,3 +1,5 @@
+import OriginalSourceBridge from '../features/catalog/OriginalSourceBridge';
+import {originalIntegrationEnabled} from '../features/catalog/originalAdapter';
 import { useEffect, useState } from 'react';
 import { DemusIdentity, getDemusIdentity } from '../lib/demusIdentity';
 import { getInventoryIdentity, updateInventoryIdentity, inventoryComponentNames,
@@ -8,7 +10,7 @@ const labels = { series: 'Řada', ordinal: 'Pořadové číslo', division: 'Lome
     stateCode: 'Stát správce', custodianCode: 'Instituce', departmentCode: 'Oddělení', collectionCode: 'Podsbírka (kód)' };
 const scope = new Set(['stateCode', 'custodianCode', 'departmentCode', 'collectionCode']);
 
-export function InventoryIdentityPanel({ itemId, inventoryNumber, canEdit, onSaved }: {
+function LegacyInventoryIdentityPanel({ itemId, inventoryNumber, canEdit, onSaved }: {
     itemId: number; inventoryNumber: string; canEdit: boolean; onSaved: () => Promise<void>;
 }) {
     const [data, setData] = useState<InventoryIdentity | null>(null);
@@ -81,3 +83,5 @@ export function InventoryIdentityPanel({ itemId, inventoryNumber, canEdit, onSav
         </>}
     </section>;
 }
+
+export function InventoryIdentityPanel(props:Parameters<typeof LegacyInventoryIdentityPanel>[0]){return originalIntegrationEnabled()?<OriginalSourceBridge itemId={props.itemId} section="identity"/>:<LegacyInventoryIdentityPanel {...props}/>;}

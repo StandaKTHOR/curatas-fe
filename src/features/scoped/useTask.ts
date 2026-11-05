@@ -8,7 +8,7 @@ export function useTask(onFatal: (status: number) => void) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     useEffect(() => () => request.current?.abort(), []);
-    const run = useCallback(async <T,>(operation: (signal: AbortSignal) => Promise<T>, success: (value: T) => void, writing = false, failure?: () => void) => {
+    const run = useCallback(async <T,>(operation: (signal: AbortSignal) => Promise<T>, success: (value: T) => void, writing = false, failure?: (status:number) => void) => {
         if (writing && request.current && !request.current.signal.aborted) return;
         request.current?.abort(); const controller = new AbortController(); request.current = controller;
         setBusy(true); setError('');
@@ -17,7 +17,7 @@ export function useTask(onFatal: (status: number) => void) {
             if (controller.signal.aborted) return;
             const status = e instanceof ScopedError ? e.status : 0;
             if ([401,403,404].includes(status)) fatal.current(status);
-            setError(errorText(status)); failure?.();
+            setError(errorText(status)); failure?.(status);
         } finally { if (!controller.signal.aborted) { request.current = null; setBusy(false); } }
     }, []);
     const cancel = useCallback(() => { request.current?.abort(); request.current = null; setBusy(false); }, []);

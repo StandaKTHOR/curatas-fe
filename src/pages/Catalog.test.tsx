@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import Catalog from './Catalog';
@@ -11,6 +11,17 @@ vi.mock('../lib/api', () => ({
 }));
 
 describe('Catalog Page UAT State Preservation', () => {
+  it('reports an API failure without claiming an empty result and retries the existing search', async () => {
+    const request = vi.spyOn(api, 'listPublicItems').mockRejectedValueOnce(new Error('Invalid curator page: sort'))
+      .mockResolvedValue({content: [{id: '1', inventoryNumber: 'RETRY-42', title: 'Recovered item'}], totalPages: 1, totalElements: 1});
+    render(<MemoryRouter initialEntries={['/?q=retained']}><Catalog /></MemoryRouter>);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid curator page: sort');
+    expect(screen.queryByText(/Žádný předmět/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('Počet nedostupný').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', {name: 'Načíst znovu'}));
+    expect(await screen.findByText('RETRY-42')).toBeInTheDocument();
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({q: 'retained', page: 0}));
+  });
   beforeEach(() => {
     vi.resetAllMocks();
   });

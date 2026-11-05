@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import AdvancedFilterBuilder, { type FilterGroup } from './AdvancedFilterBuilder';
+import AdvancedFilterBuilder, { type FilterGroup, scopedFilterFields } from './AdvancedFilterBuilder';
 
 describe('protected structured search contract', () => {
   it.each(['historicalInventoryNumber','acquisitionRecordNumber'])('offers only supported text operators for %s',field=>{
@@ -45,4 +45,10 @@ describe('protected structured search contract', () => {
     expect(condition.operator).toBe('EQUALS');
     expect(condition.value).toBe('00935');
   });
+});
+
+it('offers only contract-supported scoped fields and explicitly identifies historical filters',()=>{
+ expect(scopedFilterFields.some(f=>f.value==='spravce')).toBe(false);expect(scopedFilterFields.some(f=>f.value==='acquisitionMethod')).toBe(false);
+ for(const id of ['legacyCreatedBy','determinedBy','subCollection','Fond_S','Predmet_S','Zapsal_S','Urcil_S'])expect(scopedFilterFields.find(f=>f.value===id)?.label).toContain('DEMUS');
+ expect(scopedFilterFields.some(f=>f.value==='author')).toBe(true);
 });

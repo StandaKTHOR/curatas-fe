@@ -1,4 +1,5 @@
 import React from 'react';
+import { demusTableColumns } from '../features/scoped/curatorContract';
 import { GovButton } from '@gov-design-system-ce/react';
 
 export interface ColumnConfig {
@@ -20,7 +21,7 @@ export const DEFAULT_COLUMNS: ColumnConfig[] = [
     { id: 'spravce', label: 'Správce fondu', visible: false },
     { id: 'objectCondition', label: 'Stav předmětu', visible: false },
     { id: 'technique', label: 'Technika', visible: false },
-    { id: 'weight', label: 'Hmotnost', visible: false },
+    { id: 'weight', label: 'Hmotnost', visible: false }, ...demusTableColumns.map(c => ({ id: c.id, label: c.label, visible: true })),
 ];
 
 interface ColumnSelectorModalProps {

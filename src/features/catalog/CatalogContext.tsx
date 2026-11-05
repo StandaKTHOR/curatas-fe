@@ -8,9 +8,10 @@ interface CatalogContextValue {
     loading: boolean;
     error: string | null;
     hasMore: boolean;
-    selectCatalog: (id: number | null) => Promise<void>;
+    selectCatalog: (id: number | null) => Promise<boolean>;
     reload: () => Promise<void>;
     loadMore: () => Promise<void>;
+    clearAccess: () => void;
 }
 const CatalogContext = createContext<CatalogContextValue | null>(null);
 
@@ -67,20 +68,22 @@ export function SessionCatalogProvider({ token, onUnauthorized, children }: {
         return () => { request.current?.abort(); };
     }, [load]);
     const selectCatalog = useCallback(async (id: number | null) => {
-        if(!window.dispatchEvent(new Event('curatas:catalog-discard',{cancelable:true})))return;
+        if(!window.dispatchEvent(new Event('curatas:catalog-discard',{cancelable:true})))return false;
         const controller = start(); setSelected(null);
-        if (id === null || !token) { setLoading(false); return; }
+        if (id === null || !token) { setLoading(false); return true; }
         try {
             // Revalidate on every explicit choice, including choices from an earlier list response.
             const catalog = await resolveCatalog(id, token, controller.signal);
-            if (!controller.signal.aborted) setSelected(catalog);
+            if (!controller.signal.aborted) {setSelected(catalog);return true;}
         } catch (failure) {
             if (!controller.signal.aborted && failure instanceof CatalogApiError && failure.status === 404)
                 setCatalogs(previous => previous.filter(c => c.id !== id));
             fail(failure, controller);
         } finally { if (!controller.signal.aborted) setLoading(false); }
+        return false;
     }, [token, start, fail]);
     return <CatalogContext.Provider value={{ catalogs, selectedCatalog, loading, error,
+        clearAccess: () => { request.current?.abort(); setSelected(null); setCatalogs([]); setNext(null); setLoading(false); },
         hasMore: nextAfterId !== null, selectCatalog, reload: () => load(),
         loadMore: () => nextAfterId === null ? Promise.resolve() : load(nextAfterId) }}>
         {children}

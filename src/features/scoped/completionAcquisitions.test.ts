@@ -1,0 +1,14 @@
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+import {scopedApi} from './scopedApi';
+const signal=()=>new AbortController().signal;
+const row=(change:Record<string,unknown>={})=>({id:41,accessionNumber:'GENERATED',acquisitionMethod:'TEXT',methodDictionaryId:null,acquisitionDate:'2024-02-29',acquiredFrom:null,circumstances:null,documentNumber:null,message:null,orderNumber:'9223372036854775807',sourceReadOnly:false,...change});
+const response=(body:unknown)=>new Response(JSON.stringify(body),{headers:{'Cache-Control':'no-store, no-store',ETag:'"1"'}});
+beforeEach(()=>vi.stubEnv('VITE_LOCAL_AUTH_ENABLED','false'));afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
+it('reads current/source flags and preserves a full bigint order without exposing raw history',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response({catalogId:1,itemId:7,itemVersion:1,semantics:'CURRENT_AND_READ_ONLY_HISTORICAL_ACQUISITIONS',items:[row()]})));const result=await scopedApi(1,'generated').acquisitions(7,signal());expect(result.value[0].orderNumber).toBe('9223372036854775807');expect(result.value[0].legacyData).toBeNull();});
+it('creates through authenticated scoped If-Match and preserves explicit NULL and zero',async()=>{
+ const fetch=vi.fn().mockResolvedValue(response({catalogId:1,itemId:7,itemVersion:1,origin:'CURRENT_CURATOR_STATEMENT_NOT_SOURCE',acquisition:row({orderNumber:0,acquisitionDate:null})}));vi.stubGlobal('fetch',fetch);
+ const input={accessionNumber:'GENERATED',acquisitionMethod:null,methodDictionaryId:null,acquisitionDate:null,acquiredFrom:null,circumstances:null,documentNumber:null,message:'',orderNumber:0};
+ const result=await scopedApi(1,'generated').saveAcquisition(7,undefined,'"0"',input,signal());expect(result.value.orderNumber).toBe('0');expect(result.value.acquisitionDate).toBeNull();const [url,init]=fetch.mock.calls[0];expect(url).toContain('/catalogs/1/items/7/acquisitions');expect(init.headers['If-Match']).toBe('"0"');expect(JSON.parse(init.body)).toEqual({...input,orderNumber:'0'});
+});
+it.each([{catalogId:2},{itemId:8},{semantics:'UNKNOWN'},{items:[row(),row()]},{items:[row({sourceReadOnly:undefined})]}])('rejects foreign or invalid acquisition metadata %j',async change=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response({catalogId:1,itemId:7,itemVersion:1,semantics:'CURRENT_AND_READ_ONLY_HISTORICAL_ACQUISITIONS',items:[row()],...change})));await expect(scopedApi(1,'generated').acquisitions(7,signal())).rejects.toThrow();});
+it.each([412,422,403])('preserves rejected HTTP%s without pretending a save',async status=>{const fetch=vi.fn().mockResolvedValue(new Response('',{status}));vi.stubGlobal('fetch',fetch);await expect(scopedApi(1,'generated').saveAcquisition(7,41,'"0"',{accessionNumber:'GENERATED'} as any,signal())).rejects.toMatchObject({status});expect(fetch).toHaveBeenCalledTimes(1);});

@@ -49,3 +49,28 @@ it.each(['','abc','31'])('BATCH 2.2 rejects invalid page %s without replacing th
     const input=screen.getAllByRole('textbox',{name:'Číslo stránky evidence'})[0];await userEvent.clear(input);if(text)await userEvent.type(input,text);await userEvent.keyboard('{Enter}');
     expect(screen.getAllByRole('alert')[0]).toHaveTextContent('od 1 do 30');expect(api.listAdminItems).toHaveBeenCalledTimes(1);
 });
+it('renders all 18 confirmed DEMUS columns and preserves NULL vs empty-string vs current assertion semantics',async()=>{
+    vi.mocked(api.listAdminItems).mockResolvedValue({content:[{id:7,title:'Item',inventoryNumber:'GEN-7',quantity:5,otherNumber:null,sourceInventory:{Rada_S:'R-1',PorC_S:'42',Lomeni_S:'A',HPorC_S:null,StatSpr_S:'CZ',Spravce_S:'MZM',Odd_S:'ODD',Podsb_S:'POD',Pocet_S:'2',Ozn_S:'true',JineC_S:'',Karta_S:'false',Opsana_S:'true',Overena_S:null,Zapsal_S:'ZAP',DatZap_S:'2001',Skupina_S:'SK',Urcil_S:'URC'}}],totalPages:1,totalElements:1} as any);
+    render(<MemoryRouter><AdminItems/></MemoryRouter>);await screen.findByRole('button',{name:'GEN-7'});
+    for(const label of ['Řada','PořČ','Lom','Až','Stát','Spr','Odd','Podsb','Počet','Ozn','JinéČ','Karta','Opsa','Ověřena','Zapsal','DatZap','Skupi','Určil'])expect(screen.getByRole('button',{name:label})).toBeInTheDocument();
+    expect(screen.getByText('Současné: 5 (Zdroj: 2)')).toBeInTheDocument();
+    expect(screen.getByText('Prázdný řetězec')).toHaveAttribute('data-value-state','empty');
+    expect(document.querySelector('[data-source-field="HPorC_S"]')).toHaveAttribute('data-value-state','null');
+    expect(document.querySelector('[data-source-field="Ozn_S"]')).toHaveTextContent('Ano');
+    expect(document.querySelector('[data-source-field="Karta_S"]')).toHaveTextContent('Ne');
+});
+it('retains the previous test closing',()=>{
+});
+it('keeps original evidence toolbar/search and explicit retry when the API contract fails',async()=>{
+ vi.mocked(api.listAdminItems).mockRejectedValueOnce(new Error('Invalid curator page: Cache-Control')).mockResolvedValue(row('Recovered') as any);
+ render(<MemoryRouter><AdminItems/></MemoryRouter>);
+ await screen.findByRole('alert');
+ expect(screen.getByRole('heading',{name:/Správa sbírkových předmětů/})).toHaveTextContent('počet nedostupný');
+ expect(screen.getByRole('button',{name:'Nový předmět'})).toBeInTheDocument();
+ expect(screen.getByPlaceholderText('Rychlé hledání: název, inv. číslo, popis, autor...')).toBeInTheDocument();
+ expect(screen.queryByRole('table')).not.toBeInTheDocument();
+ expect(screen.getByRole('button',{name:/Tisk soupisu/})).toBeDisabled();
+ await userEvent.click(screen.getByRole('button',{name:'Načíst znovu'}));
+ await screen.findByRole('button',{name:'Recovered'});
+ expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});

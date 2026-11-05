@@ -8,7 +8,10 @@ interface AddDictionaryModalProps {
     dictionaryTitle: string;
     onClose: () => void;
     onSuccess: (newItem: { id?: number; code: string; label: string; type: string }) => void;
-    parentOptions?: {id: number; label: string}[];
+    initialValue?:{label:string;code:string|null;parentId:string|null};
+    editing?:boolean;
+    onCreate?:(input:{type:string;code:string;label:string;parentId:string|null})=>Promise<void>;
+    parentOptions?: {id: number|string; label: string}[];
 }
 
 export default function AddDictionaryModal({
@@ -17,6 +20,7 @@ export default function AddDictionaryModal({
     dictionaryTitle,
     onClose,
     onSuccess,
+    onCreate,initialValue,editing=false,
     parentOptions = []
 }: AddDictionaryModalProps) {
     const [label, setLabel] = useState('');
@@ -27,13 +31,13 @@ export default function AddDictionaryModal({
 
     useEffect(() => {
         if (isOpen) {
-            setLabel('');
-            setCode('');
+            setLabel(initialValue?.label??'');
+            setCode(initialValue?.code??'');
             setError(null);
             setLoading(false);
-            setParentId('');
+            setParentId(initialValue?.parentId??'');
         }
-    }, [isOpen]);
+    }, [isOpen,dictionaryType]);
 
     if (!isOpen) return null;
 
@@ -106,7 +110,8 @@ export default function AddDictionaryModal({
     };
 
     const handleSubmit = async (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
+        if (e) {e.preventDefault();e.stopPropagation();}
+        if(loading)return;
         if (!label.trim()) {
             setError('Název položky číselníku je povinný.');
             return;
@@ -117,6 +122,7 @@ export default function AddDictionaryModal({
         setLoading(true);
 
         try {
+            if(onCreate){await onCreate({type:dictionaryType,code:finalCode,label:label.trim(),parentId:parentId||null});onClose();return;}
             const created = await createDictionaryItem({
                 type: dictionaryType,
                 code: finalCode,
@@ -143,15 +149,15 @@ export default function AddDictionaryModal({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+        <div data-scoped-reference-editor={onCreate?true:undefined} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full overflow-hidden border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
                 <div className="bg-[#00204a] text-white px-5 py-3.5 flex justify-between items-center">
                     <div>
-                        <h3 className="font-extrabold text-sm uppercase tracking-tight">Přidat do číselníku</h3>
+                        <h3 className="font-extrabold text-sm uppercase tracking-tight">{editing?'Upravit položku číselníku':'Přidat do číselníku'}</h3>
                         <p className="text-[11px] text-blue-200">{getTitle()}</p>
                     </div>
                     <button
-                        onClick={onClose}
+                        type="button" onClick={onClose}
                         className="text-white/80 hover:text-white text-lg font-bold p-1 focus:outline-none"
                         aria-label="Zavřít"
                     >
@@ -200,7 +206,7 @@ export default function AddDictionaryModal({
                             color="neutral"
                             size="s"
                             disabled={loading}
-                            onClick={onClose}
+                            nativeType="button" onClick={onClose}
                         >
                             Zrušit
                         </GovButton>
@@ -212,7 +218,7 @@ export default function AddDictionaryModal({
                             disabled={loading || !label.trim()}
                             onClick={handleSubmit}
                         >
-                            {loading ? 'Ukládám...' : 'Přidat a vybrat'}
+                            {loading ? 'Ukládám...' : editing?'Uložit a vybrat':'Přidat a vybrat'}
                         </GovButton>
                     </div>
                 </form>

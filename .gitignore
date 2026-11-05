@@ -1,5 +1,8 @@
 node_modules/
+__pycache__/
 dist/
+dist-generated/
+.cache/
 .env
 /.idea/vcs.xml
 /scratch/update2_*.py

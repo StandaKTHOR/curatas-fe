@@ -6,6 +6,7 @@ interface SafeImageProps {
     src?: string;
     alt: string;
     className?: string;
+    load?:(signal:AbortSignal)=>Promise<Blob>;
 }
 
 export function isBackendImage(url: string): boolean {
@@ -19,10 +20,10 @@ export function isBackendImage(url: string): boolean {
     } catch { return false; }
 }
 
-export default function SafeImage({ src, alt, className }: SafeImageProps) {
+export default function SafeImage({ src, alt, className,load }: SafeImageProps) {
     const placeholder = noImage;
     const [isError, setIsError] = useState(false);
-    const [authenticatedImage, setAuthenticatedImage] = useState<{ source: string; url: string } | null>(null);
+    const [authenticatedImage, setAuthenticatedImage] = useState<{ source: string|((signal:AbortSignal)=>Promise<Blob>); url: string } | null>(null);
 
     let resolvedSrc = src;
     if (resolvedSrc?.startsWith('/')) {
@@ -30,14 +31,15 @@ export default function SafeImage({ src, alt, className }: SafeImageProps) {
     }
 
     const token = localStorage.getItem('token');
-    const needsAuth = !!(resolvedSrc && token && isBackendImage(resolvedSrc));
+    const needsAuth = !!load||!!(resolvedSrc && token && isBackendImage(resolvedSrc));
+    const identity=load??resolvedSrc;
     useEffect(() => {
         setIsError(false);
         setAuthenticatedImage(null);
-        if (!resolvedSrc || !token || !needsAuth) return;
+        if (!load&&(!resolvedSrc || !token || !needsAuth)) return;
         const controller = new AbortController();
         let objectUrl: string | undefined;
-        fetch(resolvedSrc, {
+        (load?load(controller.signal):fetch(resolvedSrc!, {
             headers: { Authorization: 'Bearer ' + token },
             signal: controller.signal,
             redirect: 'error',
@@ -45,10 +47,10 @@ export default function SafeImage({ src, alt, className }: SafeImageProps) {
         }).then(response => {
             if (!response.ok) throw new Error('Image unavailable');
             return response.blob();
-        }).then(blob => {
+        })).then(blob => {
             if (controller.signal.aborted) return;
             objectUrl = URL.createObjectURL(blob);
-            setAuthenticatedImage({ source: resolvedSrc!, url: objectUrl });
+            setAuthenticatedImage({ source: identity!, url: objectUrl });
         }).catch(() => {
             if (!controller.signal.aborted) setIsError(true);
         });
@@ -56,10 +58,10 @@ export default function SafeImage({ src, alt, className }: SafeImageProps) {
             controller.abort();
             if (objectUrl) URL.revokeObjectURL(objectUrl);
         };
-    }, [resolvedSrc, token, needsAuth]);
+    }, [resolvedSrc, token, needsAuth,load,identity]);
 
     const imageSrc = needsAuth
-        ? (authenticatedImage && authenticatedImage.source === resolvedSrc ? authenticatedImage.url : placeholder)
+        ? (authenticatedImage && authenticatedImage.source === identity ? authenticatedImage.url : placeholder)
         : resolvedSrc;
     return <img src={isError || !imageSrc ? placeholder : imageSrc} alt={alt}
         className={className} onError={() => setIsError(true)} />;
