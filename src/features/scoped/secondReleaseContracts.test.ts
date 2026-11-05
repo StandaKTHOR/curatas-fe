@@ -20,3 +20,7 @@ it('streams full export preserving raw chunks and reports progress only acceptin
 it.each(['truncated','count','foreign','version','after-end','cache'])('refuses incomplete/unsafe %s export without producing success Blob',async issue=>{
  const rows=records();if(issue==='truncated')rows.pop();if(issue==='count')rows[4].itemsExported=2;if(issue==='foreign')rows[2].page!.catalogId=2;if(issue==='version')rows[2].page!.itemVersion=1;if(issue==='after-end')rows.push(rows[1]);vi.stubGlobal('fetch',vi.fn().mockResolvedValue(stream(rows,issue==='cache'?'public':'no-store')));await expect(scopedApi(1,'generated').structuredExport('inventoryNumber,asc',{},signal())).rejects.toThrow();
 });
+
+it('keeps separately labelled inventory aliases as source evidence rather than current assertions',async()=>{
+ const rows=records();rows.splice(2,0,{kind:'INVENTORY_EVIDENCE',catalogId:1,itemId:3,itemVersion:0,semantics:'SOURCE_INVENTORY_AND_ALIASES_NOT_CURRENT_ASSERTIONS',evidence:{aliases:[{inventoryNumber:'Ž-01'}]}} as unknown as ReturnType<typeof records>[number]);vi.stubGlobal('fetch',vi.fn().mockResolvedValue(stream(rows)));const result=await scopedApi(1,'generated').structuredExport('inventoryNumber,asc',{},signal());expect(await result.blob.text()).toContain('Ž-01');
+});
