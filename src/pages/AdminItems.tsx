@@ -22,11 +22,12 @@ import SelectiveCloneModal from '@/components/SelectiveCloneModal';
 import WorksetModal from '@/components/WorksetModal';
 import MuseumCardPrint from '@/components/MuseumCardPrint';
 import ItemListPrint from '@/components/ItemListPrint';
-import AdvancedFilterBuilder, { FilterGroup, createEmptyGroup } from '@/components/AdvancedFilterBuilder';
+import AdvancedFilterBuilder, { FilterGroup, createEmptyGroup, scopedFilterFields } from '@/components/AdvancedFilterBuilder';
 
 export default function AdminItems() {
     const [data, setData] = useState<any>(null);
     const [loadError, setLoadError] = useState('');
+    const [listLoading,setListLoading]=useState(false);
     const requestRevision = useRef(0);
     const [exporting, setExporting] = useState(false);
     const [structuredProgress,setStructuredProgress]=useState('');
@@ -47,6 +48,7 @@ export default function AdminItems() {
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [showAdvancedBuilder, setShowAdvancedBuilder] = useState(false);
     const [advancedFilterGroup, setAdvancedFilterGroup] = useState<FilterGroup>(() => { try { return JSON.parse(searchParams.get('advancedFilter') || 'null') || createEmptyGroup('AND'); } catch { return createEmptyGroup('AND'); } });
+    const [advancedDraftGroup,setAdvancedDraftGroup]=useState<FilterGroup>(advancedFilterGroup);
     const [isAdvancedFilterActive, setIsAdvancedFilterActive] = useState(!!searchParams.get('advancedFilter'));
     const [listPrintModal, setListPrintModal] = useState<{
         isOpen: boolean;
@@ -117,7 +119,7 @@ export default function AdminItems() {
         setSortDirection(query.get('sortDirection')==='asc'?'asc':'desc');
         setSelectedWorkset(query.get('worksetId')||'');
         setFilters(previous=>Object.fromEntries(Object.keys(previous).map(key=>[key,query.get(key)||''])) as typeof previous);
-        try{setAdvancedFilterGroup(JSON.parse(query.get('advancedFilter')||'null')||createEmptyGroup('AND'));}
+        try{const value=JSON.parse(query.get('advancedFilter')||'null')||createEmptyGroup('AND');setAdvancedFilterGroup(value);setAdvancedDraftGroup(value);}
         catch{setAdvancedFilterGroup(createEmptyGroup('AND'));setLoadError('Neplatný pokročilý filtr v URL.');}
         setIsAdvancedFilterActive(query.has('advancedFilter'));
     },[location.search]);
@@ -165,11 +167,12 @@ export default function AdminItems() {
         }
         sessionStorage.setItem('adminItemsSearch', searchStr);
 
-        setLoadError('');
+        setLoadError('');setListLoading(true);
         const revision = ++requestRevision.current;
         listAdminItems(queryParams)
             .then(result => { if (revision === requestRevision.current) setData(result); })
-            .catch(err => { if (revision === requestRevision.current) {setData(null);setLoadError(err.message);} });
+            .catch(err => { if (revision === requestRevision.current) {setData(null);setLoadError(err.message);} })
+            .finally(()=>{if(revision===requestRevision.current)setListLoading(false);});
     };
 
     const handleSort = (field: string) => {
@@ -187,6 +190,7 @@ export default function AdminItems() {
     }, []);
 
     useEffect(() => {
+        setListLoading(true);
         const delayDebounceFn = setTimeout(() => {
             loadData();
         }, 400);
@@ -209,7 +213,7 @@ export default function AdminItems() {
             originPlace: '', material: '', technique: '', location: '', spravce: '',sourceDatingFromYear:'',sourceDatingToYear:'',
             ...(originalIntegrationEnabled()?Object.fromEntries([...demusTableColumns.map(c=>c.id),'Fond_S','Predmet_S','datingText','currentQuantity','currentOtherNumber'].map(k=>[k,''])):{})
         });
-        setAdvancedFilterGroup(createEmptyGroup('AND'));
+        const empty=createEmptyGroup('AND');setAdvancedFilterGroup(empty);setAdvancedDraftGroup(empty);
         setIsAdvancedFilterActive(false);
         setSearchTerm('');
         setPage(0);
@@ -293,7 +297,7 @@ export default function AdminItems() {
         setPageError(''); setPage(Number(pageText) - 1);
     };
 
-    const pagination = <div className="flex flex-wrap items-center gap-2 p-2" aria-label="Stránkování evidence">
+    const pagination = <div className="flex flex-wrap items-center gap-2 p-2" aria-label="Stránkování evidence" aria-busy={listLoading}>
         <button type="button" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Předchozí</button>
         <label>Strana <input type="text" inputMode="numeric" aria-label="Číslo stránky evidence" aria-invalid={!!pageError}
             value={pageText} onChange={e => {setPageText(e.target.value);setPageError('');}}
@@ -361,7 +365,7 @@ export default function AdminItems() {
                         </select>
                     )}
                     <button
-                        onClick={() => setShowAdvancedBuilder(!showAdvancedBuilder)}
+                        onClick={() => {setAdvancedDraftGroup(advancedFilterGroup);setShowAdvancedBuilder(!showAdvancedBuilder);}}
                         className={`genric-btn ${showAdvancedBuilder || isAdvancedFilterActive ? 'warning' : 'default-border'} radius px-4 text-[10px] uppercase font-black transition-all flex items-center gap-2`}
                         title="Otevřít stavitel pokročilých podmínek (AND/OR/NOT)"
                     >
@@ -377,17 +381,18 @@ export default function AdminItems() {
 
                 {showAdvancedBuilder && (
                     <AdvancedFilterBuilder
-                        filterGroup={advancedFilterGroup}
-                        onChange={setAdvancedFilterGroup}
+                        filterGroup={advancedDraftGroup}
+                        fields={originalIntegrationEnabled()?scopedFilterFields:undefined}
+                        onChange={setAdvancedDraftGroup}
                         onApply={() => {
+                            setAdvancedFilterGroup(advancedDraftGroup);
                             setIsAdvancedFilterActive(true);
                             setPage(0);
                         }}
                         onReset={() => {
-                            setAdvancedFilterGroup(createEmptyGroup('AND'));
+                            const empty=createEmptyGroup('AND');setAdvancedFilterGroup(empty);setAdvancedDraftGroup(empty);
                             setIsAdvancedFilterActive(false);
                             setPage(0);
-                            loadData();
                         }}
                     />
                 )}
@@ -446,6 +451,7 @@ export default function AdminItems() {
 
             <div className="card-body p-0">
                 {originalIntegrationEnabled()&&<p role="status">Fond a podsbírka jsou původní zdrojové kódy; Předmět je původní Predmet_S, nikoli současné kurátorské tvrzení. Autor, datace, materiál a technika jsou současná kurátorská tvrzení, oddělená od zdroje. Prázdná buňka neprokazuje chybějící data v DEMUS.</p>}
+                {listLoading&&data&&<p role="status">Načítám stránku evidence…</p>}
                 {loadError && <p role="alert">{loadError} <button type="button" onClick={loadData}>Načíst znovu</button></p>}
                 {!data&&!loadError&&<p role="status" className="p-10 text-center italic text-gray-400">Načítám správu sbírek...</p>}
                 {data&&pagination}

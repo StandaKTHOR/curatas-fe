@@ -38,14 +38,20 @@ export function currentDimensionsDraft(baseline:Dimension[],draft:any[]):Current
  }
  if(baseline.some(row=>!found.has(row.id)))throw new Error('Existující míry nelze odebrat tímto formulářem.');return rows;
 }
-/** Exactly one native section per save, no legacy aggregate/identity/party writes. */
-export async function saveOriginalCurrent(id:number,domain:OriginalEditDomain,session:any,form:Record<string,unknown>){
+/** One server transaction for approved current sections; historical values never enter it. */
+export async function saveOriginalCurrent(id:number,domain:OriginalEditDomain,session:any,form:Record<string,unknown>,flagsDraft?:{itemId:number;scopeSignal:AbortSignal;values:Record<string,string|null>;dirty:boolean}){
  const {api,signal,catalog}=originalSession();const snapshot=session?.scopedCurrent;
  if(!originalCanEdit(domain)||session?.itemId!==id||snapshot?.catalogId!==catalog.id||snapshot.etag!==session.etag||session.busy)throw new Error('Chybí oprávnění nebo původní verze této sekce, případně probíhá jiný zápis.');
  const changed:CurrentSectionWrites={};
  for(const section of ['inventory','professional',...(snapshot.storage?['storage'] as const:[]),...(snapshot.additional?['additional'] as const:[])] as const){const draft=currentSectionDraft(section,snapshot[section],form);if(draft.changed){if(!originalCanEdit(section==='storage'?'inventory':section==='additional'?'professional':section))throw new Error('Chybí oprávnění pro změněnou současnou sekci.');changed[section]=draft.values;}}
  if(snapshot.core){const core:Record<string,string|null>={};for(const key of ['title','inventoryNumber']){const value=form[key]===null?null:String(form[key]??'');if(String(snapshot.core[key]??'')!==String(value??''))core[key]=value;}if(Object.keys(core).length){if(!originalCanEdit('inventory'))throw new Error('Chybí oprávnění k inventární identitě.');changed.item=core;}}
  if(snapshot.dimensions){const rows=currentDimensionsDraft(snapshot.dimensions,form.dimensions as any[]);if(rows.length){if(!originalCanEdit('professional'))throw new Error('Chybí oprávnění k současným mírám.');changed.dimensions={rows};}}
+ if(flagsDraft?.dirty){
+  if(flagsDraft.itemId!==id||flagsDraft.scopeSignal!==signal||!originalCanEdit('professional')||import.meta.env.VITE_CURRENT_FLAGS_ENABLED!=='true')throw new Error('Chybí oprávnění nebo původní kontext klasifikačních příznaků.');
+  const keys=['archive','card','copied','verified','marked'];
+  if(Object.keys(flagsDraft.values).length!==keys.length||keys.some(k=>!Object.hasOwn(flagsDraft.values,k))||Object.values(flagsDraft.values).some(v=>v!==null&&v!=='true'&&v!=='false'))throw new Error('Neplatný současný klasifikační příznak.');
+  changed.flags={...flagsDraft.values};
+ }
  const sections=Object.keys(changed) as (keyof CurrentSectionWrites)[];if(!sections.length)return {saved:false};
  session.busy=true;
  try{if(sections.length===1&&sections[0]!=='item'&&sections[0]!=='dimensions')await api.saveCuratorRecord!(id,sections[0],session.etag,changed[sections[0]]!,signal);else await api.saveCuratorRecords(id,session.etag,changed,signal);}finally{session.busy=false;}

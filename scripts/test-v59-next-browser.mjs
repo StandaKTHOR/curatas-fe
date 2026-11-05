@@ -12,7 +12,7 @@ try{
  page.on('dialog',async d=>{dialogs.push(d.message());await d.dismiss();});
  page.on('response',r=>{const u=new URL(r.url());if(u.pathname.startsWith('/api/'))requests.push({path:u.pathname,method:r.request().method(),status:r.status()});});
  const base='http://127.0.0.1:18213';await page.goto(base+'/login');await page.locator('input[type="text"]').fill('gen-reader');await page.locator('input[type="password"]').fill(input.password);await page.getByRole('button',{name:'Autorizovaný vstup',exact:true}).click();await page.getByLabel('Katalog',{exact:true}).selectOption('1');await page.getByRole('table',{name:'Sbírky — tabulkové zobrazení'}).waitFor();
- if(input.mode==='create'){
+ if(['create','all'].includes(input.mode)){
   // Test the reported lower button first; the earlier release only tested the top button.
   for(const label of ['Uložit sbírkový předmět','Uložit']){
    await page.goto(base+'/admin/items/new?catalog=1');const save=page.getByRole('button',{name:label,exact:true});await expect(save).toBeEnabled();check(label+': enabled on a new CURATOR form');
@@ -24,6 +24,27 @@ try{
    if(requests.filter(r=>r.method==='POST'&&r.path==='/api/v2/catalogs/1/items').length!==posts+1)throw Error('Duplicate creation POST');
    await page.reload();await expect(page.locator('#description')).toHaveValue('GENERATED současný popis Ž');await expect(page.locator('#inventoryNumber')).toHaveValue(number);check(label+': one POST, actual ID, GET and reload persistence');
    const n=dialogs.length;await page.getByRole('button',{name:'← Zpět na seznam',exact:true}).click();await page.getByRole('table',{name:'Sbírky — tabulkové zobrazení'}).waitFor();if(dialogs.length!==n)throw Error('False dirty state after saved item reload');check(label+': return without false unsaved warning');
+  }
+ }
+ if(['flags','all'].includes(input.mode)){
+  await page.goto(base+'/admin/items/edit/1001?catalog=1&edit=professional');const card=page.getByRole('checkbox',{name:'Současný příznak Karta',exact:true});await expect(card).toBeEnabled();await card.check();
+  await page.getByRole('button',{name:'Uložit',exact:true}).click();await page.getByText('Současná sekce byla uložena přes scoped API a znovu načtena. Historické údaje DEMUS nebyly změněny.',{exact:true}).waitFor();
+  await expect(card).toBeChecked();const n=dialogs.length;await page.getByRole('button',{name:'← Zpět na seznam',exact:true}).click();await page.getByRole('table',{name:'Sbírky — tabulkové zobrazení'}).waitFor();if(dialogs.length!==n)throw Error('Saved flags remain dirty');
+  await page.goto(base+'/admin/items/edit/1001?catalog=1&edit=professional');await expect(page.getByRole('checkbox',{name:'Současný příznak Karta',exact:true})).toBeChecked();check('Global save persists current flags and clears only acknowledged draft');
+ }
+ if(['filters','all'].includes(input.mode)){
+  await page.goto(base+'/admin/items?catalog=1&sortField=inventoryNumber&sortDirection=asc');const table=page.getByRole('table',{name:'Sbírky — tabulkové zobrazení'});await table.waitFor();
+  await page.getByRole('button',{name:'Pokročilý filtr (AND/OR)',exact:true}).click();const field=page.getByRole('combobox',{name:'Pole pokročilé podmínky'}),value=page.getByPlaceholder('Hledaný výraz...');
+  await field.selectOption('inventoryNumber');await value.fill('NEXT-');await page.getByRole('button',{name:'Filtrovat výsledky',exact:true}).click();await expect(table.locator('tbody tr')).toHaveCount(2);
+  const applied=new URL(page.url()).searchParams.get('advancedFilter');await value.fill('UNAPPLIED-NO-MATCH');await page.waitForTimeout(650);if(new URL(page.url()).searchParams.get('advancedFilter')!==applied)throw Error('Unapplied draft changed query');await expect(table.locator('tbody tr')).toHaveCount(2);
+  await page.getByRole('button',{name:'Pokročilý filtr (aktivní)',exact:true}).click();await page.getByRole('button',{name:'Pokročilý filtr (aktivní)',exact:true}).click();await expect(value).toHaveValue('NEXT-');check('Advanced Apply, unapplied draft and closing cancel preserve persisted list scope');
+  await page.getByRole('button',{name:'Přidat podmínku',exact:true}).click();await field.nth(1).selectOption('title');await value.nth(1).fill('sbírkový');await page.getByRole('button',{name:'Filtrovat výsledky',exact:true}).click();await expect(table.locator('tbody tr')).toHaveCount(1);
+  await table.getByRole('button',{name:'NEXT-1',exact:true}).click();await page.waitForURL(/\/admin\/items\/view\//);await page.getByRole('button',{name:'← Zpět na seznam',exact:true}).click();await expect(table.locator('tbody tr')).toHaveCount(1);const query=new URL(page.url()).searchParams;if(!query.get('advancedFilter')?.includes('sbírkový')||query.get('sortField')!=='inventoryNumber'||query.get('sortDirection')!=='asc'||query.get('page')!=='0')throw Error('Return lost advanced filter, page or sorting');check('Combined AND filter, actual count and detail-return context');
+  await page.getByRole('button',{name:'Pokročilý filtr (aktivní)',exact:true}).click();await page.getByRole('button',{name:'Resetovat pokročilý filtr',exact:true}).click();await expect(table.locator('tbody tr')).not.toHaveCount(1);if(new URL(page.url()).searchParams.has('advancedFilter'))throw Error('Reset retained filter');check('Reset reloads complete generated list, without stale closure request');
+  const pageNumber=page.getByRole('textbox',{name:'Číslo stránky evidence'}).first();await pageNumber.fill('');await expect(pageNumber).toHaveValue('');await pageNumber.fill('1');await pageNumber.press('Enter');await expect(pageNumber).toHaveValue('1');check('Page text can be cleared and committed with Enter');
+  for(const key of ['legacyCreatedBy','determinedBy','fundLegacyCode','subCollection','inventory.series','inventory.ordinal']){
+   await page.getByRole('combobox',{name:'Pole pokročilé podmínky'}).selectOption(key);await page.getByPlaceholder('Hledaný výraz...').fill(key==='inventory.ordinal'?'999999':'GENERATED-NOT-EXIST');const response=page.waitForResponse(r=>r.url().includes('/curator-page?')&&r.request().url().includes('advancedFilter'));
+   await page.getByRole('button',{name:'Filtrovat výsledky',exact:true}).click();const r=await response;if(r.status()!==200)throw Error('Unsupported offered field '+key);const body=await r.json();if(body.totalElements!==0||body.items.length!==0)throw Error('Unexpected filter semantics '+key);check('Real scoped historical filter '+key+' with exact empty result');
   }
  }
  await page.screenshot({path:input.output+'/workflow.png',fullPage:true});

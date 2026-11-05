@@ -971,10 +971,20 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
             if(isViewMode)return;
             mainSaveRef.current=true;setLoading(true);let accepted=false;
             try{
-                const outcome=await saveOriginalCurrent(Number(id),scopedDomain,editSessionRef.current,form);
+                const pendingSections=Object.entries(sectionDrafts.current).filter(([key,draft]:[string,any])=>key!=='currentFlags'&&draft.dirty);
+                if(pendingSections.length||form.auditComment?.trim())throw new Error('Nejprve potvrďte rozepsaný odborný podzáznam nebo auditní poznámku tlačítkem Uložit sekci. Ostatní změny zůstávají rozepsané; žádný zápis nebyl proveden.');
+                const flagsDraft=sectionDrafts.current.currentFlags;
+                const outcome=await saveOriginalCurrent(Number(id),scopedDomain,editSessionRef.current,form,flagsDraft);
                 if(!outcome.saved){setSuccessMessage('Současné údaje jsou beze změn; žádný zápis nebyl proveden.');return;}
                 accepted=true;
                 const fresh=await getAdminItem(id);
+                if(flagsDraft?.dirty){
+                    const {api,signal}=originalSession();const flags=await api.curatorRecord(Number(id),'flags',signal);
+                    if(flags.etag!==fresh._editSession.etag)throw new Error('Verze příznaků se změnila během obnovení.');
+                    for(const key of Object.keys(flagsDraft.values))if(flags.value[key]!==flagsDraft.values[key])throw new Error('Obnovené příznaky neodpovídají potvrzenému zadání.');
+                    if(sectionDrafts.current.currentFlags!==flagsDraft)throw new Error('Rozpracované příznaky se změnily během ukládání.');
+                    sectionDrafts.current.currentFlags={itemId:Number(id),scopeSignal:signal,values:flags.value,dirty:false};
+                }
                 const loaded={...form,...fresh};
                 for(const key of ['objectType','description','author','datingText','originPlace','material','technique','materialNote'])loaded[key]=fresh[key]??'';
                 editSessionRef.current=fresh._editSession;persistedSnapshotRef.current=fresh;

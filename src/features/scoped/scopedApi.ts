@@ -46,7 +46,7 @@ export interface CurrentAuthorAssignment {id:string;authorId:string;roleId:strin
 export interface CurrentAuthor extends CurrentAuthorAssignment {authorLabel:string;roleLabel:string|null}
 export interface Versioned<T> { value: T; etag: string }
 export interface CurrentDimensionWrite {id:number|null;type:string;value:string;unit:string|null;note:string|null}
-export type CurrentSectionWrites=Partial<Record<'inventory'|'professional'|'storage'|'additional'|'item',Record<string,string|null>>> & {dimensions?:{rows:CurrentDimensionWrite[]}};
+export type CurrentSectionWrites=Partial<Record<'inventory'|'professional'|'storage'|'additional'|'flags'|'item',Record<string,string|null>>> & {dimensions?:{rows:CurrentDimensionWrite[]}};
 export interface LifecycleState {active:boolean|null;published:boolean|null;status:string|null;deaccession:{reason:string;deaccessionDate:string;documentNumber:string|null}|null}
 export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string|null;professional?:Record<string,string|null>;inventory?:{quantity:number|null;otherNumber:string|null};storage?:Record<string,string|null>;additional?:Record<string,string|null>;references?:Partial<Record<ManagedDictionaryType,string>>}
 export interface Creation {item:Item;origin:'MES_CREATED';requestId:string;replayed:boolean}
@@ -471,7 +471,7 @@ export function scopedApi(catalogId: number, token: string) {
             return body?.itemVersion!==undefined?tag(response,body.itemVersion):response.headers.get('ETag')||'';
         },
         saveCuratorRecords:async(id:number,etag:string,input:CurrentSectionWrites,signal:AbortSignal)=>{
-            const sections=Object.keys(input);if(!sections.length||sections.some(k=>!['inventory','professional','storage','additional','item','dimensions'].includes(k)))throw new Error('Invalid current sections');
+            const sections=Object.keys(input);if(!sections.length||sections.some(k=>!['inventory','professional','storage','additional','flags','item','dimensions'].includes(k)))throw new Error('Invalid current sections');
             const values:Record<string,any>={};
             for(const section of sections as (keyof CurrentSectionWrites)[]){
                 if(section==='dimensions'){const rows=input.dimensions?.rows;if(!rows?.length||rows.length>20)throw new Error('Uložte jednu až dvacet změněných měr.');const ids=new Set<number>();for(const row of rows){if(Object.keys(row).length!==5||!['id','type','value','unit','note'].every(k=>Object.hasOwn(row,k))||row.id!==null&&(ids.has(integer(row.id))||!ids.add(row.id))||typeof row.type!=='string'||!row.type.trim()||row.type.length>255)throw new Error('Neplatná současná míra.');decimal(row.value);for(const key of ['unit','note'] as const)if(row[key]!==null&&(typeof row[key]!=='string'||row[key]!.includes('\0')||row[key]!.length>(key==='note'?50:255)))throw new Error('Poznámka má nejvýše50 znaků; jednotka nejvýše255.');}values.dimensions={rows};continue;}

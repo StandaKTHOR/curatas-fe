@@ -48,3 +48,13 @@ it('keeps the newest search when opening a row before the debounce and when goin
  render(<MemoryRouter initialEntries={['/admin/items?catalog=1']}><History/><Routes><Route path="/admin/items" element={<AdminItems/>}/><Route path="/admin/items/view/:id" element={<Detail/>}/></Routes></MemoryRouter>);
  await screen.findByRole('button',{name:'GEN-1'});fireEvent.change(screen.getByPlaceholderText(/Název, autor/),{target:{value:'latest'}});fireEvent.click(screen.getByRole('button',{name:'GEN-1'}));expect(screen.getByTestId('return-query')).toHaveTextContent('q=latest');await userEvent.click(screen.getByRole('button',{name:'TestBack'}));await waitFor(()=>expect(screen.getByPlaceholderText(/Název, autor/)).toHaveValue('latest'));
 });
+
+it('keeps edits to an active advanced filter as a draft until Apply; close cancels and reset removes it',async()=>{
+ render(<MemoryRouter initialEntries={['/admin/items?catalog=1']}><AdminItems/></MemoryRouter>);await screen.findByRole('button',{name:'GEN-1'});
+ await userEvent.click(screen.getByRole('button',{name:'Pokročilý filtr (AND/OR)'}));
+ await userEvent.type(screen.getByPlaceholderText('Hledaný výraz...'),'first');await userEvent.click(screen.getByRole('button',{name:'Filtrovat výsledky'}));
+ await waitFor(()=>expect(api.listAdminItems).toHaveBeenLastCalledWith(expect.objectContaining({advancedFilter:expect.stringContaining('first')})));
+ const calls=vi.mocked(api.listAdminItems).mock.calls.length;await userEvent.clear(screen.getByPlaceholderText('Hledaný výraz...'));await userEvent.type(screen.getByPlaceholderText('Hledaný výraz...'),'unapplied');await new Promise(r=>setTimeout(r,550));expect(api.listAdminItems).toHaveBeenCalledTimes(calls);
+ await userEvent.click(screen.getByRole('button',{name:'Pokročilý filtr (aktivní)'}));await userEvent.click(screen.getByRole('button',{name:'Pokročilý filtr (aktivní)'}));expect(screen.getByPlaceholderText('Hledaný výraz...')).toHaveValue('first');
+ await userEvent.click(screen.getByRole('button',{name:'Resetovat pokročilý filtr'}));await waitFor(()=>expect(api.listAdminItems).toHaveBeenLastCalledWith(expect.not.objectContaining({advancedFilter:expect.anything()})));
+});

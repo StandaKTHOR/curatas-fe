@@ -69,3 +69,17 @@ it('enables original inventory component aria inputs only with inventory capabil
  const root=document.createElement('form');root.innerHTML='<input aria-label="Inventární číslo: řada"><input id="sourceLocalId">';applyOriginalEditBoundary(root,'inventory',true,false);expect(root.querySelector('input')!.disabled).toBe(false);expect((root.querySelector('#sourceLocalId') as HTMLInputElement).disabled).toBe(true);
  bindOriginalCatalog({...catalog,capabilities:['item.read','item.professional.write']},'other');applyOriginalEditBoundary(root,'professional',true,false);expect(root.querySelector('input')!.disabled).toBe(true);
 });
+
+it('saves flags atomically with current text and preserves NULL, false and source isolation',async()=>{
+ vi.stubEnv('VITE_CURRENT_FLAGS_ENABLED','true');const {signal}=await import('./originalAdapter').then(m=>m.originalSession());
+ const values={archive:null,card:'true',copied:'false',verified:null,marked:null};
+ const draft={itemId:101,scopeSignal:signal,values,dirty:true};
+ const f=vi.fn().mockResolvedValue(new Response(JSON.stringify({catalogId:71,itemId:101,itemVersion:2,sections:['flags','professional']}),{headers:{ETag:'"2"','Cache-Control':'no-store'}}));vi.stubGlobal('fetch',f);
+ await expect(saveOriginalCurrent(101,'professional',session(),{...form(),description:'Žlutý'},draft)).resolves.toEqual({saved:true});
+ expect(f).toHaveBeenCalledTimes(1);expect(f.mock.calls[0][0]).toContain('/curator-records');expect(JSON.parse(f.mock.calls[0][1].body)).toEqual({professional:{...p,description:'Žlutý'},flags:values});expect(draft.dirty).toBe(true);
+});
+it.each(['scope','item','value','disabled'])('refuses foreign or invalid flags before any write: %s',async which=>{
+ vi.stubEnv('VITE_CURRENT_FLAGS_ENABLED',which==='disabled'?'false':'true');const {signal}=await import('./originalAdapter').then(m=>m.originalSession());const f=vi.fn();vi.stubGlobal('fetch',f);
+ const draft={itemId:which==='item'?102:101,scopeSignal:which==='scope'?new AbortController().signal:signal,values:{archive:null,card:which==='value'?'DEMUS':'true',copied:null,verified:null,marked:null},dirty:true};
+ await expect(saveOriginalCurrent(101,'professional',session(),{...form(),description:'new'},draft)).rejects.toThrow();expect(f).not.toHaveBeenCalled();expect(draft.dirty).toBe(true);
+});

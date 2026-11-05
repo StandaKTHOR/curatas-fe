@@ -1,3 +1,5 @@
+import {curatorFields,demusTableColumns} from '../features/scoped/curatorContract';
+import {validateAdvancedFilter} from '../features/scoped/advancedFilterContract';
 import React from 'react';
 import { FaPlus, FaTrash, FaTimes, FaFilter, FaLayerGroup } from 'react-icons/fa';
 
@@ -21,6 +23,7 @@ interface AdvancedFilterBuilderProps {
     onChange: (updated: FilterGroup) => void;
     onApply: () => void;
     onReset: () => void;
+    fields?: readonly {value:string;label:string}[];
 }
 
 export const FILTER_FIELDS = [
@@ -63,6 +66,10 @@ export const FILTER_FIELDS = [
     { value: 'description', label: 'Stručný popis' },
     { value: 'extendedDescription', label: 'Podrobný popis' }
 ];
+
+export const scopedFilterFields=[...FILTER_FIELDS,...demusTableColumns.map(c=>({value:c.id,label:`${c.label} (DEMUS ${c.id})`})),{value:'Fond_S',label:'Fond (DEMUS Fond_S)'},{value:'Predmet_S',label:'Předmět (DEMUS Predmet_S)'}].filter(f=>{
+ try{validateAdvancedFilter(JSON.stringify({conjunction:'AND',conditions:[{field:f.value,operator:'EQUALS',value:''}],groups:[]}),curatorFields);return true;}catch{return false;}
+}).map(f=>({...f,label:['subCollection','fundLegacyCode','legacyCreatedBy','determinedBy'].includes(f.value)?`${f.label} (DEMUS)`:f.label}));
 
 export const FILTER_OPERATORS = [
     { value: 'CONTAINS', label: 'obsahuje' },
@@ -108,7 +115,8 @@ export default function AdvancedFilterBuilder({
     filterGroup,
     onChange,
     onApply,
-    onReset
+    onReset,
+    fields=FILTER_FIELDS
 }: AdvancedFilterBuilderProps) {
 
     const updateGroupConjunction = (group: FilterGroup, conj: 'AND' | 'OR' | 'NOT'): FilterGroup => ({
@@ -204,6 +212,7 @@ export default function AdvancedFilterBuilder({
                             <div key={c.id} className="flex flex-wrap items-center gap-2 bg-white p-1.5 rounded border border-gray-200 text-xs">
                                 <select
                                     value={c.field}
+                                    aria-label="Pole pokročilé podmínky"
                                     onChange={e => {
                                         const field = e.target.value;
                                         const operator = filterOperatorsForField(field).some(op => op.value === c.operator)
@@ -212,7 +221,8 @@ export default function AdvancedFilterBuilder({
                                     }}
                                     className="bg-gray-50 border border-gray-300 rounded px-2 py-1 text-xs font-medium text-gray-800 focus:outline-none focus:border-[#00204a]"
                                 >
-                                    {FILTER_FIELDS.map(f => (
+                                    {!fields.some(f=>f.value===c.field)&&<option value={c.field} disabled>{c.field} (nedostupné pole; upravte podmínku)</option>}
+                                    {fields.map(f => (
                                         <option key={f.value} value={f.value}>
                                             {f.label}
                                         </option>
@@ -221,6 +231,7 @@ export default function AdvancedFilterBuilder({
 
                                 <select
                                     value={c.operator}
+                                    aria-label="Operátor pokročilé podmínky"
                                     onChange={e => onGroupChange(updateCondition(group, c.id, { operator: e.target.value }))}
                                     className="bg-gray-50 border border-gray-300 rounded px-2 py-1 text-xs font-medium text-gray-800 focus:outline-none focus:border-[#00204a]"
                                 >
