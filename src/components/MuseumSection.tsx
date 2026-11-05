@@ -1,3 +1,4 @@
+import CurrentAuthors from '../features/catalog/CurrentAuthors';
 import type {LifecycleState} from '../features/scoped/scopedApi';
 import {HistoricalTableRows,HistoricalTable} from '../features/catalog/HistoricalRows';
 import type {HistoricalTable as HistoricalSourceTable} from '../features/catalog/historicalContract';
@@ -543,6 +544,7 @@ export default function MuseumSection({ itemId, section, onSave, editSession, re
                 </div>
             </div>}
         </div>}
+        {section==='origin'&&itemId&&originalIntegrationEnabled()&&import.meta.env.VITE_CURRENT_AUTHORS_ENABLED==='true'&&<CurrentAuthors itemId={itemId} editSession={editSession} readOnly={readOnly} onSave={onSave}/>}
         {itemId&&rootHistoricalFields[section]&&<HistoricalTable itemId={itemId} table="Sbirky" etag={editSession?.etag} fields={rootHistoricalFields[section]!}/>}
         {section==='history'&&<>{itemId&&<HistoricalTable itemId={itemId} table="Historie" etag={editSession?.etag} fields={[["Kdy_HS","Kdy"],["Kde_HS","Kde"],["Kdo_HS","Kdo"],["Historka_HS","Historie DEMUS"],["RokChr_HS","Chronologický rok"]]}/>}</>}
         {uncertain && <button type="button" onClick={async () => {try {if(originalIntegrationEnabled()){const {api,signal}=originalSession();const fresh=await api.professionalRecords(itemId,signal);setDetail(old=>old?{...old,records:fresh.items}:old);}else setDetail(await getMuseumItem(itemId)); setMessage(uncertainCreateMessage + ' Serverový seznam byl načten.');} catch (e) {setMessage((e as Error).message);}}}>Obnovit serverový seznam</button>}

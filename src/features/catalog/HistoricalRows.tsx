@@ -1,16 +1,16 @@
 import {useState} from 'react';
 import DemusLegacyDataView from '../../components/DemusLegacyDataView';
-import {historicalText,historicalStateLabel,type HistoricalRow,type HistoricalTable} from './historicalContract';
+import {historicalText,historicalFieldLines,historicalStateLabel,type HistoricalRow,type HistoricalTable} from './historicalContract';
 import {useHistoricalRows,historicalEnabled} from './useHistoricalRows';
 
 export function HistoricalLineage({row,table,itemId,etag}:{row:HistoricalRow;table:HistoricalTable;itemId?:number;etag?:string}){
  const [open,setOpen]=useState(false);
- return <details onToggle={e=>setOpen(e.currentTarget.open)}><summary>Všechna původní pole DEMUS</summary><p>Zdroj SHA-256: {row.sourceSha256} · řádek {row.recordId} · hash {row.rowHash} · výskyt {row.occurrence} · rodič {row.parentRecordId} · vazba {row.parentField}</p><pre>{JSON.stringify(row.fields,null,2)}</pre>{open&&<HistoricalRelations itemId={itemId} table={table} row={row} etag={etag}/>}</details>;
+ return <details onToggle={e=>setOpen(e.currentTarget.open)}><summary>Všechna původní pole DEMUS</summary><p>Zdroj SHA-256: {row.sourceSha256} · řádek {row.recordId} · hash {row.rowHash} · výskyt {row.occurrence} · rodič {row.parentRecordId} · vazba {row.parentField}</p><pre>{historicalFieldLines(row.fields)+'\n\n'+JSON.stringify(row.fields,null,2)}</pre>{open&&<HistoricalRelations itemId={itemId} table={table} row={row} etag={etag}/>}</details>;
 }
 function HistoricalRelations({row,table,itemId,etag}:{row:HistoricalRow;table:HistoricalTable;itemId?:number;etag?:string}){
  const {page,more}=useHistoricalRows(itemId,table,etag,row.recordId);
  return <><p>Doložené zdrojové autority a bibliografické vazby DEMUS — nikoli současná číselníková ID.</p>{page?.error&&<p role="alert">{page.error}</p>}{!page&&<p role="status">Načítání zdrojových vazeb…</p>}{page?.state==='REVIEW_REQUIRED_DEPTH_LIMIT'&&<p role="status">Řetězec zdrojových vazeb dosáhl bezpečného limitu. Zobrazený výřez není úplný; vyžaduje další ověření.</p>}{page?.state==='SOURCE_ROW_UNAVAILABLE'&&<p role="status">Zdrojové přiřazení řádku nebylo doloženo. Nejde o důkaz chybějících historických autorit.</p>}
- {page?.items.map(r=><details key={`${r.relationshipId}:${r.parentRecordId}:${r.recordId}`}><summary>DEMUS {r.relatedTable} · {r.matchingRecords==='1'?'Přesná zdrojová vazba':`Nejednoznačná vazba — ${r.matchingRecords} kandidátů`}</summary><p>Vztah {r.relationshipId} · zdroj {r.sourceSha256} · hash {r.rowHash} · výskyt {r.occurrence} · cesta {r.sourcePath?.join(' → ')}</p><pre>{JSON.stringify(r.fields,null,2)}</pre></details>)}
+ {page?.items.map(r=><details key={`${r.relationshipId}:${r.parentRecordId}:${r.recordId}`}><summary>DEMUS {r.relatedTable} · {r.matchingRecords==='1'?'Přesná zdrojová vazba':`Nejednoznačná vazba — ${r.matchingRecords} kandidátů`}</summary><p>Vztah {r.relationshipId} · zdroj {r.sourceSha256} · hash {r.rowHash} · výskyt {r.occurrence} · cesta {r.sourcePath?.join(' → ')}</p><pre>{historicalFieldLines(r.fields)+'\n\n'+JSON.stringify(r.fields,null,2)}</pre></details>)}
  {page?.state==='AVAILABLE'&&!page.items.length&&<p>V tomto zdrojovém výřezu nebyla nalezena přesná doložená vazba. Text nebyl automaticky přiřazen k autoritě.</p>}{page?.nextAfterId&&<a href="#demus-relations-next" className="underline" aria-disabled={page.pending} onClick={e=>{e.preventDefault();more();}}>Další zdrojové vazby DEMUS</a>}</>;
 }
 export function HistoricalTableRows({itemId,table,etag,fields}:{itemId?:number;table:HistoricalTable;etag?:string;fields:readonly [string,string][]}){

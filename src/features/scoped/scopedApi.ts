@@ -42,6 +42,8 @@ export function itemFilterQuery(filters:ItemFilters):URLSearchParams {
 export interface Dimension { id: number; itemId: number; catalogId: number; type: string; value: string | null; unit: string | null; createdInScopedApi: boolean;note?:string|null }
 export interface Media { id: string; itemId: number; catalogId: number; kind: 'IMAGE' | 'ATTACHMENT'; name: string; mimeType: string; byteSize: number; variants: ('content' | 'thumbnail')[]; caption?:string|null }
 export interface DictionaryValue {id:string;catalogId:number;type:string;label:string;code:string|null;parentId:string|null;version:string}
+export interface CurrentAuthorAssignment {id:string;authorId:string;roleId:string|null;sortOrder:number}
+export interface CurrentAuthor extends CurrentAuthorAssignment {authorLabel:string;roleLabel:string|null}
 export interface Versioned<T> { value: T; etag: string }
 export interface CurrentDimensionWrite {id:number|null;type:string;value:string;unit:string|null;note:string|null}
 export type CurrentSectionWrites=Partial<Record<'inventory'|'professional'|'storage'|'additional'|'item',Record<string,string|null>>> & {dimensions?:{rows:CurrentDimensionWrite[]}};
@@ -105,9 +107,15 @@ export function scopedApi(catalogId: number, token: string) {
         const response = await request(path, signal, init); const raw=await response.text();const body=exactJson(raw),wire=JSON.parse(raw);
         if (signal.aborted) throw new Error('Request cancelled'); return { body, response,wire };
     }
+    function authorsPage(body:any,response:Response,id:number){
+        if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_AUTHORS_UUID_TUPLES_NOT_DEMUS_V1'||!hasPrivateNoStore(response.headers)||!Array.isArray(body.items)||body.items.length>100)throw new Error('Neplatný kontrakt současných autorů.');
+        const items:CurrentAuthor[]=body.items.map((v:any,i:number)=>{if(integer(v.sortOrder,true)!==i)throw new Error('Neplatné pořadí autorů.');return {id:uuid(v.id),authorId:uuid(v.authorId),roleId:v.roleId===null?null:uuid(v.roleId),sortOrder:i,authorLabel:text(v.authorLabel),roleLabel:nullable(v.roleLabel)};});
+        if(new Set(items.map(v=>v.id)).size!==items.length||new Set(items.map(v=>`${v.authorId}:${v.roleId}`)).size!==items.length)throw new Error('Duplicitní současní autoři.');
+        return {items,etag:tag(response,body.itemVersion)};
+    }
     function item(v: any, id?: number): Item {
         if (integer(v.catalogId) !== catalogId || (id !== undefined && integer(v.id) !== id)) throw new Error('Foreign item response');
-        return { id: integer(v.id), catalogId, title: nullable(v.title), inventoryNumber: nullable(v.inventoryNumber), accessionNumber: nullable(v.accessionNumber), version: version(v.version) };
+    return { id: integer(v.id), catalogId, title: nullable(v.title), inventoryNumber: nullable(v.inventoryNumber), accessionNumber: nullable(v.accessionNumber), version: version(v.version) };
     }
     function dimension(v: any, parent: number, id?: number): Dimension {
         if (integer(v.catalogId) !== catalogId || integer(v.itemId) !== parent || (id !== undefined && integer(v.id) !== id) || typeof v.createdInScopedApi !== 'boolean') throw new Error('Foreign dimension response');
@@ -343,6 +351,35 @@ export function scopedApi(catalogId: number, token: string) {
             const {body,response}=await read(`${itemPath(id)}/acquisitions${recordId===undefined?'':'/'+integer(recordId)}`,signal,{method:recordId===undefined?'POST':'PATCH',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(payload)});
             if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.origin!=='CURRENT_CURATOR_STATEMENT_NOT_SOURCE'||!hasPrivateNoStore(response.headers))throw new Error('Neplatné potvrzení akvizice.');
             const value=acquisition(body.acquisition);if(value.sourceReadOnly||recordId!==undefined&&value.id!==recordId)throw new Error('Neplatná identita uložené akvizice.');return {value,etag:tag(response,body.itemVersion)};
+        },
+        structuredExport:async(sort:string,filters:Record<string,unknown>,signal:AbortSignal,onProgress?:(items:number,bytes:number)=>void)=>{
+            const query=curatorQuery(0,100,sort,filters);query.delete('page');query.delete('size');const params:Record<string,string>={};query.forEach((v,k)=>{params[k]=v;});
+            const response=await request(`${root}/curator-export.ndjson`,signal,{method:'POST',body:JSON.stringify(params)});
+            if(!hasPrivateNoStore(response.headers)||response.headers.get('X-CURATAS-Catalog-Id')!==String(catalogId)||response.headers.get('Content-Type')?.split(';')[0]!=='application/x-ndjson'||!response.body)throw new Error('Neplatný kontrakt strukturovaného exportu.');
+            const reader=response.body.getReader(),decoder=new TextDecoder('utf-8',{fatal:true}),chunks:ArrayBuffer[]=[];let pending='',bytes=0,began=false,ended=false,expected=0,review=0;const items=new Set<number>(),finished=new Set<number>(),versions=new Map<number,string>();
+            function line(raw:string){if(!raw.trim())throw new Error('Prázdný záznam exportu.');const v=exactJson(raw);if(ended)throw new Error('Data za ukončením exportu.');
+             if(!began){if(v.kind!=='BEGIN'||v.format!=='MES_PROFESSIONAL_NDJSON_V1'||integer(v.catalogId)!==catalogId)throw new Error('Chybí začátek exportu.');expected=integer(v.itemsExpected,true);if(expected>10000)throw new Error('Rozsah exportu překročen.');began=true;return;}
+             if(v.kind==='END'){if(v.format!=='MES_PROFESSIONAL_NDJSON_V1'||integer(v.catalogId)!==catalogId||v.status!=='COMPLETE_AVAILABLE_EVIDENCE'||integer(v.itemsExported,true)!==expected||items.size!==expected||finished.size!==expected)throw new Error('Export není úplný.');review=integer(v.sourceReviewStates,true);ended=true;return;}
+             const source=v.kind==='DEMUS_SOURCE'||v.kind==='DEMUS_RELATIONS',p=source?v.page:v;if(!['CURRENT','ITEM_END','DEMUS_SOURCE','DEMUS_RELATIONS'].includes(v.kind)||integer(p.catalogId)!==catalogId)throw new Error('Cizí nebo neznámý záznam exportu.');const id=integer(p.itemId);
+             if(v.kind==='CURRENT'){if(items.has(id))throw new Error('Duplicitní předmět exportu.');items.add(id);versions.set(id,version(p.itemVersion));}
+             else if(!items.has(id)||finished.has(id))throw new Error('Neplatná posloupnost exportu.');
+             else if(v.kind==='ITEM_END')finished.add(id);
+             else if(versions.get(id)!==version(p.itemVersion))throw new Error('Nesouhlasí verze exportu.');
+            }
+            try{while(true){const {done,value}=await reader.read();if(done)break;if(signal.aborted)throw new Error('Export byl zrušen.');bytes+=value.byteLength;if(bytes>134217728)throw new Error('Export překročil128MiB. Zužte filtr; neúplný soubor nebyl uložen.');chunks.push(new Uint8Array(value).buffer);pending+=decoder.decode(value,{stream:true});let n;while((n=pending.indexOf('\n'))>=0){line(pending.slice(0,n));pending=pending.slice(n+1);}if(pending.length>8388608)throw new Error('Překročen limit řádku exportu.');onProgress?.(finished.size,bytes);}
+             pending+=decoder.decode();if(pending||!began||!ended||signal.aborted)throw new Error('Přenos exportu není úplný; soubor nebyl uložen.');return {blob:new Blob(chunks,{type:'application/x-ndjson'}),items:expected,sourceReviewStates:review};
+            }catch(e){await reader.cancel().catch(()=>{});throw e;}finally{reader.releaseLock();}
+        },
+        currentAuthors:async(id:number,signal:AbortSignal)=>{
+            const {body,response}=await read(`${itemPath(id)}/current-authors`,signal);
+            return authorsPage(body,response,id);
+        },
+        saveCurrentAuthors:async(id:number,etag:string,items:CurrentAuthorAssignment[],signal:AbortSignal)=>{
+            if(items.length>100||items.some((v,i)=>v.sortOrder!==i)||new Set(items.map(v=>v.id)).size!==items.length||new Set(items.map(v=>`${v.authorId}:${v.roleId}`)).size!==items.length)throw new Error('Neplatná nebo duplicitní přiřazení autorů.');
+            items.forEach(v=>{uuid(v.id);uuid(v.authorId);if(v.roleId!==null)uuid(v.roleId);});
+            const {body,response}=await read(`${itemPath(id)}/current-authors`,signal,{method:'PUT',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(items)});
+            const result=authorsPage(body,response,id);
+            if(JSON.stringify(result.items.map(({id,authorId,roleId,sortOrder})=>({id,authorId,roleId,sortOrder})))!==JSON.stringify(items))throw new Error('Server nepotvrdil přesné přiřazení autorů.');return result;
         },
         sourcePlus:async(id:number,signal:AbortSignal,after='')=>{
             if(after&&!/^[a-f0-9]{64}$/.test(after))throw new Error('Neplatná zdrojová stránka.');

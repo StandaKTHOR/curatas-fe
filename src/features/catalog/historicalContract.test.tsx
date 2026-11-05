@@ -1,7 +1,7 @@
 import {render,screen,waitFor,cleanup,fireEvent,renderHook,act} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {scopedApi} from '../scoped/scopedApi';
-import {historicalTables,historicalText,typedHistorical} from './historicalContract';
+import {historicalTables,historicalText,historicalFieldLines,typedHistorical} from './historicalContract';
 import {HistoricalTableRows} from './HistoricalRows';
 import {useHistoricalRows} from './useHistoricalRows';
 import {bindOriginalCatalog} from './originalAdapter';
@@ -56,4 +56,16 @@ it('loads declared source authority rows only after expanding original evidence 
  const f=vi.fn().mockImplementation((url:string)=>Promise.resolve(reply(url.includes('/relations?')?related():page())));vi.stubGlobal('fetch',f);
  render(<fieldset disabled><table><tbody><HistoricalTableRows itemId={3} table="Urceni" etag={'"0"'} fields={[["Predmet_UR","Předmět"]]}/></tbody></table></fieldset>);await screen.findByText('kredenc kuchyňská (DEMUS)');expect(f).toHaveBeenCalledTimes(1);
  const summary=screen.getByText('Všechna původní pole DEMUS');const detail=summary.parentElement as HTMLDetailsElement;detail.open=true;fireEvent(detail,new Event('toggle'));await screen.findByText('DEMUS Adresar · Nejednoznačná vazba — 2 kandidátů');expect(f).toHaveBeenCalledTimes(2);expect(screen.queryByRole('button',{name:'Použít autoritu'})).not.toBeInTheDocument();
+});
+
+it('renders exact source author, role and literature keys without losing NULL/zero/empty or raw evidence',()=>{
+ const fields={OsobaVz_VZ:{kind:'TEXT',value:'Žluťoučký autor'},Role_VZ:{kind:'TEXT',value:'R1'},RokOd_VZ:{kind:'INTEGER',value:'0'},Pozn_VZ:{kind:'NULL'},Titul_LT:{kind:'TEXT',value:''}};
+ const text=historicalFieldLines(fields);expect(text).toContain('OsobaVz_VZ [TEXT]: Žluťoučký autor (DEMUS)');expect(text).toContain('RokOd_VZ [INTEGER]: 0 (DEMUS)');expect(text).toContain('Pozn_VZ [NULL]: NULL (DEMUS)');expect(text).toContain('Prázdný řetězec');expect(fields.Role_VZ.value).toBe('R1');
+});
+it('retains validated repeated historical rows on next-page network failure and retries the same cursor',async()=>{
+ const f=vi.fn().mockResolvedValueOnce(reply(page([row()],{nextAfterId:'a'.repeat(64)}))).mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(reply(page([row('e','židle')])));vi.stubGlobal('fetch',f);
+ const v=renderHook(()=>useHistoricalRows(3,'Urceni','"0"'));await waitFor(()=>expect(v.result.current.page?.items).toHaveLength(1));act(()=>v.result.current.more());await waitFor(()=>expect(v.result.current.page?.error).toContain('Již'));expect(v.result.current.page?.items).toHaveLength(1);expect(v.result.current.page?.nextAfterId).toBe('a'.repeat(64));act(()=>v.result.current.more());await waitFor(()=>expect(v.result.current.page?.items).toHaveLength(2));expect(v.result.current.page?.error).toBe('');expect(f.mock.calls[1][0]).toBe(f.mock.calls[2][0]);
+});
+it('clears previous historical rows when next page is a different parent revision',async()=>{
+ const f=vi.fn().mockResolvedValueOnce(reply(page([row()],{nextAfterId:'a'.repeat(64)}))).mockResolvedValueOnce(reply(page([row('e')],{itemVersion:1}),'"1"'));vi.stubGlobal('fetch',f);const v=renderHook(()=>useHistoricalRows(3,'Urceni','"0"'));await waitFor(()=>expect(v.result.current.page?.items).toHaveLength(1));act(()=>v.result.current.more());await waitFor(()=>expect(v.result.current.page?.error).toContain('Verze předmětu'));expect(v.result.current.page?.items).toHaveLength(0);expect(v.result.current.page?.nextAfterId).toBeNull();
 });

@@ -32,3 +32,8 @@ export function historicalText(value:TypedHistorical|undefined){
 }
 
 export const historicalStateLabel=(state:string)=>({SOURCE_PARENT_MISSING:'Zdrojové přiřazení předmětu nebylo doloženo.',AMBIGUOUS_PARENT_LINEAGE:'Více zdrojových přiřazení předmětu — vyžaduje ověření.',SOURCE_TABLE_UNAVAILABLE:'Zdrojová tabulka není úplně dostupná.',SOURCE_PARENT_UNAVAILABLE:'Zdrojový záznam předmětu není úplně dostupný.',AMBIGUOUS_SOURCE_PARENT:'Původní identifikátor předmětu není ve zdroji jednoznačný.',SOURCE_RELATIONSHIP_UNVERIFIED:'Historická vazba na předmět nebyla doložena.',AVAILABLE:'Pro tuto doloženou vazbu nejsou řádky ve zdrojovém výřezu.'}[state]??'Zdrojový výřez vyžaduje další ověření.');
+
+/** Exact source keys/types, never an authority label or inferred semantic mapping. */
+export function historicalFieldLines(fields:Record<string,TypedHistorical>){
+ return Object.entries(fields).map(([key,value])=>`${key} [${value.kind}]: ${historicalText(value)}`).join('\n');
+}

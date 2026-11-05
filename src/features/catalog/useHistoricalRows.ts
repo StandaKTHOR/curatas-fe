@@ -17,7 +17,14 @@ export function useHistoricalRows(itemId:number|undefined,table:HistoricalTable|
    if(owned.controller.signal.aborted||scope.signal.aborted||life.current!==owned)return;
    if(result.etag!==etag)throw new Error('Verze předmětu se změnila. Obnovte kartu; historická data nebyla spojena s jinou verzí.');
    setState(old=>({key,scope:scope!.signal,...result,items:after&&old?.key===key?[...old.items,...result.items]:result.items,pending:false,error:''}));
-  }catch(e){if(!owned.controller.signal.aborted&&!scope.signal.aborted&&life.current===owned)setState({key,scope:scope.signal,items:[],state:'ERROR',nextAfterId:null,etag:etag!,pending:false,error:(e as Error).message});}
+  }catch(e){if(!owned.controller.signal.aborted&&!scope.signal.aborted&&life.current===owned){
+   // Only a transport failure may retain the already validated page for retry. A contract,
+   // revision or permission failure closes the whole view rather than mixing evidence.
+   const retryable=e instanceof TypeError;
+   setState(old=>retryable&&after&&old?.key===key&&old.scope===scope.signal
+    ?{...old,pending:false,error:'Další stránku DEMUS se nepodařilo načíst. Již ověřené řádky zůstávají zobrazené; načítání lze opakovat.'}
+    :{key,scope:scope.signal,items:[],state:'ERROR',nextAfterId:null,etag:etag!,pending:false,error:(e as Error).message});
+  }}
   finally{owned.pending=false;}
  }
  useEffect(()=>{

@@ -29,6 +29,7 @@ export default function AdminItems() {
     const [loadError, setLoadError] = useState('');
     const requestRevision = useRef(0);
     const [exporting, setExporting] = useState(false);
+    const [structuredProgress,setStructuredProgress]=useState('');
     const [searchParams, setSearchParams] = useSearchParams();
     const location = useLocation();
     const ownSearch = useRef<string|null>(null);
@@ -257,6 +258,16 @@ export default function AdminItems() {
         } finally {setExporting(false);}
     };
 
+    const handleStructuredExport=async()=>{
+        if(exporting)return;setExporting(true);setStructuredProgress('Připravuji strukturovaný export…');
+        try{const {api,signal}=originalSession();const params:Record<string,unknown>={q:searchTerm,...filters};if(selectedWorkset)params.worksetId=selectedWorkset;if(isAdvancedFilterActive&&(advancedFilterGroup.conditions.length||advancedFilterGroup.groups.length))params.advancedFilter=JSON.stringify(advancedFilterGroup);
+         if((data?.totalElements??0)>1000&&!window.confirm('Export obsahuje více než1000 předmětů a samostatné historické záznamy. Pokračovat?')){setStructuredProgress('Export nebyl spuštěn.');return;}
+         const result=await api.structuredExport(`${sortField},${sortDirection}`,params,signal,(items,bytes)=>setStructuredProgress(`Exportuji odbornou evidenci: ${items} předmětů, ${bytes.toLocaleString('cs-CZ')} bajtů…`));
+         if(signal.aborted)throw new Error('Katalog nebo přihlášení se změnily.');const url=URL.createObjectURL(result.blob),link=document.createElement('a');link.href=url;link.download=`catalog-${originalSession().catalog.id}-professional.ndjson`;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+         setStructuredProgress(`Export dokončen: ${result.items} předmětů. ${result.sourceReviewStates?`${result.sourceReviewStates} zdrojových stavů vyžaduje ověření; jsou uvedeny v exportu.`:'Dostupná zdrojová evidence je oddělená od současných dat.'}`);
+        }catch(e){setStructuredProgress(`Export se nezdařil: ${(e as Error).message}`);}finally{setExporting(false);}
+    };
+
     const handleExecuteCopy = async () => {
         if (!copyModal.itemId) return;
         setIsCopying(true);
@@ -315,6 +326,8 @@ export default function AdminItems() {
                         <button disabled={exporting} aria-busy={exporting} onClick={handleExportExcel} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">
                             <FaFileExcel /> {exporting ? 'Exportuji…' : 'Export .xlsx'}
                         </button>
+                        {originalIntegrationEnabled()&&import.meta.env.VITE_CURRENT_AUTHORS_ENABLED==='true'&&<button disabled={exporting} aria-busy={exporting} onClick={handleStructuredExport} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">Export odborné evidence</button>}
+                        {structuredProgress&&<p role="status">{structuredProgress}</p>}
                         <button disabled={originalIntegrationEnabled()&&!originalCanCreate()} title="Založení podle katalogového oprávnění item.create a explicitního přepínače" onClick={() => navigate(`/admin/items/new${originalIntegrationEnabled()?'?catalog='+originalSession().catalog.id:''}`, { state: { fromSearch: currentSearch() } })} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
                             <FaPlus /> Nový předmět
                         </button>
