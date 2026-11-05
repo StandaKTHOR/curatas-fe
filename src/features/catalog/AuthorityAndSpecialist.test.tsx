@@ -153,3 +153,21 @@ describe('Priority 3: Specialist Tabs (Reference, Manipulace, Akce, ISO) in Muse
   expect(screen.getByText('Současné kurátorské tvrzení · #0')).toBeInTheDocument();
  });
 });
+
+it('blocks input before the authoritative snapshot and preserves a reversed range draft across closing and reopening',async()=>{
+ const values={lowerNumber:'1',upperNumber:null,seriesRecordId:null};let resolve!:(value:Response)=>void;let first=true;
+ const f=vi.fn((url:string,init:any={})=>{
+  if(String(url).includes('/curator-record/inventory-range')){
+   if(init.method==='PUT')throw new Error('Reversed range must never reach transport');
+   const body={catalogId:71,itemId:101,itemVersion:0,section:'inventory-range',values,hasCurrentAssertion:true,origin:'CURRENT_CURATOR_STATEMENT_NOT_SOURCE'};
+   if(first){first=false;return new Promise<Response>(r=>{resolve=r;});}return Promise.resolve(reply(body));
+  }
+  return Promise.resolve(reply({catalogId:71,kind:'series',items:[],nextAfterId:null}));
+ });vi.stubGlobal('fetch',f);const drafts:any={current:{}};
+ const component=render(<AuthorityAndRangeBindings itemId={101} mode="range" drafts={drafts}/>);
+ expect(screen.getByLabelText('Dolní pořadové číslo')).toBeDisabled();expect(screen.getByLabelText('Horní pořadové číslo')).toBeDisabled();
+ resolve(reply({catalogId:71,itemId:101,itemVersion:0,section:'inventory-range',values,hasCurrentAssertion:true,origin:'CURRENT_CURATOR_STATEMENT_NOT_SOURCE'}));
+ await waitFor(()=>expect(screen.getByLabelText('Dolní pořadové číslo')).toBeEnabled());await userEvent.clear(screen.getByLabelText('Dolní pořadové číslo'));await userEvent.type(screen.getByLabelText('Dolní pořadové číslo'),'20');await userEvent.type(screen.getByLabelText('Horní pořadové číslo'),'10');
+ await userEvent.click(screen.getByRole('button',{name:'Uložit rozsah a řadu'}));expect(await screen.findByRole('alert')).toHaveTextContent('Dolní pořadové číslo musí být menší nebo rovno hornímu');expect(drafts.current.rangeBindings.dirty).toBe(true);
+ component.unmount();render(<AuthorityAndRangeBindings itemId={101} mode="range" drafts={drafts}/>);await waitFor(()=>expect(screen.getByLabelText('Dolní pořadové číslo')).toBeEnabled());expect(screen.getByLabelText('Dolní pořadové číslo')).toHaveValue('20');expect(screen.getByLabelText('Horní pořadové číslo')).toHaveValue('10');expect(f.mock.calls.every(c=>c[1]?.method!=='PUT')).toBe(true);
+});

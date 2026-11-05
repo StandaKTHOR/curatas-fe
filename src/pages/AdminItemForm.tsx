@@ -634,10 +634,10 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
         }
     };
 
-    const hasUnsavedChanges = () => !isViewMode && (
+    const hasUnsavedChanges = (exceptDraft?:string) => !isViewMode && (
         (!!initialFormSnapshotRef.current && getFormSnapshot(formRef.current) !== initialFormSnapshotRef.current)
         || !!formRef.current.auditComment?.trim()
-        || Object.values(sectionDrafts.current).some((draft: any) => draft.dirty));
+        || Object.entries(sectionDrafts.current).some(([key,draft]: [string,any]) => key!==exceptDraft&&draft.dirty));
 
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -972,7 +972,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
             mainSaveRef.current=true;setLoading(true);let accepted=false;
             try{
                 const pendingSections=Object.entries(sectionDrafts.current).filter(([key,draft]:[string,any])=>key!=='currentFlags'&&draft.dirty);
-                if(pendingSections.length||form.auditComment?.trim())throw new Error('Nejprve potvrďte rozepsaný odborný podzáznam nebo auditní poznámku tlačítkem Uložit sekci. Ostatní změny zůstávají rozepsané; žádný zápis nebyl proveden.');
+                if(pendingSections.length||form.auditComment?.trim())throw new Error('Nejprve potvrďte rozepsaný odborný podzáznam, rozsah nebo auditní poznámku jejich vlastním tlačítkem Uložit. Ostatní změny zůstávají rozepsané; žádný zápis nebyl proveden.');
                 const flagsDraft=sectionDrafts.current.currentFlags;
                 const outcome=await saveOriginalCurrent(Number(id),scopedDomain,editSessionRef.current,form,flagsDraft);
                 if(!outcome.saved){setSuccessMessage('Současné údaje jsou beze změn; žádný zápis nebyl proveden.');return;}
@@ -1703,7 +1703,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                                 Číselníkové zařazení předmětu
                             </h4>
                             {id&&import.meta.env.VITE_CURRENT_FLAGS_ENABLED==='true'?<CurrentClassificationFlags itemId={Number(id)} parentEtag={editSessionRef.current?.etag} readOnly={isViewMode} blocked={loading||scopedNeedsReload||!!initialFormSnapshotRef.current&&getFormSnapshot(formRef.current)!==initialFormSnapshotRef.current||Object.entries(sectionDrafts.current).some(([k,v]:[string,any])=>k!=='currentFlags'&&v.dirty)} drafts={sectionDrafts} onSave={etag=>{const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();}}>{managedField('SUBJECT','Námět')}</CurrentClassificationFlags>:<MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="basic" key={editSessionRef.current?.etag} onSave={handleSectionSave} />}
-                            {originalIntegrationEnabled()&&id&&<div className="mt-2"><button type="button" data-scoped-navigation="true" onClick={()=>setShowScopedAuthorities(v=>!v)} className="text-xs font-semibold text-[#00204a] underline">{showScopedAuthorities?'Skrýt současné odborné vazby a rozsah inv. čísla':'Otevřít současné odborné vazby (Fond, Podsbírka, Skupina, Určil, Role autora) a rozsah inv. čísla'}</button>{showScopedAuthorities&&<div className="mt-2"><AuthorityAndRangeBindings itemId={Number(id)} readOnly={isViewMode||hasUnsavedChanges()||scopedNeedsReload||loading} onSave={etag=>{const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();}}/></div>}</div>}
+                            {originalIntegrationEnabled()&&id&&<div className="mt-2"><button type="button" data-scoped-navigation="true" onClick={()=>setShowScopedAuthorities(v=>!v)} className="text-xs font-semibold text-[#00204a] underline">{showScopedAuthorities?'Skrýt současné odborné vazby a rozsah inv. čísla':'Otevřít současné odborné vazby (Fond, Podsbírka, Skupina, Určil, Role autora) a rozsah inv. čísla'}</button>{showScopedAuthorities&&<div className="mt-2"><AuthorityAndRangeBindings itemId={Number(id)} drafts={sectionDrafts} readOnly={isViewMode||hasUnsavedChanges('rangeBindings')||scopedNeedsReload||loading} onSave={etag=>{const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();}}/></div>}</div>}
                         </div>
                         {/* Autor / Původce & Role */}
                         <div className="space-y-1" ref={authorDropdownRef}>
@@ -2540,7 +2540,7 @@ function AdminItemEditor({ readOnly = false }: { readOnly?: boolean }) {
                             {museumSubTab === 'iso' && (
                                 <MuseumSection snapshotRequired drafts={sectionDrafts} editSession={editSessionRef.current} readOnly={isViewMode} itemId={id ? Number(id) : undefined} section="iso" onSave={handleSectionSave} />
                             )}
-                            {museumSubTab === 'vocabularies' && id && !isViewMode && <>{originalIntegrationEnabled()&&<AuthorityAndRangeBindings itemId={Number(id)} readOnly={isViewMode||hasUnsavedChanges()||scopedNeedsReload||loading} onSave={etag=>{const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();}}/>}<VocabularyAssociations itemId={Number(id)} data={(editSessionRef.current?.museumSnapshot as any)?.vocabularies}/></>}
+                            {museumSubTab === 'vocabularies' && id && !isViewMode && <>{originalIntegrationEnabled()&&<AuthorityAndRangeBindings itemId={Number(id)} drafts={sectionDrafts} readOnly={isViewMode||hasUnsavedChanges('rangeBindings')||scopedNeedsReload||loading} onSave={etag=>{const session=editSessionRef.current as any;if(session?.scopedCurrent){session.etag=etag;session.scopedCurrent.etag=etag;}void handleSectionSave();}}/>}<VocabularyAssociations itemId={Number(id)} data={(editSessionRef.current?.museumSnapshot as any)?.vocabularies}/></>}
                             {museumSubTab === 'demus' && (
                                 <div className="space-y-4">
                                     {id && !isViewMode && <DemusSourceIdentity itemId={Number(id)}/>}

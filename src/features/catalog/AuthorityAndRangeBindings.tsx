@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useState,type MutableRefObject} from 'react';
 import {originalSession} from './originalAdapter';
 import {originalCanEdit} from './originalEdit';
 import {validateInventoryRange,type SourceChoice} from '../scoped/scopedApi';
@@ -16,7 +16,7 @@ const EMPTY_AUTH:Record<string,string|null>={determinedByText:null,authorRoleTex
 
 /** Scoped Priority 2 editor for inventory range/series and professional authority bindings.
  * Never merges person records or overwrites historical DEMUS source columns. */
-export default function AuthorityAndRangeBindings({itemId,mode='all',readOnly=false,onSave}:{itemId:number;mode?:'all'|'range'|'authorities';readOnly?:boolean;onSave?:(etag:string)=>void}){
+export default function AuthorityAndRangeBindings({itemId,mode='all',readOnly=false,onSave,drafts}:{itemId:number;drafts?:MutableRefObject<Record<string,any>>;mode?:'all'|'range'|'authorities';readOnly?:boolean;onSave?:(etag:string)=>void}){
  const {api,signal}=originalSession();
  const canEditRange=!readOnly&&originalCanEdit('inventory');
  const canEditAuth=!readOnly&&originalCanEdit('professional');
@@ -34,34 +34,46 @@ export default function AuthorityAndRangeBindings({itemId,mode='all',readOnly=fa
  const [authPresent,setAuthPresent]=useState(false);
  const [choicesByKind,setChoicesByKind]=useState<Record<string,SourceChoice[]>>({});
 
+ const [ready,setReady]=useState(false);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
  const [status,setStatus]=useState('');
  const [revision,setRevision]=useState(0);
 
  useEffect(()=>{
-  let alive=true;setError('');
+  let alive=true;setError('');setReady(false);
   async function load(){
    try{
-    if(showRange){
-     const [r,s]=await Promise.all([api.curatorRecord(itemId,'inventory-range',signal),api.sourceChoices('series',signal).catch(()=>({items:[] as SourceChoice[],nextAfterId:null}))]);
-     if(!alive||signal.aborted)return;
-     setEtag(r.etag);setRangeBase(r.value);setRangeDraft({...r.value});setRangePresent(r.present);setSeriesChoices(s.items);
+    const range=showRange?await api.curatorRecord(itemId,'inventory-range',signal):null;
+    const series=showRange?await api.sourceChoices('series',signal):null;
+    const auth=showAuth?await api.curatorRecord(itemId,'authorities',signal):null;
+    const entries=showAuth?await Promise.all(AUTHORITY_SPECS.map(async([,kind])=>[kind,(await api.sourceChoices(kind,signal)).items] as const)):[];
+    if(!alive||signal.aborted)return;
+    if(range&&auth&&range.etag!==auth.etag)throw new Error('Verze odborných vazeb se během čtení změnila. Obnovte kartu.');
+    const etag=range?.etag??auth!.etag;
+    const stored=drafts?.current.rangeBindings;
+    if(stored?.dirty&&stored.itemId===itemId&&stored.scopeSignal===signal&&stored.etag!==etag){
+     setRangeDraft(stored.rangeDraft);setAuthDraft(stored.authDraft);
+     throw new Error('Předmět se mezitím změnil. Rozepsaný rozsah a vazby zůstávají zachované; porovnejte je před obnovením ze serveru.');
     }
-    if(showAuth){
-     const a=await api.curatorRecord(itemId,'authorities',signal);
-     const entries=await Promise.all(AUTHORITY_SPECS.map(async([,kind])=>[kind,(await api.sourceChoices(kind,signal).catch(()=>({items:[] as SourceChoice[],nextAfterId:null}))).items] as const));
-     if(!alive||signal.aborted)return;
-     setEtag(a.etag);setAuthBase(a.value);setAuthDraft({...a.value});setAuthPresent(a.present);setChoicesByKind(Object.fromEntries(entries));
-    }
+    const keep=stored?.dirty&&stored.itemId===itemId&&stored.scopeSignal===signal?stored:null;
+    setEtag(etag);
+    if(range){setRangeBase(range.value);setRangeDraft(keep?.rangeDraft??{...range.value});setRangePresent(range.present);setSeriesChoices(series!.items);}
+    if(auth){setAuthBase(auth.value);setAuthDraft(keep?.authDraft??{...auth.value});setAuthPresent(auth.present);setChoicesByKind(Object.fromEntries(entries));}
+    setReady(true);
    }catch(e){if(alive&&!signal.aborted)setError((e as Error).message);}
   }
-  void load();
-  return()=>{alive=false;};
+  void load();return()=>{alive=false;};
  },[itemId,signal,showRange,showAuth,revision]);
 
+ useEffect(()=>{
+  if(!ready||!drafts)return;
+  const dirty=(showRange&&rangeBase&&Object.keys(EMPTY_RANGE).some(k=>rangeDraft[k]!==rangeBase[k]))||(showAuth&&authBase&&Object.keys(EMPTY_AUTH).some(k=>authDraft[k]!==authBase[k]));
+  drafts.current.rangeBindings={itemId,scopeSignal:signal,etag,rangeDraft,authDraft,dirty:!!dirty};
+ },[ready,drafts,itemId,signal,etag,showRange,showAuth,rangeDraft,rangeBase,authDraft,authBase]);
+ function reload(){if(drafts?.current.rangeBindings?.dirty&&!window.confirm('Zahodit rozepsaný rozsah a vazby a načíst aktuální serverové hodnoty?'))return;if(drafts)delete drafts.current.rangeBindings;setRevision(v=>v+1);}
  async function saveRange(){
-  if(!canEditRange||busy||!rangeBase)return;
+  if(!canEditRange||busy||!ready||!rangeBase)return;
   setError('');setStatus('');
   const invalid=validateInventoryRange(rangeDraft);
   if(invalid){setError(invalid);return;}
@@ -78,7 +90,7 @@ export default function AuthorityAndRangeBindings({itemId,mode='all',readOnly=fa
  }
 
  async function saveAuthorities(){
-  if(!canEditAuth||busy||!authBase)return;
+  if(!canEditAuth||busy||!ready||!authBase)return;
   setError('');setStatus('');
   if(Object.keys(EMPTY_AUTH).every(k=>String(authDraft[k]??'')===String(authBase[k]??''))){setStatus('Odborné vazby a role jsou beze změn.');return;}
   for(const k of ['determinedByText','authorRoleText'] as const){
@@ -104,15 +116,15 @@ export default function AuthorityAndRangeBindings({itemId,mode='all',readOnly=fa
    <p className="text-gray-600">Současné kurátorské tvrzení je oddělené od historických složek DEMUS (Rada_S, PorC_S, HPorC_S).</p>
    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
     <label className="block space-y-1">Dolní pořadové číslo (1–99999999)
-     <input aria-label="Dolní pořadové číslo" type="text" disabled={!canEditRange||busy} value={rangeDraft.lowerNumber??''}
+     <input aria-label="Dolní pořadové číslo" type="text" disabled={!canEditRange||busy||!ready} value={rangeDraft.lowerNumber??''}
       onChange={e=>setRangeDraft(old=>({...old,lowerNumber:e.target.value===''?null:e.target.value}))} className="w-full bg-white border border-gray-300 rounded px-2 py-1"/>
     </label>
     <label className="block space-y-1">Horní pořadové číslo (Až — volitelné)
-     <input aria-label="Horní pořadové číslo" type="text" disabled={!canEditRange||busy} value={rangeDraft.upperNumber??''}
+     <input aria-label="Horní pořadové číslo" type="text" disabled={!canEditRange||busy||!ready} value={rangeDraft.upperNumber??''}
       onChange={e=>setRangeDraft(old=>({...old,upperNumber:e.target.value===''?null:e.target.value}))} className="w-full bg-white border border-gray-300 rounded px-2 py-1"/>
     </label>
     <label className="block space-y-1">Inventární řada (číselník InvRady)
-     <select aria-label="Inventární řada (číselník InvRady)" disabled={!canEditRange||busy} value={rangeDraft.seriesRecordId??''}
+     <select aria-label="Inventární řada (číselník InvRady)" disabled={!canEditRange||busy||!ready} value={rangeDraft.seriesRecordId??''}
       onChange={e=>setRangeDraft(old=>({...old,seriesRecordId:e.target.value===''?null:e.target.value}))} className="w-full bg-white border border-gray-300 rounded px-2 py-1">
       <option value="">— bez současné vazby (NULL) —</option>
       {rangeDraft.seriesRecordId&&!seriesChoices.some(c=>c.recordId===rangeDraft.seriesRecordId)&&<option value={rangeDraft.seriesRecordId}>Uložená řada ({rangeDraft.seriesRecordId.slice(0,12)}…)</option>}
@@ -121,8 +133,8 @@ export default function AuthorityAndRangeBindings({itemId,mode='all',readOnly=fa
     </label>
    </div>
    <div className="flex items-center gap-2">
-    <button type="button" disabled={!canEditRange||busy||!rangeBase} onClick={()=>void saveRange()} className="px-3 py-1 bg-[#00204a] text-white font-semibold rounded disabled:opacity-50">Uložit rozsah a řadu</button>
-    <button type="button" disabled={busy} onClick={()=>setRevision(v=>v+1)} className="px-2 py-1 border border-gray-300 bg-white rounded">Obnovit ze serveru</button>
+    <button type="button" disabled={!canEditRange||busy||!ready||!rangeBase} onClick={()=>void saveRange()} className="px-3 py-1 bg-[#00204a] text-white font-semibold rounded disabled:opacity-50">Uložit rozsah a řadu</button>
+    <button type="button" disabled={busy} onClick={reload} className="px-2 py-1 border border-gray-300 bg-white rounded">Obnovit ze serveru</button>
    </div>
   </div>}
   {showAuth&&<div className="space-y-2 pt-2 border-t border-gray-200">
@@ -130,11 +142,11 @@ export default function AuthorityAndRangeBindings({itemId,mode='all',readOnly=fa
    <p className="text-gray-600">Vazby odkazují na ověřené zdrojové záznamy katalogu. Jména osob (Určil, Autor) se nikdy automaticky neslučují a nepřepisují historický zdroj DEMUS.</p>
    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
     <label className="block space-y-1">Určil (současné kurátorské tvrzení)
-     <input aria-label="Určil (současné kurátorské tvrzení)" type="text" disabled={!canEditAuth||busy} value={authDraft.determinedByText??''}
+     <input aria-label="Určil (současné kurátorské tvrzení)" type="text" disabled={!canEditAuth||busy||!ready} value={authDraft.determinedByText??''}
       onChange={e=>setAuthDraft(old=>({...old,determinedByText:e.target.value===''&&old.determinedByText===null?null:e.target.value}))} className="w-full bg-white border border-gray-300 rounded px-2 py-1"/>
     </label>
     <label className="block space-y-1">Role autora (současné kurátorské tvrzení)
-     <select aria-label="Role autora (současné kurátorské tvrzení)" disabled={!canEditAuth||busy} value={authDraft.authorRoleText??''}
+     <select aria-label="Role autora (současné kurátorské tvrzení)" disabled={!canEditAuth||busy||!ready} value={authDraft.authorRoleText??''}
       onChange={e=>setAuthDraft(old=>({...old,authorRoleText:e.target.value===''?null:e.target.value}))} className="w-full bg-white border border-gray-300 rounded px-2 py-1">
       <option value="">— bez současné role (NULL) —</option>
       {authDraft.authorRoleText&&!AUTHOR_ROLES.includes(authDraft.authorRoleText as typeof AUTHOR_ROLES[number])&&<option value={authDraft.authorRoleText}>{authDraft.authorRoleText}</option>}
@@ -145,7 +157,7 @@ export default function AuthorityAndRangeBindings({itemId,mode='all',readOnly=fa
      const list=choicesByKind[kind]||[];
      const currentVal=authDraft[field]??'';
      return <label key={field} className="block space-y-1">{label}
-      <select aria-label={label} disabled={!canEditAuth||busy} value={currentVal}
+      <select aria-label={label} disabled={!canEditAuth||busy||!ready} value={currentVal}
        onChange={e=>setAuthDraft(old=>({...old,[field]:e.target.value===''?null:e.target.value}))} className="w-full bg-white border border-gray-300 rounded px-2 py-1">
        <option value="">— bez současné vazby (NULL) —</option>
        {currentVal&&!list.some(c=>c.recordId===currentVal)&&<option value={currentVal}>Uložená vazba ({currentVal.slice(0,12)}…)</option>}
@@ -155,8 +167,8 @@ export default function AuthorityAndRangeBindings({itemId,mode='all',readOnly=fa
     })}
    </div>
    <div className="flex items-center gap-2">
-    <button type="button" disabled={!canEditAuth||busy||!authBase} onClick={()=>void saveAuthorities()} className="px-3 py-1 bg-[#00204a] text-white font-semibold rounded disabled:opacity-50">Uložit odborné vazby a role</button>
-    {!showRange&&<button type="button" disabled={busy} onClick={()=>setRevision(v=>v+1)} className="px-2 py-1 border border-gray-300 bg-white rounded">Obnovit ze serveru</button>}
+    <button type="button" disabled={!canEditAuth||busy||!ready||!authBase} onClick={()=>void saveAuthorities()} className="px-3 py-1 bg-[#00204a] text-white font-semibold rounded disabled:opacity-50">Uložit odborné vazby a role</button>
+    {!showRange&&<button type="button" disabled={busy} onClick={reload} className="px-2 py-1 border border-gray-300 bg-white rounded">Obnovit ze serveru</button>}
    </div>
   </div>}
  </section>;
