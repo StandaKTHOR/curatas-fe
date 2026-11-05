@@ -1,7 +1,15 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CatalogProvider, SessionCatalogProvider, useCatalog } from './CatalogContext';
-import CatalogSelector from './CatalogSelector';
+// Test-only context observer. The retired separate workspace selector is not restored to the application.
+function ContextProbe() {
+    const {catalogs,selectedCatalog,loading,error,hasMore,selectCatalog,reload,loadMore}=useCatalog();
+    return <><select value={selectedCatalog?.id??''} disabled={loading} onChange={e=>void selectCatalog(e.target.value?Number(e.target.value):null)}>
+        <option value="">Vyberte katalog</option>{catalogs.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <button onClick={()=>void reload()}>Obnovit katalogy</button>{hasMore&&<button onClick={()=>void loadMore()}>Další katalogy</button>}
+        {!loading&&!error&&catalogs.length===0&&<span>Nemáte přidělený žádný katalog.</span>}
+        {error&&<p role="alert">{error}</p>}{selectedCatalog&&<p>Vybrán katalog {selectedCatalog.name}.</p>}</>;
+}
 
 let auth: { token: string | null; logout: () => void };
 vi.mock('../../components/AuthContext', () => ({ useAuth: () => auth }));
@@ -12,7 +20,7 @@ function setup(fetcher = vi.fn().mockResolvedValue(response({ items: [a, b], nex
     vi.stubGlobal('fetch', fetcher);
     const logout = vi.fn();
     auth = { token: 'token-one', logout };
-    const rendered = render(<CatalogProvider><CatalogSelector /></CatalogProvider>);
+    const rendered = render(<CatalogProvider><ContextProbe /></CatalogProvider>);
     return { fetcher, logout, ...rendered };
 }
 beforeEach(() => { vi.stubEnv('VITE_SCOPED_WORKSPACE_ENABLED','false'); });
@@ -61,7 +69,7 @@ describe('catalog metadata context', () => {
         await screen.findByRole('option', { name: /Katalog A/ });
         fetcher.mockImplementationOnce(() => new Promise(() => {}));
         auth = { ...auth, token: 'token-two' };
-        rerender(<CatalogProvider><CatalogSelector /></CatalogProvider>);
+        rerender(<CatalogProvider><ContextProbe /></CatalogProvider>);
         expect(screen.queryByRole('option', { name: /Katalog A/ })).not.toBeInTheDocument();
         expect(screen.getByRole('combobox')).toHaveValue('');
     });
@@ -114,7 +122,7 @@ describe('catalog metadata context', () => {
     });
     it('anonymous sessions make no catalog requests', async () => {
         const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
-        render(<SessionCatalogProvider token={null} onUnauthorized={vi.fn()}><CatalogSelector /></SessionCatalogProvider>);
+        render(<SessionCatalogProvider token={null} onUnauthorized={vi.fn()}><ContextProbe /></SessionCatalogProvider>);
         await waitFor(() => expect(fetcher).not.toHaveBeenCalled());
     });
 });
