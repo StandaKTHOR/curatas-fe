@@ -29,6 +29,17 @@ export default function AdminItems() {
     const [loadError, setLoadError] = useState('');
     const [listLoading,setListLoading]=useState(false);
     const requestRevision = useRef(0);
+    const columnScope=originalIntegrationEnabled()?String(originalSession().catalog.id):'legacy';
+    const readColumns=()=>{try{const saved=JSON.parse(localStorage.getItem('mes:demus-columns:'+columnScope)||'null');if(Array.isArray(saved))return demusTableColumns.filter(c=>saved.includes(c.id)).map(c=>c.id);}catch{/* invalid preference defaults to complete source view */}return demusTableColumns.map(c=>c.id);};
+    const [demusColumns,setDemusColumns]=useState<string[]>(readColumns);
+    useEffect(()=>{setDemusColumns(readColumns());},[columnScope]);
+    const chooseColumns=(values:string[])=>{setDemusColumns(values);try{localStorage.setItem('mes:demus-columns:'+columnScope,JSON.stringify(values));}catch{/* selection still works without local storage */}};
+    const selectionAnchor=useRef<number|null>(null);
+    const selectRow=(id:number,checked:boolean,shift:boolean)=>{
+        const ids=(data?.content??[]).map((v:any)=>v.id);const start=ids.indexOf(selectionAnchor.current),end=ids.indexOf(id);
+        const selected=shift&&start>=0&&end>=0?ids.slice(Math.min(start,end),Math.max(start,end)+1):[id];
+        setSelectedIds(previous=>checked?[...new Set([...previous,...selected])]:previous.filter(id=>!selected.includes(id)));selectionAnchor.current=id;
+    };
     const [exporting, setExporting] = useState(false);
     const [structuredProgress,setStructuredProgress]=useState('');
     const [searchParams, setSearchParams] = useSearchParams();
@@ -379,6 +390,7 @@ export default function AdminItems() {
                     </button>
                 </div>
 
+                <details><summary>Sloupce DEMUS</summary>{demusTableColumns.map(col=><label key={col.id}><input type="checkbox" aria-label={`Zobrazit sloupec DEMUS ${col.label}`} checked={demusColumns.includes(col.id)} onChange={e=>chooseColumns(e.target.checked?[...demusColumns,col.id]:demusColumns.filter(id=>id!==col.id))}/>{col.label} ({col.id})</label>)}<button type="button" onClick={()=>chooseColumns(demusTableColumns.map(col=>col.id))}>Zobrazit všechny sloupce DEMUS</button></details>
                 {showAdvancedBuilder && (
                     <AdvancedFilterBuilder
                         filterGroup={advancedDraftGroup}
@@ -442,7 +454,7 @@ export default function AdminItems() {
                                 </div>
                             )}
                             <div className="col-md-3 flex flex-col justify-end">
-                                <button onClick={resetFilters} className="text-[10px] text-red-500 font-black uppercase hover:text-red-700 transition-colors mb-2 text-right">Resetovat vše</button>
+                                <button onClick={resetFilters} className="text-[10px] text-red-500 font-black uppercase hover:text-red-700 transition-colors mb-2 text-right">Úplný seznam (reset filtrů)</button>
                             </div>
                         </div>
                     </div>
@@ -465,17 +477,17 @@ export default function AdminItems() {
                             <th>Fond</th><th>Podsbírka</th><th>Předmět</th>
                             <th><button type="button" onClick={() => handleSort('title')}>Titul</button></th>
                             <th><button type="button" onClick={() => handleSort('author')}>Autor</button></th>
-                            <th>Datace</th><th>Materiál</th><th>Technika</th>{demusTableColumns.map(col => <th key={col.id}><button type="button" onClick={() => handleSort(col.id)}>{col.label}</button></th>)}<th>Stav</th><th>Akce</th>
+                            <th>Datace</th><th>Materiál</th><th>Technika</th>{demusTableColumns.filter(col=>demusColumns.includes(col.id)).map(col => <th key={col.id}><button type="button" onClick={() => handleSort(col.id)}>{col.label}</button></th>)}<th>Stav</th><th>Akce</th>
                         </tr></thead>
                         <tbody>{data.content.map((item: any) => <tr key={item.id}>
                             <td><input type="checkbox" aria-label={`Vybrat ${item.inventoryNumber || item.id}`} checked={selectedIds.includes(item.id)}
-                                onChange={() => setSelectedIds(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev,item.id])}/></td>
+                                onChange={e => selectRow(item.id,e.target.checked,!!(e.nativeEvent as MouseEvent).shiftKey)}/></td>
                             <td><button type="button" className="underline" onClick={() => openItem(originalIntegrationEnabled()?originalItemHref(item.id):`/admin/items/view/${item.id}`)}>{item.inventoryNumber || '—'}</button></td>
                             <td>{item.accessionNumber || '—'}</td><td>{item.fundLegacyCode || item.fundName || '—'}</td>
                             <td>{item.subCollection || '—'}</td><td title={originalIntegrationEnabled()?'Původní DEMUS Predmet_S; není současným kurátorským tvrzením':undefined}>{originalIntegrationEnabled()?(item.sourceInventory?.Predmet_S===null||item.sourceInventory?.Predmet_S===undefined?'—':item.sourceInventory.Predmet_S===''?'Prázdný řetězec':item.sourceInventory.Predmet_S):(item.objectType || '—')}</td><td>{item.title || '—'}</td>
                             <td>{item.author || item.authors?.join(', ') || '—'}</td><td>{item.datingText || '—'}</td>
                             <td>{item.material || item.materials?.join(', ') || '—'}</td><td>{item.technique || '—'}</td>
-                            {demusTableColumns.map(col => { const cell = formatDemusCell(item, col); return <td key={col.id} title={cell.title} data-source-field={col.id} data-value-state={cell.state} data-current-assertion={cell.hasCurrent ? 'present' : 'absent'}>{cell.text}</td>; })}
+                            {demusTableColumns.filter(col=>demusColumns.includes(col.id)).map(col => { const cell = formatDemusCell(item, col); return <td key={col.id} title={cell.title} data-source-field={col.id} data-value-state={cell.state} data-current-assertion={cell.hasCurrent ? 'present' : 'absent'}>{cell.text}</td>; })}
                             <td>{item.catalogingStatus==='VYRAZENO'?'Vyřazeno':item.published ? 'Zveřejněno' : 'Neveřejné'}</td>
                             <td className="demus-row-actions">
                                 <button type="button" aria-label="Upravit předmět" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')&&!originalCanEdit('inventory')} title="Současná odborná sekce podle oprávnění" onClick={() => openItem(originalIntegrationEnabled()?originalEditHref(item.id,originalCanEdit('professional')?'professional':'inventory'):`/admin/items/edit/${item.id}`)}><FaEdit/></button>

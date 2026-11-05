@@ -39,7 +39,7 @@ function AppContent() {
     }, [login]);
     return <div className="demus-app" ref={appRef}>
         {!login && <header className="demus-app-menu" ref={menuRef}>
-            <div className="demus-titlebar"><strong>CURATAS — Katalog sbírek</strong>
+            <div className="demus-titlebar"><strong>MESonline — Katalog sbírek</strong>
                 <span>{token ? catalogHeaderRole(roles,selectedCatalog?.capabilities??[]) : 'Veřejný katalog'}</span>
             </div>
             <nav aria-label="Hlavní menu" className="demus-menubar">

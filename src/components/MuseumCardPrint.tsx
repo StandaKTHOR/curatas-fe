@@ -76,7 +76,7 @@ export default function MuseumCardPrint({ item, onClose }: MuseumCardPrintProps)
                     </div>
                     <div className="text-right text-xs">
                         <div className="font-mono font-bold">Tisk dne: {today}</div>
-                        <div className="text-gray-500 uppercase text-[10px]">Systém CURATAS</div>
+                        <div className="text-gray-500 uppercase text-[10px]">Systém MESonline</div>
                     </div>
                 </div>
 

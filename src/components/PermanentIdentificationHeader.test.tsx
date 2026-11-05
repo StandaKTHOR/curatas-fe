@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi,afterEach } from 'vitest';
 import PermanentIdentificationHeader from './PermanentIdentificationHeader';
+
+afterEach(()=>{vi.restoreAllMocks();document.getElementById('test-header-geometry')?.remove();});
 
 describe('PermanentIdentificationHeader - CITEM DEMUS Parity', () => {
     it('renders all 6 mandatory identification fields and inventory number', () => {
@@ -69,6 +71,7 @@ describe('PermanentIdentificationHeader - CITEM DEMUS Parity', () => {
     });
 
     it('allows toggling expand/collapse for long descriptions', async () => {
+        const css=document.createElement('style');css.id='test-header-geometry';css.textContent='.demus-description dd { max-height:160px; padding:0px; }';document.head.append(css);vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockReturnValue({height:240,width:400,x:0,y:0,top:0,left:0,right:400,bottom:240,toJSON:()=>({})});
         const longDescription = 'Toto je velmi podrobný a dlouhý popis sbírkového předmětu obsahující detailní údaje o provenience, stavu a restaurování v průběhu let.';
         render(
             <PermanentIdentificationHeader
@@ -103,4 +106,9 @@ describe('PermanentIdentificationHeader - CITEM DEMUS Parity', () => {
         expect(aside).toHaveClass('sticky');
         expect(aside).toHaveClass('top-0');
     });
+});
+
+it('does not offer expansion for a description that fits even if longer than50characters',()=>{
+ const css=document.createElement('style');css.id='test-header-geometry';css.textContent='.demus-description dd { max-height:160px; padding:0px; }';document.head.append(css);vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockReturnValue({height:36,width:400,x:0,y:0,top:0,left:0,right:400,bottom:36,toJSON:()=>({})});
+ render(<PermanentIdentificationHeader popis={'Popis se skutečně vejde. '.repeat(4)}/>);expect(screen.queryByRole('button',{name:'Zobrazit celý popis'})).not.toBeInTheDocument();
 });

@@ -1,4 +1,4 @@
-import {useEffect,useState,type MutableRefObject} from 'react';
+import {useEffect,useState,useRef,type MutableRefObject} from 'react';
 import {originalSession} from './originalAdapter';
 import {originalCanEdit} from './originalEdit';
 import {validateInventoryRange,type SourceChoice} from '../scoped/scopedApi';
@@ -17,7 +17,7 @@ const EMPTY_AUTH:Record<string,string|null>={determinedByText:null,authorRoleTex
 /** Scoped Priority 2 editor for inventory range/series and professional authority bindings.
  * Never merges person records or overwrites historical DEMUS source columns. */
 export default function AuthorityAndRangeBindings({itemId,mode='all',readOnly=false,onSave,drafts}:{itemId:number;drafts?:MutableRefObject<Record<string,any>>;mode?:'all'|'range'|'authorities';readOnly?:boolean;onSave?:(etag:string)=>void}){
- const {api,signal}=originalSession();
+ const {api,signal}=originalSession();const root=useRef<HTMLElement>(null);
  const canEditRange=!readOnly&&originalCanEdit('inventory');
  const canEditAuth=!readOnly&&originalCanEdit('professional');
  const showRange=mode==='all'||mode==='range';
@@ -76,7 +76,7 @@ export default function AuthorityAndRangeBindings({itemId,mode='all',readOnly=fa
   if(!canEditRange||busy||!ready||!rangeBase)return;
   setError('');setStatus('');
   const invalid=validateInventoryRange(rangeDraft);
-  if(invalid){setError(invalid);return;}
+  if(invalid){setError(invalid);root.current?.querySelector<HTMLInputElement>('input[aria-label="Dolní pořadové číslo"]')?.focus();return;}
   if(Object.keys(EMPTY_RANGE).every(k=>String(rangeDraft[k]??'')===String(rangeBase[k]??''))){setStatus('Rozsah inventárního čísla je beze změn.');return;}
   setBusy(true);
   try{
@@ -108,7 +108,7 @@ export default function AuthorityAndRangeBindings({itemId,mode='all',readOnly=fa
   finally{if(!signal.aborted)setBusy(false);}
  }
 
- return <section aria-label="Současné odborné vazby a rozsah inventárního čísla" data-scoped-reference-editor className="space-y-3 border border-gray-200 rounded p-3 bg-gray-50 text-xs">
+ return <section ref={root} aria-label="Současné odborné vazby a rozsah inventárního čísla" data-scoped-reference-editor className="space-y-3 border border-gray-200 rounded p-3 bg-gray-50 text-xs">
   {error&&<p role="alert" className="text-red-700 font-bold">{error}</p>}
   {status&&<p role="status" className="text-green-800 font-bold">{status}</p>}
   {showRange&&<div className="space-y-2">

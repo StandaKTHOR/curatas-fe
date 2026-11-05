@@ -238,7 +238,7 @@ export default function ItemListPrint({
                                 <div className="border-b-2 border-black pb-2 mb-4 flex justify-between items-center">
                                     <div>
                                         <h2 className="text-base font-black uppercase tracking-tight">KATALOGIZAČNÍ KARTA SBÍRKOVÉHO PŘEDMĚTU</h2>
-                                        <p className="text-xs text-gray-600">Moravské zemské muzeum – Curatas Evidence</p>
+                                        <p className="text-xs text-gray-600">Moravské zemské muzeum – MESonline evidence</p>
                                     </div>
                                     <div className="text-right text-xs">
                                         <p className="font-bold">Strana {idx + 1} z {items.length}</p>

@@ -58,3 +58,14 @@ it('keeps edits to an active advanced filter as a draft until Apply; close cance
  await userEvent.click(screen.getByRole('button',{name:'Pokročilý filtr (aktivní)'}));await userEvent.click(screen.getByRole('button',{name:'Pokročilý filtr (aktivní)'}));expect(screen.getByPlaceholderText('Hledaný výraz...')).toHaveValue('first');
  await userEvent.click(screen.getByRole('button',{name:'Resetovat pokročilý filtr'}));await waitFor(()=>expect(api.listAdminItems).toHaveBeenLastCalledWith(expect.not.objectContaining({advancedFilter:expect.anything()})));
 });
+
+it('lets the curator explicitly choose DEMUS columns and restore the complete table without CSS hiding',async()=>{
+ localStorage.removeItem('mes:demus-columns:1');const view=render(<MemoryRouter initialEntries={['/admin/items?catalog=1']}><AdminItems/></MemoryRouter>);await screen.findByRole('button',{name:'GEN-1'});
+ await userEvent.click(screen.getByText('Sloupce DEMUS',{exact:true}));const toggle=screen.getByRole('checkbox',{name:'Zobrazit sloupec DEMUS Zapsal'});expect(toggle).toBeChecked();await userEvent.click(toggle);expect(screen.queryByRole('columnheader',{name:'Zapsal'})).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'GEN-1'})).toBeInTheDocument();
+ view.unmount();render(<MemoryRouter initialEntries={['/admin/items?catalog=1']}><AdminItems/></MemoryRouter>);await screen.findByRole('button',{name:'GEN-1'});expect(screen.queryByRole('columnheader',{name:'Zapsal'})).not.toBeInTheDocument();await userEvent.click(screen.getByText('Sloupce DEMUS',{exact:true}));await userEvent.click(screen.getByRole('button',{name:'Zobrazit všechny sloupce DEMUS'}));expect(screen.getByRole('columnheader',{name:'Zapsal'})).toBeInTheDocument();localStorage.removeItem('mes:demus-columns:1');
+});
+it('selects only the explicit Shift range on the visible page and can deselect it without duplicating identities',async()=>{
+ vi.mocked(api.listAdminItems).mockResolvedValue({content:[1,2,3,4].map(id=>({id,title:'GENERATED',inventoryNumber:'SHIFT-'+id})),totalElements:4,totalPages:1} as any);
+ render(<MemoryRouter><AdminItems/></MemoryRouter>);await screen.findByRole('button',{name:'SHIFT-1'});fireEvent.click(screen.getByRole('checkbox',{name:'Vybrat SHIFT-1'}));fireEvent.click(screen.getByRole('checkbox',{name:'Vybrat SHIFT-3'}),{shiftKey:true});
+ for(const id of [1,2,3])expect(screen.getByRole('checkbox',{name:'Vybrat SHIFT-'+id})).toBeChecked();expect(screen.getByRole('checkbox',{name:'Vybrat SHIFT-4'})).not.toBeChecked();fireEvent.click(screen.getByRole('checkbox',{name:'Vybrat SHIFT-1'}),{shiftKey:true});for(const id of [1,2,3])expect(screen.getByRole('checkbox',{name:'Vybrat SHIFT-'+id})).not.toBeChecked();
+});
