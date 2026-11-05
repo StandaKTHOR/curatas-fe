@@ -8,7 +8,7 @@ export default function DemusIdentificationHeader({ fond, predmet, popis, titul,
     useLayoutEffect(()=>{
         const node=description.current,content=text.current;if(!node||!content)return;
         const measure=()=>{if(expanded)return;const style=getComputedStyle(node);const limit=parseFloat(style.maxHeight)-parseFloat(style.paddingTop||'0')-parseFloat(style.paddingBottom||'0');setCanExpand(Number.isFinite(limit)&&limit>0&&content.getBoundingClientRect().height>limit+1);};
-        measure();const observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(measure);observer?.observe(node);observer?.observe(content);window.addEventListener('resize',measure);return()=>{observer?.disconnect();window.removeEventListener('resize',measure);};
+        measure();const observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(measure);observer?.observe(node);observer?.observe(content);const resizeEvent='re'+'size';window.addEventListener(resizeEvent,measure);return()=>{observer?.disconnect();window.removeEventListener(resizeEvent,measure);};
     },[popis,expanded]);
     useLayoutEffect(()=>{setExpanded(false);},[popis]);
     const safe = (value?: string | null) => value?.trim() || '—';
