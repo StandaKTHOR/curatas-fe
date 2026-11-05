@@ -46,7 +46,7 @@ try{
  await page.getByRole('status').filter({hasText:'Předmět byl založen'}).waitFor();
  const id=Number(new URL(page.url()).pathname.split('/').pop());if(!Number.isSafeInteger(id))throw Error('New scoped item identity absent');
  await expect(page.locator('#title')).toHaveValue('GENERATED original-form item');
- await page.getByRole('definition').filter({hasText:'local:GEN_1'}).waitFor();
+ await expect(page.getByRole('definition').filter({hasText:'GENERATED 1'})).toHaveCount(2);if(await page.getByRole('definition').filter({hasText:'local:GEN_1'}).count())throw Error('Technical authentication subject leaked instead of actor display name');
  if(!await page.locator('time[datetime]').first().getAttribute('datetime'))throw Error('Creation timestamp absent');
  checks.push({name:'original-form-scoped-create-detail-author-time',pass:true});
  for(const [kind,,label] of initialAuthorities){await expect(page.getByRole('combobox',{name:'Současná autorita '+kind,exact:true})).toHaveValue(/[0-9a-f-]{36}/);await expect(page.getByRole('combobox',{name:'Současná autorita '+kind,exact:true})).toContainText(label);}checks.push({name:'first-save-all-current-authorities-actually-persisted-and-reloaded',pass:true});
