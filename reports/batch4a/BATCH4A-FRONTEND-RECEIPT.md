@@ -1,5 +1,0 @@
-# BATCH4A frontend receipt
-
-Tested code `211c1174a9e3ef1853bbc1c2b59301b7e35fa5eb` on `feature/b4a-december-mvp-frontend-20261022`. TypeScript, lint (23 inherited warnings, zero errors), Vitest 341 and production build PASS. Fresh real-browser baseline 18 and MVP 29 scenarios PASS against the committed backend in one isolated PG17 runner. Three workflows: scoped combined item search, independent scoped material/technique value management, read-only native inventory/aliases. Full reload and optimistic conflict persistence tested. No item-reference assignment, source import or new identity rules.
-
-All required reports and machine evidence: `D:\ProjektyJava\IdeaProjects\curatas-be\scratch\batch4a-20261022\be\reports\batch4a`. Raw runner evidence and final committed heads: `D:\ProjektyJava\IdeaProjects\curatas-be\scratch\batch4a-20261022\evidence\final-state.json`. This receipt changes no tested application code. Museum release readiness remains BLOCKED; see backend blockers/source acceptance reports.

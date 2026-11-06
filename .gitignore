@@ -12,3 +12,11 @@ dist-generated/
 /scratch/final-*.log
 /docs/
 /scratch/batch1-evidence/
+# Local AI/Codex artifacts
+/reports/
+/CODEX_*
+/AGENTS.md
+/.codex/
+/.claude/
+/.idea/copilot.data.migration.*.xml
+/ops/next-release/REPORT-HONZA-MYRKA.md
