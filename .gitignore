@@ -1,0 +1,22 @@
+node_modules/
+__pycache__/
+dist/
+dist-generated/
+.cache/
+.env
+/.idea/vcs.xml
+/scratch/update2_*.py
+/scratch/update2-*.log
+/docs/update2-references/
+/artifacts/
+/scratch/final-*.log
+/docs/
+/scratch/batch1-evidence/
+# Local AI/Codex artifacts
+/reports/
+/CODEX_*
+/AGENTS.md
+/.codex/
+/.claude/
+/.idea/copilot.data.migration.*.xml
+/ops/next-release/REPORT-HONZA-MYRKA.md

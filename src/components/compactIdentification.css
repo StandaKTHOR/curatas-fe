@@ -1,0 +1,70 @@
+/* P0 compact editor only. Read-only headers and every other MES screen retain original styles. */
+[data-compact-editor="true"].demus-identification { padding: 6px 8px; }
+[data-compact-editor="true"] dl { align-items: start; gap: 6px 12px; }
+[data-compact-editor="true"] dl > div { align-self: start; align-items: start; min-width: 0; }
+[data-compact-editor="true"] dd { padding: 0; border: 0; background: transparent; min-width: 0; }
+[data-compact-editor="true"] fieldset.demus-editor { padding: 0; margin: 0; border: 0; min-width: 0; }
+[data-compact-editor="true"] fieldset fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
+[data-compact-editor="true"] [data-identification-value]:not([data-historical="true"]) { display: none; }
+[data-compact-editor="true"] [data-identification-field="Předmět"] [data-identification-value][data-present="true"],
+[data-compact-editor="true"] [data-identification-field="Autor"] [data-identification-value][data-present="true"],
+[data-compact-editor="true"] [data-identification-value][data-historical="true"] { display: block; margin-bottom: 2px; }
+[data-compact-editor="true"] dl > div > dd > fieldset > .space-y-1 > label[for],
+[data-compact-editor="true"] dl > div > dd > fieldset > .space-y-1 > .flex > label[for] { display: none; }
+[data-compact-editor="true"] .demus-editor input:not([type=checkbox]):not([type=radio]):not([type=file]),
+[data-compact-editor="true"] .demus-editor select { width: 100%; min-width: 0; box-sizing: border-box; }
+[data-compact-editor="true"] .demus-editor .space-y-1 > :not([hidden]) ~ :not([hidden]) { margin-top: 2px; }
+[data-compact-editor="true"] .demus-editor p { margin: 2px 0; }
+[data-compact-editor="true"] details { min-width: 0; }
+[data-compact-editor="true"] summary { cursor: pointer; color: #153a72; line-height: 20px; }
+[data-compact-editor="true"] details[open] > :not(summary) { margin-top: 3px; }
+[data-compact-editor="true"] [data-inventory-options] { grid-column: 1 / -1; }
+[data-compact-editor="true"] [data-identification-field="Datace"] { grid-column: 1 / -1; }
+[data-compact-editor="true"] [data-identification-field="Datace"] dd > fieldset > div { display: grid; grid-template-columns: minmax(160px, 1fr) auto; gap: 4px; align-items: center; }
+[data-compact-editor="true"] [data-identification-field="Datace"] dd > fieldset > div > details { grid-column: 1 / -1; }
+[data-compact-editor="true"] [data-identification-field="Datace"] dd > fieldset > div > input { grid-column: 1; }
+[data-compact-editor="true"] [data-identification-field="Datace"] dd > fieldset > div > .flex { grid-column: 2; grid-row: 1; }
+@media (max-width: 760px) {
+ [data-compact-editor="true"] dl { grid-template-columns: minmax(0, 1fr); }
+ [data-compact-editor="true"] > fieldset > .grid { grid-template-columns: minmax(0, 1fr); }
+ [data-compact-editor="true"] [data-identification-field="Datace"] dd > fieldset > div { grid-template-columns: minmax(0, 1fr); }
+ [data-compact-editor="true"] [data-identification-field="Datace"] dd > fieldset > div > .flex { grid-column: 1; grid-row: auto; }
+}
+
+/* Checkpoint A: one intrinsic input row per field; disclosures never reflow sibling rows. */
+[data-compact-editor="true"] dd { display: flex; flex-direction: column; }
+[data-compact-editor="true"] dd > [data-identification-value] { order: 2; }
+[data-compact-editor="true"] [data-scoped-reference-editor] { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; gap: 4px; }
+[data-compact-editor="true"] [data-scoped-reference-editor] > select { grid-column: 1; grid-row: 1; }
+[data-compact-editor="true"] [data-scoped-reference-editor] > details { grid-column: 2; grid-row: 1; }
+[data-compact-editor="true"] [data-scoped-reference-editor] > p { grid-column: 1 / -1; }
+[data-compact-editor="true"] details { position: relative; }
+[data-compact-editor="true"] details > [data-top-popup] { position: absolute; top: 100%; right: 0; z-index: 65; width: min(580px,70vw); max-height: 55vh; overflow: auto; padding: 8px; border: 1px solid #8b929b; background: #efefef; box-shadow: 0 3px 10px #0003; }
+[data-compact-editor="true"] [data-inventory-options] > [data-top-popup] { right: auto; left: 0; }
+[data-compact-editor="true"] [data-top-popup] [data-top-popup] { position: static; width: auto; max-height: none; padding: 4px; box-shadow: none; }
+[data-unified-identification="true"] [data-identity-inline] .demus-inventory-components { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 2px 12px; margin: 4px 0; }
+[data-unified-identification="true"] [data-identity-inline] .demus-inventory-components > div { display: grid; grid-template-columns: minmax(100px,auto) minmax(0,1fr); gap: 4px; }
+[data-unified-identification="true"] [data-identity-inline] label { color: #153a72; margin: 0; }
+@media (max-width: 760px) {
+ [data-unified-identification="true"] [data-identity-inline] .demus-inventory-components { grid-template-columns: minmax(0,1fr); }
+}
+
+[data-current-audit="true"] { flex-basis: 100%; display: flex; justify-content: flex-end; }
+[data-current-audit="true"] dl { display: grid; grid-template-columns: auto auto; gap: 0 6px; margin: 0; font-size: 10px; line-height: 14px; }
+[data-current-audit="true"] dt, [data-current-audit="true"] dd { margin: 0; }
+
+[data-compact-editor="true"] dl > div > dd > fieldset > .space-y-1 > input { margin-top: 0; }
+[data-compact-editor="true"] fieldset.demus-editor { position: relative; }
+[data-compact-editor="true"] [data-scoped-reference-editor] > details { position: static; }
+[data-compact-editor="true"] details > [data-top-popup] { width: min(580px,100%); }
+
+[data-compact-editor="true"] #title { margin-top: 0; }
+[data-current-audit="true"]:empty { display: none; }
+
+/* One shared auxiliary layer below all primary rows, never over the next field. */
+[data-compact-editor="true"] fieldset.demus-editor, [data-compact-editor="true"] fieldset fieldset, [data-compact-editor="true"] details { position: static; }
+[data-compact-editor="true"] details > [data-top-popup] { top: 100%; left: 0; right: auto; width: min(900px,100%); }
+
+[data-compact-editor="true"] #item-top-options-host > [data-top-popup] { position: static; width: auto; max-height: 55vh; margin-top: 6px; }
+[data-compact-editor="true"] #item-top-options-host > [data-top-popup][hidden] { display: none; }
+[data-compact-editor="true"] [data-inventory-options] { display: block; }

@@ -1,0 +1,6 @@
+﻿MES UAT B CLEAN SOURCE SNAPSHOT
+Repository: curatas-fe
+Original deployed source commit: 273dfdadcb60f51264f55fc6f814494841937db8
+Snapshot is a NEW independent one-commit history (not an ancestry-preserving branch).
+Tracked docs/, .idea/ and all .env* files were omitted intentionally.
+No server deployment or database changes are part of this Git snapshot.

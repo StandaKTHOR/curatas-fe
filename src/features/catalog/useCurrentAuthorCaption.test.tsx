@@ -1,0 +1,11 @@
+import {renderHook,waitFor} from '@testing-library/react';
+import {beforeEach,afterEach,it,expect,vi} from 'vitest';
+import {useCurrentAuthorCaption} from './useCurrentAuthorCaption';
+import {originalSession} from './originalAdapter';
+vi.mock('./originalAdapter',()=>({originalIntegrationEnabled:()=>true,originalSession:vi.fn()}));
+const api={currentAuthors:vi.fn()};let controller:AbortController;
+beforeEach(()=>{vi.resetAllMocks();vi.stubEnv('VITE_CURRENT_AUTHORS_ENABLED','true');controller=new AbortController();vi.mocked(originalSession).mockReturnValue({api,signal:controller.signal,catalog:{id:1,capabilities:['dictionary.read']}} as any);});afterEach(()=>vi.unstubAllEnvs());
+it('never reads or invents assignments for a new item',()=>{const r=renderHook(()=>useCurrentAuthorCaption(undefined,undefined));expect(r.result.current).toBeNull();expect(api.currentAuthors).not.toHaveBeenCalled();});
+it('reads current names and roles at the same revision without promoting them to editable text',async()=>{api.currentAuthors.mockResolvedValue({etag:'"3"',items:[{authorLabel:'A',roleLabel:'Tvůrce'},{authorLabel:'A',roleLabel:'Rytec'}]});const r=renderHook(()=>useCurrentAuthorCaption(1001,'"3"'));await waitFor(()=>expect(r.result.current).toBe('A (Tvůrce), A (Rytec)'));expect(api.currentAuthors).toHaveBeenCalledWith(1001,controller.signal);});
+it('refuses a stale revision',async()=>{api.currentAuthors.mockResolvedValue({etag:'"2"',items:[{authorLabel:'stale'}]});const r=renderHook(()=>useCurrentAuthorCaption(1001,'"3"'));await waitFor(()=>expect(api.currentAuthors).toHaveBeenCalled());expect(r.result.current).toBeNull();});
+it('never retains the previous item caption while changing identity',async()=>{api.currentAuthors.mockResolvedValueOnce({etag:'"1"',items:[{authorLabel:'First'}]}).mockResolvedValueOnce({etag:'"1"',items:[]});const r=renderHook(({id})=>useCurrentAuthorCaption(id,'"1"'),{initialProps:{id:1}});await waitFor(()=>expect(r.result.current).toBe('First'));r.rerender({id:2});expect(r.result.current).not.toBe('First');await waitFor(()=>expect(r.result.current).toBe(''));});

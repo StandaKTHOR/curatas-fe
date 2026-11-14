@@ -1,0 +1,982 @@
+{
+  "format": "UPDATE2-MUSEUM-SAFE-SAMPLES-V1",
+  "origin": "accepted isolated PG17 V3 COPY bundle; not UAT identifiers",
+  "manifestSha256": "459570459edc8bca63deae35d022f7eedfc0259bb6357a83e7047af72f834227",
+  "projectionCommit": "51dc2362c82bb0f43d51e43fde156d60bfbbcca5",
+  "security": "whitelisted field excerpt; all physical storage/coordinate/file-path values excluded",
+  "items": [
+    {
+      "id": "1003",
+      "inventory_number": "     GrJBu    1142         _CZE6MM _",
+      "title": "Dr. Jur. E. Röper a J. Gruša - vzájemná konverzace",
+      "accession_number": "DEMUS-SOURCE-9f6406b3881702b241c05cbea62fa26e6d1037f9b60ede839b2ba047604705bd",
+      "material": "papír",
+      "technique": "strojopis, xerox",
+      "dating_text": "9.9.1991; 23.9.1991",
+      "spravce": "6MM",
+      "oddeleni": "_",
+      "stat_spr": "CZE",
+      "sourceRecord": "00026e13fed529d9ca422ba26008f7ab03c9baec65d2a7fde827210e11dcab00",
+      "native": {
+        "IdC_S": 4029,
+        "Odd_S": "_",
+        "InvC_S": "     GrJBu    1142         _CZE6MM _",
+        "PorC_S": 1142,
+        "Rada_S": "GrJBu",
+        "Sluz_S": null,
+        "HPorC_S": 1143,
+        "PrirC_S": true,
+        "RokDo_S": 1991,
+        "RokOd_S": 1991,
+        "Titul_S": "Dr. Jur. E. Röper a J. Gruša - vzájemná konverzace",
+        "Datace_S": "9.9.1991; 23.9.1991",
+        "Lomeni_S": "_",
+        "HLomeni_S": null,
+        "Predmet_S": "dopisy",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "papír",
+        "Technika_S": "strojopis, xerox",
+        "Pocet_S": 2
+      },
+      "sections": [
+        {
+          "kind": "DETERMINATION",
+          "itemId": "1003",
+          "recordId": "2",
+          "sourceRecord": "00026e13fed529d9ca422ba26008f7ab03c9baec65d2a7fde827210e11dcab00",
+          "sourceTable": "Sbirky",
+          "dictionaryId": null,
+          "partyId": null,
+          "materialDictionaryId": null,
+          "techniqueDictionaryId": null,
+          "native": {
+            "IdC_S": 4029,
+            "Odd_S": "_",
+            "InvC_S": "     GrJBu    1142         _CZE6MM _",
+            "PorC_S": 1142,
+            "Rada_S": "GrJBu",
+            "Sluz_S": null,
+            "HPorC_S": 1143,
+            "PrirC_S": true,
+            "RokDo_S": 1991,
+            "RokOd_S": 1991,
+            "Titul_S": "Dr. Jur. E. Röper a J. Gruša - vzájemná konverzace",
+            "Datace_S": "9.9.1991; 23.9.1991",
+            "Lomeni_S": "_",
+            "HLomeni_S": null,
+            "Predmet_S": "dopisy",
+            "Spravce_S": "6MM",
+            "StatSpr_S": "CZE",
+            "Material_S": "papír",
+            "Technika_S": "strojopis, xerox"
+          }
+        }
+      ],
+      "aliases": [
+        {
+          "id": "74bccf9e-2509-3c57-91a7-4542b2139051",
+          "displayNumber": "GrJBu     1142",
+          "components": {
+            "InvC_IC": "GrJBu     1142",
+            "Prefix_IC": "CZE6MM_"
+          },
+          "sourceRecord": "0317880980a9088166bc571ceae41c054cd7630de662f8ef5d7c732c24610a09"
+        },
+        {
+          "id": "9082a1cd-d830-3df6-9dfd-af00c8fdb96e",
+          "displayNumber": "GrJBu     1143",
+          "components": {
+            "InvC_IC": "GrJBu     1143",
+            "Prefix_IC": "CZE6MM_"
+          },
+          "sourceRecord": "25c5faf0ed9fd2dc9c676bd75c7e27c4f0b3db1bc4374f3bd2f0249d1d959dc4"
+        }
+      ]
+    },
+    {
+      "id": "1018",
+      "inventory_number": "       TEX   54388         _CZE6MM e",
+      "title": "šaty společenské",
+      "accession_number": "DEMUS-SOURCE-d31e4419d939783d96a00d3d53a384c774b1dde3a6edf0c4556aea487a6c5b3c",
+      "material": "hedvábí",
+      "technique": "",
+      "dating_text": "kolem 1910",
+      "spravce": "6MM",
+      "oddeleni": "e",
+      "stat_spr": "CZE",
+      "sourceRecord": "00098da6a40a2f2f9dbc4b568bca2235151f38cf70c3a7441f57871b8697d8a2",
+      "native": {
+        "IdC_S": 11536,
+        "Odd_S": "e",
+        "InvC_S": "       TEX   54388         _CZE6MM e",
+        "PorC_S": 54388,
+        "Rada_S": "TEX",
+        "Sluz_S": null,
+        "HPorC_S": null,
+        "PrirC_S": true,
+        "RokDo_S": null,
+        "RokOd_S": null,
+        "Titul_S": null,
+        "Datace_S": "kolem 1910",
+        "Lomeni_S": "_",
+        "HLomeni_S": null,
+        "Predmet_S": "šaty společenské",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "hedvábí",
+        "Technika_S": null,
+        "Pocet_S": 1
+      },
+      "sections": [
+        {
+          "kind": "MATERIAL_TECHNIQUE",
+          "itemId": "1018",
+          "recordId": "106945",
+          "sourceRecord": "6566c6ed1435cb08864724a26f3be1e759f986f6453edf6860740fdb186ffb9a",
+          "sourceTable": "MatTech",
+          "dictionaryId": null,
+          "partyId": null,
+          "materialDictionaryId": "281",
+          "techniqueDictionaryId": null,
+          "native": {
+            "IdC_MT": 11536,
+            "Poradi_MT": 1406,
+            "Material_MT": "hedvábí",
+            "Technika_MT": null
+          }
+        }
+      ],
+      "aliases": [
+        {
+          "id": "33db0bbc-a2dc-37bb-bf3f-25103c38387b",
+          "displayNumber": "TEX       54388",
+          "components": {
+            "InvC_IC": "TEX       54388",
+            "Prefix_IC": "CZE6MMe"
+          },
+          "sourceRecord": "b43cbb29cbafaee2b8ab5e0e9bb524945d06011a84efffdb3e26dceeb39fe1db"
+        }
+      ]
+    },
+    {
+      "id": "1153",
+      "inventory_number": "        ST    1669        14CZE6MM E",
+      "title": "Písničky ranní, každému člověku křesťanskému zpívati užitečné a potřebné, opět v nově vytištěné",
+      "accession_number": "DEMUS-SOURCE-efebff6131cb359033531621069c210eb059656c656677f73562467ed9c0bd72",
+      "material": "papír",
+      "technique": "tisk z výšky",
+      "dating_text": "1776",
+      "spravce": "6MM",
+      "oddeleni": "E",
+      "stat_spr": "CZE",
+      "sourceRecord": "00637435c5b5bccc1926ce4ee14ef833d9b7bec7f704e4586a586795be76972d",
+      "native": {
+        "IdC_S": 8089,
+        "Odd_S": "E",
+        "InvC_S": "        ST    1669        14CZE6MM E",
+        "PorC_S": 1669,
+        "Rada_S": "ST",
+        "Sluz_S": null,
+        "HPorC_S": null,
+        "PrirC_S": true,
+        "RokDo_S": 1776,
+        "RokOd_S": 1776,
+        "Titul_S": "Písničky ranní, každému člověku křesťanskému zpívati užitečné a potřebné, opět v nově vytištěné",
+        "Datace_S": "1776",
+        "Lomeni_S": "14",
+        "HLomeni_S": null,
+        "Predmet_S": "Konvolut kramářských tisků",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "papír",
+        "Technika_S": "tisk z výšky",
+        "Pocet_S": 1
+      },
+      "sections": [
+        {
+          "kind": "ORIGIN",
+          "itemId": "1153",
+          "recordId": "114952",
+          "sourceRecord": "8dab9ce497c59d849b6c703bccb6d55fe62848b40b11356ca37143db3d57e085",
+          "sourceTable": "Vznik",
+          "dictionaryId": null,
+          "partyId": null,
+          "materialDictionaryId": null,
+          "techniqueDictionaryId": null,
+          "native": {
+            "IdC_VZ": 8089,
+            "Role_VZ": null,
+            "RokDo_VZ": 1776,
+            "RokOd_VZ": 1776,
+            "Datace_VZ": "1776",
+            "Poradi_VZ": 1,
+            "OsobaVz_VZ": null
+          }
+        }
+      ],
+      "aliases": [
+        {
+          "id": "6492f579-ffdb-328b-b826-981237d4507e",
+          "displayNumber": "ST        1669/14",
+          "components": {
+            "InvC_IC": "ST        1669/14",
+            "Prefix_IC": "CZE6MME"
+          },
+          "sourceRecord": "6262f2b4b4fac0fda4b314e82152bc0c36fe433e6cd2bcf5668a92cc22dc82c8"
+        }
+      ]
+    },
+    {
+      "id": "3385",
+      "inventory_number": "       TEX   53318         _CZE6MM e",
+      "title": "šaty pro družičku",
+      "accession_number": "DEMUS-SOURCE-921373e74d21eaeb454bc0f595ffc1793882726bbba65498ac8bb1a17b821d27",
+      "material": "tyl",
+      "technique": "",
+      "dating_text": "1946",
+      "spravce": "6MM",
+      "oddeleni": "e",
+      "stat_spr": "CZE",
+      "sourceRecord": "05da92ae327a3a2a4a47fc4c4addb6b960b8b481a30b6b1b5fcfc49f9d0c6c88",
+      "native": {
+        "IdC_S": 2798,
+        "Odd_S": "e",
+        "InvC_S": "       TEX   53318         _CZE6MM e",
+        "PorC_S": 53318,
+        "Rada_S": "TEX",
+        "Sluz_S": null,
+        "HPorC_S": null,
+        "PrirC_S": true,
+        "RokDo_S": null,
+        "RokOd_S": null,
+        "Titul_S": null,
+        "Datace_S": "1946",
+        "Lomeni_S": "_",
+        "HLomeni_S": null,
+        "Predmet_S": "šaty pro družičku",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "tyl",
+        "Technika_S": null,
+        "Pocet_S": 1
+      },
+      "sections": [
+        {
+          "kind": "DOCUMENTATION",
+          "itemId": "3385",
+          "recordId": "59567",
+          "sourceRecord": "0a6566e195a0f98873fb59cb3f407225305522275da66268273985c22e8b4f5c",
+          "sourceTable": "Dokumentace",
+          "dictionaryId": null,
+          "partyId": null,
+          "materialDictionaryId": null,
+          "techniqueDictionaryId": null,
+          "native": {}
+        }
+      ],
+      "aliases": [
+        {
+          "id": "8f976ca7-614b-3bc6-b1a7-e07103061e09",
+          "displayNumber": "TEX       53318",
+          "components": {
+            "InvC_IC": "TEX       53318",
+            "Prefix_IC": "CZE6MMe"
+          },
+          "sourceRecord": "9cce2e2b80a322f2fca3c327f70718ff9b76f7873a23a80093c8e42ae015f1c2"
+        }
+      ]
+    },
+    {
+      "id": "24261",
+      "inventory_number": "        HN     343         1CZE6MM E",
+      "title": "Kontrabas",
+      "accession_number": "DEMUS-SOURCE-7a5943825dcaed990c59cac100b096114977502abe38508e6499a59a73ae8ebe",
+      "material": "dřevo",
+      "technique": "",
+      "dating_text": "",
+      "spravce": "6MM",
+      "oddeleni": "E",
+      "stat_spr": "CZE",
+      "sourceRecord": "405c85b6cc7a339c8788cf5867f206fb2509cd0ddc0786c701c50f3b3f3847c2",
+      "native": {
+        "IdC_S": 378,
+        "Odd_S": "E",
+        "InvC_S": "        HN     343         1CZE6MM E",
+        "PorC_S": 343,
+        "Rada_S": "HN",
+        "Sluz_S": null,
+        "HPorC_S": null,
+        "PrirC_S": false,
+        "RokDo_S": null,
+        "RokOd_S": null,
+        "Titul_S": null,
+        "Datace_S": null,
+        "Lomeni_S": "1",
+        "HLomeni_S": null,
+        "Predmet_S": "Kontrabas",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "dřevo",
+        "Technika_S": null,
+        "Pocet_S": 1
+      },
+      "sections": [
+        {
+          "kind": "BIBLIOGRAPHY",
+          "itemId": "24261",
+          "recordId": "109736",
+          "sourceRecord": "ea72c5ae5713f82a9e1222d3fc17212807357874fb9b16fae4a6fe1d26e6e94b",
+          "sourceTable": "Reference",
+          "dictionaryId": "21117",
+          "partyId": null,
+          "materialDictionaryId": null,
+          "techniqueDictionaryId": null,
+          "native": {
+            "IdC_RF": 378,
+            "Ref_RF": "Kurfurst",
+            "Str_RF": "553"
+          }
+        }
+      ],
+      "aliases": [
+        {
+          "id": "4da3c426-fcd6-3116-a31d-0a8bc8c1e1d2",
+          "displayNumber": "HN        343/1",
+          "components": {
+            "InvC_IC": "HN        343/1",
+            "Prefix_IC": "CZE6MME"
+          },
+          "sourceRecord": "826406705d6f493a69224e34af6a1006fb4e5ffcfac842705536cec7aa44d11e"
+        }
+      ]
+    }
+  ],
+  "dictionaries": [
+    {
+      "id": "281",
+      "dict_type": "MATERIAL",
+      "code": "hedvábí",
+      "label": "hedvábí",
+      "parent_id": ""
+    },
+    {
+      "id": "21117",
+      "dict_type": "LITERATURE",
+      "code": "Kurfurst",
+      "label": "Hudební nástroje",
+      "parent_id": ""
+    }
+  ],
+  "sourceTrace": [
+    {
+      "recordId": "6262f2b4b4fac0fda4b314e82152bc0c36fe433e6cd2bcf5668a92cc22dc82c8",
+      "artifactSha256": "741905a61258f3936eff55f069f8252b0b9e30a83da70b107d304ba1451ee1f7",
+      "sourceFiles": [
+        "DataKat.mdb"
+      ],
+      "table": "InvCisla",
+      "rowHash": "26f57f86102ca6016fc780b1369d7070cc070f68d23104cbe1d48d9cc50ac3d3",
+      "occurrence": "1",
+      "nativePrimaryKey": {},
+      "fields": {
+        "InvC_IC": "ST        1669/14",
+        "Prefix_IC": "CZE6MME"
+      }
+    },
+    {
+      "recordId": "e47385545d805c42682d346bc60662d82482b5fe74d7e88ab6ad2d7861f818a4",
+      "artifactSha256": "741905a61258f3936eff55f069f8252b0b9e30a83da70b107d304ba1451ee1f7",
+      "sourceFiles": [
+        "DataKat.mdb"
+      ],
+      "table": "Sbirky",
+      "rowHash": "43269161e7a0274cbab30581bf9a4700c4f798b97cc13045f578463b28bba0cb",
+      "occurrence": "1",
+      "nativePrimaryKey": {
+        "IdC_S": {
+          "kind": "INTEGER",
+          "value": "1",
+          "javaType": "java.lang.Integer",
+          "sourceType": "LONG"
+        }
+      },
+      "fields": {
+        "IdC_S": "1",
+        "Odd_S": "E",
+        "InvC_S": "        ZV     935         _CZE6MM E",
+        "PorC_S": "935",
+        "Rada_S": "ZV",
+        "Sluz_S": null,
+        "HPorC_S": null,
+        "PrirC_S": true,
+        "RokDo_S": "1979",
+        "RokOd_S": "1970",
+        "Titul_S": null,
+        "Datace_S": "70. léta 20. století",
+        "Lomeni_S": "_",
+        "HLomeni_S": null,
+        "Predmet_S": "vánoční ozdoba",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "sklo",
+        "Technika_S": "foukání"
+      }
+    },
+    {
+      "recordId": "00637435c5b5bccc1926ce4ee14ef833d9b7bec7f704e4586a586795be76972d",
+      "artifactSha256": "741905a61258f3936eff55f069f8252b0b9e30a83da70b107d304ba1451ee1f7",
+      "sourceFiles": [
+        "DataKat.mdb"
+      ],
+      "table": "Sbirky",
+      "rowHash": "40c0f8ef865e4b144146fef1569c288ff97d8f55d1c5ef98ababbc93f0c83a57",
+      "occurrence": "1",
+      "nativePrimaryKey": {
+        "IdC_S": {
+          "kind": "INTEGER",
+          "value": "8089",
+          "javaType": "java.lang.Integer",
+          "sourceType": "LONG"
+        }
+      },
+      "fields": {
+        "IdC_S": "8089",
+        "Odd_S": "E",
+        "InvC_S": "        ST    1669        14CZE6MM E",
+        "PorC_S": "1669",
+        "Rada_S": "ST",
+        "Sluz_S": null,
+        "HPorC_S": null,
+        "PrirC_S": true,
+        "RokDo_S": "1776",
+        "RokOd_S": "1776",
+        "Titul_S": "Písničky ranní, každému člověku křesťanskému zpívati užitečné a potřebné, opět v nově vytištěné",
+        "Datace_S": "1776",
+        "Lomeni_S": "14",
+        "HLomeni_S": null,
+        "Predmet_S": "Konvolut kramářských tisků",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "papír",
+        "Technika_S": "tisk z výšky",
+        "Pocet_S": 1
+      }
+    },
+    {
+      "recordId": "8dab9ce497c59d849b6c703bccb6d55fe62848b40b11356ca37143db3d57e085",
+      "artifactSha256": "741905a61258f3936eff55f069f8252b0b9e30a83da70b107d304ba1451ee1f7",
+      "sourceFiles": [
+        "DataKat.mdb"
+      ],
+      "table": "Vznik",
+      "rowHash": "9913bcaa2025bd9e09eab42d0107e3080a9e4ada254bc4d6299eb0acdff084ec",
+      "occurrence": "1",
+      "nativePrimaryKey": {},
+      "fields": {
+        "IdC_VZ": "8089",
+        "Role_VZ": null,
+        "RokDo_VZ": "1776",
+        "RokOd_VZ": "1776",
+        "Datace_VZ": "1776",
+        "Poradi_VZ": "1",
+        "OsobaVz_VZ": null
+      }
+    },
+    {
+      "recordId": "25c5faf0ed9fd2dc9c676bd75c7e27c4f0b3db1bc4374f3bd2f0249d1d959dc4",
+      "artifactSha256": "78c454ec7cb38a2786fe366706a55f293f2f076b9b40079ad26db70697d1f0a8",
+      "sourceFiles": [
+        "dataKAT_.MDB"
+      ],
+      "table": "InvCisla",
+      "rowHash": "5370ceb786be0e2781d99c5ba3fe569a34ed6884ba375b08d5f0189e5b7be438",
+      "occurrence": "1",
+      "nativePrimaryKey": {},
+      "fields": {
+        "InvC_IC": "GrJBu     1143",
+        "Prefix_IC": "CZE6MM_"
+      }
+    },
+    {
+      "recordId": "00026e13fed529d9ca422ba26008f7ab03c9baec65d2a7fde827210e11dcab00",
+      "artifactSha256": "78c454ec7cb38a2786fe366706a55f293f2f076b9b40079ad26db70697d1f0a8",
+      "sourceFiles": [
+        "dataKAT_.MDB"
+      ],
+      "table": "Sbirky",
+      "rowHash": "dd51cffcc573a22ac5ed59aae28efa7b7c05cf7dbc4f614b4caac178101c5e4c",
+      "occurrence": "1",
+      "nativePrimaryKey": {},
+      "fields": {
+        "IdC_S": "4029",
+        "Odd_S": "_",
+        "InvC_S": "     GrJBu    1142         _CZE6MM _",
+        "PorC_S": "1142",
+        "Rada_S": "GrJBu",
+        "Sluz_S": null,
+        "HPorC_S": "1143",
+        "PrirC_S": true,
+        "RokDo_S": "1991",
+        "RokOd_S": "1991",
+        "Titul_S": "Dr. Jur. E. Röper a J. Gruša - vzájemná konverzace",
+        "Datace_S": "9.9.1991; 23.9.1991",
+        "Lomeni_S": "_",
+        "HLomeni_S": null,
+        "Predmet_S": "dopisy",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "papír",
+        "Technika_S": "strojopis, xerox",
+        "Pocet_S": 2
+      }
+    },
+    {
+      "recordId": "0a6566e195a0f98873fb59cb3f407225305522275da66268273985c22e8b4f5c",
+      "artifactSha256": "6eb3067caaea70f3fde0bb0f5b4dddee8ae96cf2538776251217777711268971",
+      "sourceFiles": [
+        "dataKAT_20220823.MDB"
+      ],
+      "table": "Dokumentace",
+      "rowHash": "c59d44cfa1075af5c00265ce7e7e61d3f40f5649f1158de27cd16a55f6a880b9",
+      "occurrence": "1",
+      "nativePrimaryKey": {},
+      "fields": {}
+    },
+    {
+      "recordId": "9cce2e2b80a322f2fca3c327f70718ff9b76f7873a23a80093c8e42ae015f1c2",
+      "artifactSha256": "6eb3067caaea70f3fde0bb0f5b4dddee8ae96cf2538776251217777711268971",
+      "sourceFiles": [
+        "dataKAT_20220823.MDB"
+      ],
+      "table": "InvCisla",
+      "rowHash": "d54eae719738691cf424f38e9cc6b97c60b99658753dabb3db21dfd4035c8240",
+      "occurrence": "1",
+      "nativePrimaryKey": {},
+      "fields": {
+        "InvC_IC": "TEX       53318",
+        "Prefix_IC": "CZE6MMe"
+      }
+    },
+    {
+      "recordId": "b43cbb29cbafaee2b8ab5e0e9bb524945d06011a84efffdb3e26dceeb39fe1db",
+      "artifactSha256": "6eb3067caaea70f3fde0bb0f5b4dddee8ae96cf2538776251217777711268971",
+      "sourceFiles": [
+        "dataKAT_20220823.MDB"
+      ],
+      "table": "InvCisla",
+      "rowHash": "15b85ae20b658e3c679bb53b45fe1bfe9f077a0d8f59721b92f34161a8d6db28",
+      "occurrence": "1",
+      "nativePrimaryKey": {},
+      "fields": {
+        "InvC_IC": "TEX       54388",
+        "Prefix_IC": "CZE6MMe"
+      }
+    },
+    {
+      "recordId": "6566c6ed1435cb08864724a26f3be1e759f986f6453edf6860740fdb186ffb9a",
+      "artifactSha256": "6eb3067caaea70f3fde0bb0f5b4dddee8ae96cf2538776251217777711268971",
+      "sourceFiles": [
+        "dataKAT_20220823.MDB"
+      ],
+      "table": "MatTech",
+      "rowHash": "ffccee0c85075561bccbec20779b5af040a31de0afcd34be27bc6afe46e7bcd7",
+      "occurrence": "1",
+      "nativePrimaryKey": {},
+      "fields": {
+        "IdC_MT": "11536",
+        "Poradi_MT": "1406",
+        "Material_MT": "hedvábí",
+        "Technika_MT": null
+      }
+    },
+    {
+      "recordId": "05da92ae327a3a2a4a47fc4c4addb6b960b8b481a30b6b1b5fcfc49f9d0c6c88",
+      "artifactSha256": "6eb3067caaea70f3fde0bb0f5b4dddee8ae96cf2538776251217777711268971",
+      "sourceFiles": [
+        "dataKAT_20220823.MDB"
+      ],
+      "table": "Sbirky",
+      "rowHash": "f0b35e8c71e23a08f924b3379332aede79922f0667aea7a66742c9fbeff192e0",
+      "occurrence": "1",
+      "nativePrimaryKey": {
+        "IdC_S": {
+          "kind": "INTEGER",
+          "value": "2798",
+          "javaType": "java.lang.Integer",
+          "sourceType": "LONG"
+        }
+      },
+      "fields": {
+        "IdC_S": "2798",
+        "Odd_S": "e",
+        "InvC_S": "       TEX   53318         _CZE6MM e",
+        "PorC_S": "53318",
+        "Rada_S": "TEX",
+        "Sluz_S": null,
+        "HPorC_S": null,
+        "PrirC_S": true,
+        "RokDo_S": null,
+        "RokOd_S": null,
+        "Titul_S": null,
+        "Datace_S": "1946",
+        "Lomeni_S": "_",
+        "HLomeni_S": null,
+        "Predmet_S": "šaty pro družičku",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "tyl",
+        "Technika_S": null,
+        "Pocet_S": 1
+      }
+    },
+    {
+      "recordId": "00098da6a40a2f2f9dbc4b568bca2235151f38cf70c3a7441f57871b8697d8a2",
+      "artifactSha256": "6eb3067caaea70f3fde0bb0f5b4dddee8ae96cf2538776251217777711268971",
+      "sourceFiles": [
+        "dataKAT_20220823.MDB"
+      ],
+      "table": "Sbirky",
+      "rowHash": "bdb1628562cb5e462b326d78ef9c80f4595ddf1cd1c44a5227e0282904a8ff41",
+      "occurrence": "1",
+      "nativePrimaryKey": {
+        "IdC_S": {
+          "kind": "INTEGER",
+          "value": "11536",
+          "javaType": "java.lang.Integer",
+          "sourceType": "LONG"
+        }
+      },
+      "fields": {
+        "IdC_S": "11536",
+        "Odd_S": "e",
+        "InvC_S": "       TEX   54388         _CZE6MM e",
+        "PorC_S": "54388",
+        "Rada_S": "TEX",
+        "Sluz_S": null,
+        "HPorC_S": null,
+        "PrirC_S": true,
+        "RokDo_S": null,
+        "RokOd_S": null,
+        "Titul_S": null,
+        "Datace_S": "kolem 1910",
+        "Lomeni_S": "_",
+        "HLomeni_S": null,
+        "Predmet_S": "šaty společenské",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "hedvábí",
+        "Technika_S": null,
+        "Pocet_S": 1
+      }
+    },
+    {
+      "recordId": "8f42be119cc8315b42c186394a9602734a505270238fa50e4d42c4a9a4be58df",
+      "artifactSha256": "c4cff52d74be8cabb3dc698811774bd55d5ef4d54913177d6c1a9441b7169310",
+      "sourceFiles": [
+        "DataKat_6MM_Polakova.mdb"
+      ],
+      "table": "Sbirky",
+      "rowHash": "f568af68ee4de344f9db44c23262709a1ad7037afa232414a00070fad051dea8",
+      "occurrence": "1",
+      "nativePrimaryKey": {
+        "IdC_S": {
+          "kind": "INTEGER",
+          "value": "1",
+          "javaType": "java.lang.Integer",
+          "sourceType": "LONG"
+        }
+      },
+      "fields": {
+        "IdC_S": "1",
+        "Odd_S": "E",
+        "InvC_S": "        ZV     935         _CZE6MM E",
+        "PorC_S": "935",
+        "Rada_S": "ZV",
+        "Sluz_S": "0",
+        "HPorC_S": null,
+        "PrirC_S": true,
+        "RokDo_S": "1979",
+        "RokOd_S": "1970",
+        "Titul_S": null,
+        "Datace_S": "70. léta 20. století",
+        "Lomeni_S": "_",
+        "HLomeni_S": null,
+        "Predmet_S": "vánoční ozdoba",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "sklo",
+        "Technika_S": "foukání"
+      }
+    },
+    {
+      "recordId": "0317880980a9088166bc571ceae41c054cd7630de662f8ef5d7c732c24610a09",
+      "artifactSha256": "be8f49a3aa40754aef24b9350131f35628e99cdfd459a57c67ebabc3ecb0d2ea",
+      "sourceFiles": [
+        "dataKAT_ODKAZ (2).MDB"
+      ],
+      "table": "InvCisla",
+      "rowHash": "b29f115620b19f438d6f37386fbe0c3f5e4dffb00a3693a4b3c8a486dbe0e6c9",
+      "occurrence": "1",
+      "nativePrimaryKey": {},
+      "fields": {
+        "InvC_IC": "GrJBu     1142",
+        "Prefix_IC": "CZE6MM_"
+      }
+    },
+    {
+      "recordId": "826406705d6f493a69224e34af6a1006fb4e5ffcfac842705536cec7aa44d11e",
+      "artifactSha256": "23a55ac9d00eed2380d7da04262459637bd17d4558c132eb2bf5aaef3e2920a1",
+      "sourceFiles": [
+        "DataKat_Poláková.mdb"
+      ],
+      "table": "InvCisla",
+      "rowHash": "ee671a148d85ac76da065fb28ac5fbb4068e77893403b002da3e91b3f89161bd",
+      "occurrence": "1",
+      "nativePrimaryKey": {},
+      "fields": {
+        "InvC_IC": "HN        343/1",
+        "Prefix_IC": "CZE6MME"
+      }
+    },
+    {
+      "recordId": "ea72c5ae5713f82a9e1222d3fc17212807357874fb9b16fae4a6fe1d26e6e94b",
+      "artifactSha256": "23a55ac9d00eed2380d7da04262459637bd17d4558c132eb2bf5aaef3e2920a1",
+      "sourceFiles": [
+        "DataKat_Poláková.mdb"
+      ],
+      "table": "Reference",
+      "rowHash": "c6ae04ce75c6ace32f7c55ba1a57b29b20d9bf8c2854132c552a6f8c9198a448",
+      "occurrence": "1",
+      "nativePrimaryKey": {
+        "IdC_RF": {
+          "kind": "INTEGER",
+          "value": "378",
+          "javaType": "java.lang.Integer",
+          "sourceType": "LONG"
+        },
+        "Ref_RF": {
+          "kind": "TEXT",
+          "value": "Kurfurst",
+          "javaType": "java.lang.String",
+          "sourceType": "TEXT"
+        },
+        "Str_RF": {
+          "kind": "TEXT",
+          "value": "553",
+          "javaType": "java.lang.String",
+          "sourceType": "TEXT"
+        }
+      },
+      "fields": {
+        "IdC_RF": "378",
+        "Ref_RF": "Kurfurst",
+        "Str_RF": "553"
+      }
+    },
+    {
+      "recordId": "8d1842d7c45869513e1dc6fdcca5280bef2c5b52e542c3b933023a8ea145c128",
+      "artifactSha256": "23a55ac9d00eed2380d7da04262459637bd17d4558c132eb2bf5aaef3e2920a1",
+      "sourceFiles": [
+        "DataKat_Poláková.mdb"
+      ],
+      "table": "Sbirky",
+      "rowHash": "43269161e7a0274cbab30581bf9a4700c4f798b97cc13045f578463b28bba0cb",
+      "occurrence": "1",
+      "nativePrimaryKey": {
+        "IdC_S": {
+          "kind": "INTEGER",
+          "value": "1",
+          "javaType": "java.lang.Integer",
+          "sourceType": "LONG"
+        }
+      },
+      "fields": {
+        "IdC_S": "1",
+        "Odd_S": "E",
+        "InvC_S": "        ZV     935         _CZE6MM E",
+        "PorC_S": "935",
+        "Rada_S": "ZV",
+        "Sluz_S": null,
+        "HPorC_S": null,
+        "PrirC_S": true,
+        "RokDo_S": "1979",
+        "RokOd_S": "1970",
+        "Titul_S": null,
+        "Datace_S": "70. léta 20. století",
+        "Lomeni_S": "_",
+        "HLomeni_S": null,
+        "Predmet_S": "vánoční ozdoba",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "sklo",
+        "Technika_S": "foukání"
+      }
+    },
+    {
+      "recordId": "405c85b6cc7a339c8788cf5867f206fb2509cd0ddc0786c701c50f3b3f3847c2",
+      "artifactSha256": "23a55ac9d00eed2380d7da04262459637bd17d4558c132eb2bf5aaef3e2920a1",
+      "sourceFiles": [
+        "DataKat_Poláková.mdb"
+      ],
+      "table": "Sbirky",
+      "rowHash": "b172607501fd47af9a469280ab9526a1854e0b689dd13f25f95aba64a8c21a93",
+      "occurrence": "1",
+      "nativePrimaryKey": {
+        "IdC_S": {
+          "kind": "INTEGER",
+          "value": "378",
+          "javaType": "java.lang.Integer",
+          "sourceType": "LONG"
+        }
+      },
+      "fields": {
+        "IdC_S": "378",
+        "Odd_S": "E",
+        "InvC_S": "        HN     343         1CZE6MM E",
+        "PorC_S": "343",
+        "Rada_S": "HN",
+        "Sluz_S": null,
+        "HPorC_S": null,
+        "PrirC_S": false,
+        "RokDo_S": null,
+        "RokOd_S": null,
+        "Titul_S": null,
+        "Datace_S": null,
+        "Lomeni_S": "1",
+        "HLomeni_S": null,
+        "Predmet_S": "Kontrabas",
+        "Spravce_S": "6MM",
+        "StatSpr_S": "CZE",
+        "Material_S": "dřevo",
+        "Technika_S": null,
+        "Pocet_S": 1
+      }
+    }
+  ],
+  "unresolvedConflict": {
+    "identity": "ZV 935 / 6MM",
+    "status": "BLOCKED",
+    "reason": "CONFLICTING_ITEM_VARIANTS",
+    "itemId": null,
+    "variants": [
+      {
+        "recordId": "e47385545d805c42682d346bc60662d82482b5fe74d7e88ab6ad2d7861f818a4",
+        "artifactSha256": "741905a61258f3936eff55f069f8252b0b9e30a83da70b107d304ba1451ee1f7",
+        "sourceFiles": [
+          "DataKat.mdb"
+        ],
+        "table": "Sbirky",
+        "rowHash": "43269161e7a0274cbab30581bf9a4700c4f798b97cc13045f578463b28bba0cb",
+        "occurrence": "1",
+        "nativePrimaryKey": {
+          "IdC_S": {
+            "kind": "INTEGER",
+            "value": "1",
+            "javaType": "java.lang.Integer",
+            "sourceType": "LONG"
+          }
+        },
+        "fields": {
+          "IdC_S": "1",
+          "Odd_S": "E",
+          "InvC_S": "        ZV     935         _CZE6MM E",
+          "PorC_S": "935",
+          "Rada_S": "ZV",
+          "Sluz_S": null,
+          "HPorC_S": null,
+          "PrirC_S": true,
+          "RokDo_S": "1979",
+          "RokOd_S": "1970",
+          "Titul_S": null,
+          "Datace_S": "70. léta 20. století",
+          "Lomeni_S": "_",
+          "HLomeni_S": null,
+          "Predmet_S": "vánoční ozdoba",
+          "Spravce_S": "6MM",
+          "StatSpr_S": "CZE",
+          "Material_S": "sklo",
+          "Technika_S": "foukání"
+        }
+      },
+      {
+        "recordId": "8f42be119cc8315b42c186394a9602734a505270238fa50e4d42c4a9a4be58df",
+        "artifactSha256": "c4cff52d74be8cabb3dc698811774bd55d5ef4d54913177d6c1a9441b7169310",
+        "sourceFiles": [
+          "DataKat_6MM_Polakova.mdb"
+        ],
+        "table": "Sbirky",
+        "rowHash": "f568af68ee4de344f9db44c23262709a1ad7037afa232414a00070fad051dea8",
+        "occurrence": "1",
+        "nativePrimaryKey": {
+          "IdC_S": {
+            "kind": "INTEGER",
+            "value": "1",
+            "javaType": "java.lang.Integer",
+            "sourceType": "LONG"
+          }
+        },
+        "fields": {
+          "IdC_S": "1",
+          "Odd_S": "E",
+          "InvC_S": "        ZV     935         _CZE6MM E",
+          "PorC_S": "935",
+          "Rada_S": "ZV",
+          "Sluz_S": "0",
+          "HPorC_S": null,
+          "PrirC_S": true,
+          "RokDo_S": "1979",
+          "RokOd_S": "1970",
+          "Titul_S": null,
+          "Datace_S": "70. léta 20. století",
+          "Lomeni_S": "_",
+          "HLomeni_S": null,
+          "Predmet_S": "vánoční ozdoba",
+          "Spravce_S": "6MM",
+          "StatSpr_S": "CZE",
+          "Material_S": "sklo",
+          "Technika_S": "foukání"
+        }
+      },
+      {
+        "recordId": "8d1842d7c45869513e1dc6fdcca5280bef2c5b52e542c3b933023a8ea145c128",
+        "artifactSha256": "23a55ac9d00eed2380d7da04262459637bd17d4558c132eb2bf5aaef3e2920a1",
+        "sourceFiles": [
+          "DataKat_Poláková.mdb"
+        ],
+        "table": "Sbirky",
+        "rowHash": "43269161e7a0274cbab30581bf9a4700c4f798b97cc13045f578463b28bba0cb",
+        "occurrence": "1",
+        "nativePrimaryKey": {
+          "IdC_S": {
+            "kind": "INTEGER",
+            "value": "1",
+            "javaType": "java.lang.Integer",
+            "sourceType": "LONG"
+          }
+        },
+        "fields": {
+          "IdC_S": "1",
+          "Odd_S": "E",
+          "InvC_S": "        ZV     935         _CZE6MM E",
+          "PorC_S": "935",
+          "Rada_S": "ZV",
+          "Sluz_S": null,
+          "HPorC_S": null,
+          "PrirC_S": true,
+          "RokDo_S": "1979",
+          "RokOd_S": "1970",
+          "Titul_S": null,
+          "Datace_S": "70. léta 20. století",
+          "Lomeni_S": "_",
+          "HLomeni_S": null,
+          "Predmet_S": "vánoční ozdoba",
+          "Spravce_S": "6MM",
+          "StatSpr_S": "CZE",
+          "Material_S": "sklo",
+          "Technika_S": "foukání"
+        }
+      }
+    ]
+  }
+}

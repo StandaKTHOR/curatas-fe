@@ -1,0 +1,901 @@
+import {originalIntegrationEnabled,originalList,originalCatalogList,originalDetail,originalPrint,originalExcel,originalWorksets,originalWorksetCreate,originalAcquisitions,originalAcquisitionSave,unsupported} from '../features/catalog/originalAdapter';
+import { requireEditSession, type ItemEditSession } from './editSession';
+import {LabelDto} from "@/components/LabelPrinter";
+import {PrintItemRow} from "@/components/ItemListPrint";
+
+export const API_BASE = (import.meta.env.VITE_API_BASE || '').trim().replace(/\/+$/, '');
+
+/**
+ * Resolves an API or media path against API_BASE without creating duplicate prefixes (e.g. /uat/uat/).
+ */
+export function resolveApiUrl(path: string): string {
+    if (!path) return '';
+    if(originalIntegrationEnabled() && !/^\/api\/(v2\/catalogs(?:\/|\?|$)|v2\/workspaces(?:\/|\?|$)|auth\/)/.test(path)) unsupported();
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+        return path;
+    }
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    if (!API_BASE) {
+        return cleanPath;
+    }
+    if (API_BASE.startsWith('/')) {
+        if (cleanPath === API_BASE || cleanPath.startsWith(`${API_BASE}/`)) {
+            return cleanPath;
+        }
+    }
+    try {
+        const parsedBase = new URL(API_BASE);
+        const basePath = parsedBase.pathname.replace(/\/+$/, '');
+        if (basePath && (cleanPath === basePath || cleanPath.startsWith(`${basePath}/`))) {
+            return `${parsedBase.origin}${cleanPath}`;
+        }
+    } catch {
+        // Ignored: API_BASE is relative or non-URL
+    }
+    return `${API_BASE}${cleanPath}`;
+}
+
+/**
+ * Creates a WHATWG URL object for API requests with query parameters.
+ * Works with both absolute API_BASE URLs and relative paths (e.g. /uat).
+ */
+export function buildApiUrl(path: string): URL {
+    const resolved = resolveApiUrl(path);
+    if (resolved.startsWith('http://') || resolved.startsWith('https://')) {
+        return new URL(resolved);
+    }
+    const origin = typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
+        ? window.location.origin
+        : 'https://example.invalid';
+    return new URL(resolved, origin);
+}
+
+export type MuseumRecordKind = 'DOCUMENTATION' | 'CLASSIFICATION' | 'DETERMINATION' | 'DEACCESSION' | 'MANIPULATION' | 'ACTION' | 'ISO' | 'ORIGIN' | 'MATERIAL_TECHNIQUE' | 'BIBLIOGRAPHY';
+export interface MuseumRecord {
+    id: number;
+    kind: MuseumRecordKind;
+    dictionaryId: number | null;
+    partyId: number | null;
+    payload: Record<string, unknown>;
+    sourceTable: string | null;
+    sourceKey: string | null;
+    legacyData: Record<string, unknown> | null;
+    materialDictionaryId?: number | null;
+    techniqueDictionaryId?: number | null;
+    currentParty?: {id: number; type: string; displayName: string} | null;
+}
+export interface SourceAcquisition {
+    acquisitionMethod: string | null; acquisitionDateRaw: string | null; acquiredFrom: string | null;
+    documentNumber: string | null; circumstances: string | null; accessionFlag: boolean | null;
+}
+export interface ItemVocabulary {
+    dictionaryId: number; type: string; code: string | null; label: string | null; role: string | null;
+    associationOrigin: 'SOURCE_PROJECTED' | 'CURRENT_OR_UNVERIFIED' | string;
+    dictionarySourceRecord: string | null; sourceRecords: string[]; hasMoreSourceRecords: boolean;
+}
+export interface LineagePage {
+    offset: number; limit: number; hasMore: boolean;
+    records: {sourceRecord: string; sourceTable: string; sourceFiles: string[]; rowHash: string;
+        occurrence: number; nativePrimaryKey: unknown; typedValues: unknown; roles: unknown; outcomes: unknown}[];
+}
+export interface ProfessionalWrite {
+    fields?: Record<string,unknown> & {kind: MuseumRecordKind}; payload?: Record<string,unknown>;
+    dictionaryId?: number; partyId?: number; materialDictionaryId?: number; techniqueDictionaryId?: number;
+    clearParty?: boolean; clearDictionary?: boolean;
+}
+
+export interface MuseumItemDetail {
+    itemId: number;
+    originNote?: string | null;
+    sourceAcquisition?: SourceAcquisition | null;
+    vocabularies?: ItemVocabulary[];
+    markant: string | null;
+    signature: string | null;
+    legacyArchived: boolean | null;
+    legacyCard: boolean | null;
+    legacyCopied: boolean | null;
+    legacyVerified: boolean | null;
+    legacyMarked: boolean | null;
+    localityLegacyCode: string | null;
+    fundLegacyCode: string | null;
+    groupLegacyCode: string | null;
+    subjectLegacyCode: string | null;
+    materialDictionaryId: number | null;
+    techniqueDictionaryId: number | null;
+    localityDictionaryId: number | null;
+    fundDictionaryId: number | null;
+    groupDictionaryId: number | null;
+    subjectDictionaryId: number | null;
+    legacyCreatedBy: string | null;
+    legacyCreatedAt: string | null;
+    legacyUpdatedBy: string | null;
+    legacyUpdatedAt: string | null;
+    records: MuseumRecord[];
+}
+
+export interface MuseumAcquisition {
+    id: number;
+    accessionNumber: string | null;
+    acquisitionMethod: string | null;
+    methodDictionaryId: number | null;
+    acquisitionDate: string | null;
+    acquiredFrom: string | null;
+    circumstances: string | null;
+    documentNumber: string | null;
+    message: string | null;
+    orderNumber: number | string | null;
+    sourceReadOnly?:boolean;
+    legacyData: Record<string, unknown> | null;
+}
+export type MuseumAcquisitionInput = Omit<MuseumAcquisition, 'id' | 'legacyData' | 'sourceReadOnly'>;
+
+const getAuthHeader = (): HeadersInit => {
+    const token = localStorage.getItem('token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
+async function responseError(response: Response): Promise<never> {
+    const data = await response.json().catch(() => ({}));
+    const errors = Array.isArray(data.fieldErrors)
+        ? Object.fromEntries(data.fieldErrors.map((e: {field: string; message: string}) => [e.field, e.message]))
+        : data.fieldErrors;
+    const conflict = response.status === 412 || (response.status === 409 && data.code === 'STALE_WRITE');
+    throw new ApiError(response.status, conflict
+        ? 'Záznam mezitím změnil jiný uživatel. Vaše zadání zůstává zachováno; porovnejte jej s aktuálním záznamem před dalším uložením.'
+        : data.message || data.error || `Požadavek selhal (${response.status}).`, errors);
+}
+
+async function versionedWrite<T>(itemId: number, path: string, init: RequestInit, session?: ItemEditSession): Promise<T> {
+    const editor = requireEditSession(itemId, session);
+    editor.busy = true;
+    try {
+        const response = await fetch(resolveApiUrl(path), {
+            ...init, headers: { ...getAuthHeader(), 'Content-Type': 'application/json', ...init.headers, 'If-Match': editor.etag },
+        });
+        if (!response.ok) await responseError(response);
+        const tag = response.headers.get('ETag');
+        // A successful write without its next token must not authorize another stale write.
+        editor.etag = tag || '';
+        if (!tag) throw new Error('Server nepotvrdil verzi uloženého záznamu. Obnovte záznam před dalším uložením.');
+        return response.status === 204 ? undefined as T : await response.json();
+    } catch (error) {
+        // A lost CREATE response may follow a committed transaction.
+        if (init.method === 'POST' && !(error instanceof ApiError && error.status >= 400 && error.status < 500)) editor.etag = '';
+        throw error;
+    } finally { editor.busy = false; }
+}
+
+async function museumRequest<T>(itemId: number, suffix = '', init: RequestInit = {}, session?: ItemEditSession): Promise<T> {
+    const path = `/api/v1/items/${itemId}/museum${suffix}`;
+    if (init.method && init.method !== 'GET') return versionedWrite<T>(itemId, path, init, session);
+    const response = await fetch(resolveApiUrl(path), { headers: getAuthHeader() });
+    if (!response.ok) await responseError(response);
+    if (session && response.headers.get('ETag') && response.headers.get('ETag') !== session.etag) {
+        throw new ApiError(412, 'Záznam se změnil. Obnovte a porovnejte data; neuložené zadání zůstává zachováno.');
+    }
+    return response.json();
+}
+
+export const getMuseumItem = (itemId: number, session?: ItemEditSession) => museumRequest<MuseumItemDetail>(itemId, '', {}, session);
+export const patchMuseumItem = (itemId: number, changes: Record<string, unknown>, session?: ItemEditSession) =>
+    museumRequest<MuseumItemDetail>(itemId, '', { method: 'PATCH', body: JSON.stringify(changes) }, session);
+export const createMuseumRecord = (itemId: number, kind: MuseumRecordKind, payload: Record<string, unknown>, dictionaryId: number | null = null, partyId: number | null = null, session?: ItemEditSession) =>
+    museumRequest<MuseumRecord>(itemId, `/${kind}`, { method: 'POST', body: JSON.stringify({ payload, dictionaryId, partyId }) }, session);
+export const updateMuseumRecord = (itemId: number, kind: MuseumRecordKind, recordId: number, payload: Record<string, unknown>, dictionaryId: number | null = null, partyId: number | null = null, session?: ItemEditSession) =>
+    museumRequest<MuseumRecord>(itemId, `/${kind}/${recordId}`, { method: 'PATCH', body: JSON.stringify({ payload, dictionaryId, partyId }) }, session);
+export const saveProfessionalRecord = (itemId: number, kind: MuseumRecordKind, input: ProfessionalWrite,
+    session?: ItemEditSession, recordId?: number) => museumRequest<MuseumRecord>(itemId,
+        `/${kind}${recordId === undefined ? '' : `/${recordId}`}`, {
+            method: recordId === undefined ? 'POST' : 'PATCH', body: JSON.stringify(input),
+        }, session);
+export async function listProfessionalRecords(itemId: number, kind: MuseumRecordKind, session?: ItemEditSession) {
+    if (session && await getItemVersion(itemId) !== session.etag) throw new ApiError(412,'Verze odborné evidence se změnila. Porovnejte záznam.');
+    const rows = await museumRequest<MuseumRecord[]>(itemId, `/${kind}`);
+    if (session && await getItemVersion(itemId) !== session.etag) throw new ApiError(412,'Evidence se změnila během načítání.');
+    return rows;
+}
+export async function getDemusLineage(category: 'items' | 'dictionaries' | 'parties', id: number, offset=0, limit=20): Promise<LineagePage> {
+    const url = buildApiUrl(`/api/v1/${category}/${id}/demus-lineage`);
+    url.searchParams.set('offset', String(offset)); url.searchParams.set('limit', String(limit));
+    const response = await fetch(url.toString(),{headers:getAuthHeader()});
+    if (!response.ok) await responseError(response);
+    return response.json();
+}
+
+export const deleteMuseumRecord = (itemId: number, kind: MuseumRecordKind, recordId: number, session?: ItemEditSession) =>
+    museumRequest<void>(itemId, `/${kind}/${recordId}`, { method: 'DELETE' }, session);
+export async function listMuseumAcquisitions(itemId: number, session?: ItemEditSession) {
+    if(originalIntegrationEnabled())return originalAcquisitions(itemId,session);
+    if (session && await getItemVersion(itemId) !== session.etag) throw new ApiError(412, 'Verze akvizic neodpovídá otevřenému předmětu. Obnovte záznam.');
+    const rows = await museumRequest<MuseumAcquisition[]>(itemId, '/acquisitions');
+    if (session && await getItemVersion(itemId) !== session.etag) throw new ApiError(412, 'Akvizice se změnily během načítání. Obnovte záznam.');
+    if (session) session.acquisitionSnapshot = rows;
+    return rows;
+}
+export const createMuseumAcquisition = (itemId: number, input: MuseumAcquisitionInput, session?: ItemEditSession) =>
+    originalIntegrationEnabled()?originalAcquisitionSave(itemId,undefined,input,session):museumRequest<MuseumAcquisition>(itemId, '/acquisitions', { method: 'POST', body: JSON.stringify(input) }, session);
+export const updateMuseumAcquisition = (itemId: number, id: number, input: MuseumAcquisitionInput, session?: ItemEditSession) =>
+    originalIntegrationEnabled()?originalAcquisitionSave(itemId,id,input,session):museumRequest<MuseumAcquisition>(itemId, `/acquisitions/${id}`, { method: 'PATCH', body: JSON.stringify(input) }, session);
+export const deleteMuseumAcquisition = (itemId: number, id: number, session?: ItemEditSession) =>
+    museumRequest<void>(itemId, `/acquisitions/${id}`, { method: 'DELETE' }, session);
+
+export async function listPublicItems(params: {
+    q?: string,
+    accessionNumber?: string,
+    inventoryNumber?: string,
+    subCollection?: string,
+    objectType?: string,
+    author?: string,
+    datingFrom?: string | number,
+    datingTo?: string | number,
+    originPlace?: string,
+    material?: string,
+    technique?: string,
+    location?: string,
+    spravce?: string,
+    page?: number,
+    size?: number,
+    sort?: string
+}) {
+    if(originalIntegrationEnabled())return originalCatalogList(params);
+    const u = buildApiUrl('/public/v1/catalog/items');
+
+    // Projdeme všechny klíče v objektu params
+    Object.entries(params).forEach(([key, value]) => {
+        // Přidáme do URL pouze pokud má hodnota smysl (není null, undefined nebo prázdný string)
+        if (value !== undefined && value !== null && value !== '') {
+            u.searchParams.set(key, value.toString());
+        }
+    });
+    // Zajištění výchozí velikosti stránky, pokud není v params
+    if (!u.searchParams.has('size')) {
+        u.searchParams.set('size', '20');
+    }
+    const r = await fetch(u.toString());
+    if (!r.ok) throw new Error('Načítání katalogu selhalo');
+    return r.json();
+}
+
+export async function listAdminItems(params: {
+    page?: number,
+    size?: number,
+    q?: string,
+    accessionNumber?: string,
+    inventoryNumber?: string,
+    author?: string,
+    originPlace?: string, // PŘIDAT SEM
+    subCollection?: string,
+    material?: string,
+    location?: string,
+    spravce?: string,
+    technique?: string, objectType?: string, datingFrom?: string, datingTo?: string,
+    sourceDatingFromYear?: string, sourceDatingToYear?: string, advancedFilter?: string,
+    sortField?: string, sortDirection?: string, worksetId?: string
+}) {
+    if(originalIntegrationEnabled())return originalList(params);
+    const u = buildApiUrl('/api/v1/items');
+
+    Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            u.searchParams.set(key, value.toString());
+        }
+    });
+
+    const r = await fetch(u.toString(), {
+        headers: getAuthHeader() // Nezapomeň na token, v adminu je povinný!
+    });
+
+    if (!r.ok) await responseError(r);
+    return r.json();
+}
+
+export async function getItem(id: string) {
+    const r = await fetch(resolveApiUrl(`/public/v1/catalog/items/${id}`));
+    if (!r.ok) throw new Error('Předmět nebyl nalezen');
+    return r.json();
+}
+
+export async function sendFeedback(body: any) {
+    const r = await fetch(resolveApiUrl('/public/v1/feedback'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error('Odeslání připomínky selhalo');
+    return r.json();
+}
+
+// ADMIN FUNKCE
+export async function login(credentials: { username: string; password: string }) {
+    const response = await fetch(resolveApiUrl('/api/auth/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+    });
+    if (!response.ok) throw new Error('Neplatné jméno nebo heslo');
+    const data = await response.json();
+    localStorage.setItem('token', data.token);
+    return data;
+}
+
+export class ApiError extends Error {
+    constructor(
+        public status: number,
+        public message: string,
+        public fieldErrors?: Record<string, string>
+    ) {
+        super(message);
+        this.name = 'ApiError';
+    }
+}
+
+export async function createItem(body: any) {
+    const r = await fetch(resolveApiUrl('/api/v1/items'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(body)
+    });
+    if (!r.ok) {
+        let fieldErrors: Record<string, string> | undefined = undefined;
+        let errMsg = '';
+        try {
+            const data = await r.json();
+            if (data.message) {
+                errMsg = data.message;
+            } else if (data.error) {
+                errMsg = data.error;
+            }
+            if (data.fieldErrors) {
+                if (Array.isArray(data.fieldErrors)) {
+                    fieldErrors = {};
+                    data.fieldErrors.forEach((fe: any) => {
+                        fieldErrors![fe.field] = fe.message;
+                    });
+                } else if (typeof data.fieldErrors === 'object') {
+                    fieldErrors = data.fieldErrors;
+                }
+            }
+        } catch (e) { /* ignore JSON parse error */ }
+
+        if (!errMsg) {
+            if (r.status === 409) {
+                errMsg = 'Předmět s tímto inventárním nebo přírůstkovým číslem již existuje.';
+            } else if (r.status === 400) {
+                errMsg = 'Zadaná data předmětu nejsou platná. Zkontrolujte povinná pole.';
+            } else {
+                errMsg = `Vytvoření předmětu selhalo (${r.status})`;
+            }
+        }
+        throw new ApiError(r.status, errMsg, fieldErrors);
+    }
+    return r.json();
+}
+
+export async function updateItem(id: number, body: Record<string, any>, session?: ItemEditSession) {
+    return versionedWrite(id, `/api/v1/items/${id}`, { method: 'PATCH', body: JSON.stringify(body) }, session);
+}
+
+export async function getItemVersion(id: number): Promise<string> {
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${id}/version`), { headers: getAuthHeader() });
+    if (!response.ok) await responseError(response);
+    const etag = response.headers.get('ETag');
+    if (!etag) throw new Error('Server neposkytl ETag. Bez verze nelze bezpečně upravovat předmět.');
+    return etag;
+}
+
+export async function getAdminItem(id: string) {
+    if(originalIntegrationEnabled())return originalDetail(id);
+    const itemId = Number(id);
+    const before = await getItemVersion(itemId);
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${id}`), { headers: getAuthHeader() });
+    if (!response.ok) await responseError(response);
+    const detail = await response.json();
+    const museumResponse = await fetch(resolveApiUrl(`/api/v1/items/${id}/museum`), { headers: getAuthHeader() });
+    if (!museumResponse.ok) await responseError(museumResponse);
+    const museum = await museumResponse.json();
+    const after = await getItemVersion(itemId);
+    if (before !== after || museumResponse.headers.get('ETag') !== before) {
+        throw new ApiError(412, 'Předmět se změnil během načítání. Načtěte jej znovu.');
+    }
+    for (const key of ['legacyArchived','legacyCard','legacyCopied','legacyVerified','legacyMarked',
+        'legacyCreatedBy','legacyCreatedAt','legacyUpdatedBy','legacyUpdatedAt']) {
+        detail[key] = museum[key];
+    }
+    detail.createdByUser = detail.createdByUser ?? detail.createdBy;
+    detail.modifiedByUser = detail.modifiedByUser ?? detail.lastModifiedBy;
+    Object.defineProperty(detail, '_editSession', {value: {itemId, etag: after, museumSnapshot: museum}});
+    return detail;
+}
+
+// Funkce pro smazání (audit se děje na pozadí)
+export async function deleteAdminItem(id: number) {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}`), {
+        method: 'DELETE',
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Smazání selhalo');
+}
+
+export async function uploadItemImage(itemId: number, file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/images`), {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+    });
+
+    const rawResponse = await response.text(); // Přečteme odpověď jako čistý text
+    console.log("Raw response ze serveru:", rawResponse);
+
+    if (!response.ok) {
+        throw new Error(`Nahrávání selhalo: ${rawResponse}`);
+    }
+
+    try {
+        return JSON.parse(rawResponse); // Teprve teď zkusíme JSON
+    } catch (e) {
+        console.error("Chyba při parsování JSONu. Server poslal tohle:", rawResponse);
+        throw new Error("Server neposlal platný JSON. Podívej se do konzole.", {cause: e});
+    }
+}
+
+export interface ItemImageDto {
+    id: number;
+    url: string;
+    thumbUrl?: string;
+    caption?: string;
+    primary: boolean;
+    sortOrder?: number;
+}
+
+export async function listItemImages(itemId: number): Promise<ItemImageDto[]> {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/images`), {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Nepodařilo se načíst fotografie');
+    return r.json();
+}
+
+export async function deleteItemImage(itemId: number, imageId: number): Promise<void> {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/images/${imageId}`), {
+        method: 'DELETE',
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Smazání fotografie selhalo');
+}
+
+export async function setPrimaryItemImage(itemId: number, imageId: number): Promise<ItemImageDto> {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/images/${imageId}/primary`), {
+        method: 'POST',
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Nastavení hlavní fotografie selhalo');
+    return r.json();
+}
+
+export async function exportItemsToExcel(params: any) {
+    let blob:Blob;
+    if(originalIntegrationEnabled())blob=await originalExcel(params);
+    else {
+    const u = buildApiUrl('/api/v1/items/export/excel');
+
+    // Přidáme filtry do URL
+    Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            u.searchParams.set(key, value.toString());
+        }
+    });
+
+    const r = await fetch(u.toString(), {
+        headers: getAuthHeader() // Použije tvou existující funkci pro token
+    });
+
+    if (!r.ok) throw new Error('Export selhal');
+
+    // Zpracování binárních dat (blob)
+    blob = await r.blob();
+    }
+    const downloadUrl = window.URL.createObjectURL(blob);
+
+    // Vytvoření a kliknutí na skrytý odkaz
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+
+    // Pojmenování souboru s aktuálním datem
+    const date = new Date().toISOString().split('T')[0];
+    link.setAttribute('download', `export_sbirky_${date}.xlsx`);
+
+    document.body.appendChild(link);
+    link.click();
+
+    // Úklid v paměti prohlížeče
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+}
+
+// Přidat do lib/api.ts
+export async function bulkCopyItem(id: number, data: {
+    count: number,
+    titleSuffix: string,
+    invNumSuffix: string
+}) {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}/bulk-copy`), {
+        method: 'POST',
+        headers: {
+            ...getAuthHeader(),
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    });
+
+    if (!r.ok) {
+        const error = await r.json().catch(() => ({}));
+        throw new Error(error.message || 'Hromadné kopírování selhalo');
+    }
+    return true;
+}
+
+export async function getDictionaries() {
+    const response = await fetch(resolveApiUrl('/api/v1/dictionaries'), {
+        headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+        }
+    });
+    if (!response.ok) throw new Error('Nepodařilo se načíst číselníky');
+    return response.json();
+}
+
+export async function getNextAvailableNumbers() {
+    const response = await fetch(resolveApiUrl('/api/v1/items/next-numbers'), {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    return response.json();
+}
+
+export async function checkUniqueness(type: 'accession' | 'inventory', value: string) {
+    // Ujisti se, že URL je správná (včetně lomítek)
+    const response = await fetch(resolveApiUrl(`/api/v1/items/check?type=${type}&value=${encodeURIComponent(value)}`), {
+        headers: getAuthHeader()
+    });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Server vrátil chybu:", errorData);
+        throw new Error('Chyba při validaci unikátnosti');
+    }
+    return response.json();
+}
+
+export const fetchLabelData = async (id: number): Promise<LabelDto> => {
+    // Získání tokenu pro autorizaci (předpokládáme uložení v localStorage)
+    const token = localStorage.getItem('token');
+
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${id}/label`), {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    });
+
+    if (!response.ok) {
+        // Pokud backend vrátí chybu (např. 404 nebo 403), vyhodíme výjimku
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Nepodařilo se načíst data pro štítek');
+    }
+
+    // Vracíme zformátovaný JSON, který odpovídá struktuře LabelDto
+    return await response.json();
+};
+
+// ==========================================
+// PRACOVNÍ SADY (WORKSETS)
+// ==========================================
+
+export interface WorksetSummary {
+    id: string;
+    name: string;
+    description: string;
+    itemCount: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export async function listWorksets(): Promise<WorksetSummary[]> {
+    if(originalIntegrationEnabled())return originalWorksets();
+    const r = await fetch(resolveApiUrl('/api/v1/worksets'), {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Načítání pracovních sad selhalo');
+    return r.json();
+}
+
+export async function createWorkset(data: { name: string; description?: string; itemIds?: number[]; requestId?:string }): Promise<WorksetSummary> {
+    if(originalIntegrationEnabled())return originalWorksetCreate(data);
+    const r = await fetch(resolveApiUrl('/api/v1/worksets'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Vytvoření pracovní sady selhalo');
+    }
+    return r.json();
+}
+
+export async function createWorksetFromFilter(data: { name: string; description?: string; filter: any; requestId?:string }): Promise<WorksetSummary> {
+    if(originalIntegrationEnabled())return originalWorksetCreate(data);
+    const r = await fetch(resolveApiUrl('/api/v1/worksets/from-filter'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Vytvoření sady z filtru selhalo');
+    }
+    return r.json();
+}
+
+export async function getWorksetDetail(id: string, page = 0, size = 50) {
+    const r = await fetch(resolveApiUrl(`/api/v1/worksets/${id}?page=${page}&size=${size}`), {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Načítání detailu pracovní sady selhalo');
+    return r.json();
+}
+
+export async function addItemsToWorkset(id: string, itemIds: number[]) {
+    const r = await fetch(resolveApiUrl('/api/v1/worksets/${id}/items'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify({ itemIds })
+    });
+    if (!r.ok) throw new Error('Přidání položek do sady selhalo');
+    return r.json();
+}
+
+export async function removeWorksetItem(worksetId: string, itemId: number) {
+    const r = await fetch(resolveApiUrl(`/api/v1/worksets/${worksetId}/items/${itemId}`), {
+        method: 'DELETE',
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Odebrání položky ze sady selhalo');
+}
+
+export async function deleteWorkset(id: string) {
+    const r = await fetch(resolveApiUrl(`/api/v1/worksets/${id}`), {
+        method: 'DELETE',
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Smazání pracovní sady selhalo');
+}
+
+// ==========================================
+// SELEKTIVNÍ KLONOVÁNÍ PŘEDMĚTU
+// ==========================================
+
+export interface CloneItemOptions {
+    copyDescription?: boolean;
+    copyDating?: boolean;
+    copyLocation?: boolean;
+    copyAuthors?: boolean;
+    copyMaterials?: boolean;
+    copyClassification?: boolean;
+    copyDimensions?: boolean;
+    targetInventoryNumber?: string;
+}
+
+export async function cloneItemSelective(id: number, options: CloneItemOptions) {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}/clone`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(options)
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Klonování předmětu selhalo');
+    }
+    return r.json();
+}
+
+// ==========================================
+// VYŘAZENÍ Z EVIDENCE (DEACCESSION)
+// ==========================================
+
+export interface DeaccessionData {
+    reason: string;
+    deaccessionDate?: string;
+    documentNumber?: string;
+}
+
+export async function deaccessionItem(id: number, data: DeaccessionData) {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}/deaccession`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Vyřazení z evidence selhalo');
+    }
+    return r.json();
+}
+
+// ==========================================
+// TISK KARTY PŘEDMĚTU (PRINT BASIC)
+// ==========================================
+
+export async function getPrintBasic(id: number) {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${id}/print-basic`), {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Načtení tiskových dat selhalo');
+    return r.json();
+}
+
+export async function searchPrintItems(params: any): Promise<PrintItemRow[]> {
+    if(originalIntegrationEnabled())return originalPrint(params) as unknown as PrintItemRow[];
+    const response = await fetch(resolveApiUrl('/api/v1/items/search/print'), {
+        method: 'POST',
+        headers: {
+            ...getAuthHeader(),
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+        throw new Error('Načtení tiskových dat selhalo');
+    }
+
+    return response.json();
+}
+
+// ==========================================
+// ČÍSELNÍKY - INLINE PŘIDÁVÁNÍ A STROM
+// ==========================================
+
+export async function createDictionaryItem(data: { type: string; code: string; label: string; parentId?: number; sortOrder?: number }) {
+    const r = await fetch(resolveApiUrl('/api/v1/dictionaries'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Uložení do číselníku selhalo');
+    }
+    return r.json();
+}
+
+export async function getDictionaryTree(type: string) {
+    const r = await fetch(resolveApiUrl(`/api/v1/dictionaries/tree?type=${encodeURIComponent(type)}`), {
+        headers: getAuthHeader()
+    });
+    if (r.status === 401) throw new ApiError(401, 'Číselník nelze načíst: přihlášení vypršelo nebo chybí. Přihlaste se znovu.');
+    if (r.status === 403) throw new ApiError(403, 'Číselník nelze načíst: přístup není povolen pro tento účet nebo síť.');
+    if (!r.ok) throw new ApiError(r.status, `Načtení stromu číselníku selhalo (HTTP ${r.status}).`);
+    let tree: unknown;
+    try { tree = await r.json(); } catch { throw new Error('Server nevrátil čitelnou odpověď číselníku.'); }
+    if (['MATERIAL', 'TECHNIQUE'].includes(type.toUpperCase())) {
+        // This endpoint returns a complete tree, not a lazy node/hasChildren response.
+        // Missing children must never be mistaken for an empty, fully loaded leaf.
+        const invalid = () => new Error('Server vrátil neúplnou nebo neplatnou hierarchii číselníku. Potomky nelze určit; uložená vazba zůstává zachována.');
+        if (!Array.isArray(tree)) throw invalid();
+        const seen = new Set<number>();
+        const pending = tree.map(node => ({node, parentId: null as number | null}));
+        while (pending.length) {
+            const {node, parentId} = pending.pop()!;
+            if (!node || typeof node !== 'object' || !Number.isSafeInteger(node.id) || node.id <= 0 ||
+                typeof node.label !== 'string' || !Array.isArray(node.children) || seen.has(node.id) ||
+                (node.type !== undefined && node.type !== type.toUpperCase()) ||
+                (node.parentId !== undefined && node.parentId !== parentId) ||
+                (node.hasChildren !== undefined && node.hasChildren !== (node.children.length > 0))) throw invalid();
+            seen.add(node.id);
+            pending.push(...node.children.map((child: any) => ({node: child, parentId: node.id})));
+        }
+    }
+    return tree as any;
+}
+
+// ==========================================
+// PŘÍLOHY (DOKUMENTY A SOUBORY)
+// ==========================================
+
+export async function listAttachments(itemId: number) {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments`), {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Načtení příloh selhalo');
+    return r.json();
+}
+
+export async function getAttachmentCount(itemId: number): Promise<number> {
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments/count`), {headers: getAuthHeader()});
+    if (!response.ok) await responseError(response);
+    const data = await response.json();
+    if (!Number.isInteger(data.count) || data.count < 0) throw new Error('Neplatný počet příloh ze serveru.');
+    return data.count;
+}
+
+export async function patchAttachment(itemId: number, attachmentId: number, changes: {caption?: string; sortOrder?: number; primary?: boolean}) {
+    const response = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments/${attachmentId}`), {
+        method: 'PATCH', headers: {'Content-Type':'application/json', ...getAuthHeader()}, body: JSON.stringify(changes),
+    });
+    if (!response.ok) await responseError(response);
+    return response.json();
+}
+
+export async function uploadAttachment(itemId: number, file: File, caption?: string, isPrimary = false) {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (caption) formData.append('caption', caption);
+    formData.append('primary', isPrimary.toString());
+
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments`), {
+        method: 'POST',
+        headers: getAuthHeader(),
+        body: formData
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Nahrání přílohy selhalo');
+    }
+    return r.json();
+}
+
+export async function deleteAttachment(itemId: number, attachmentId: number) {
+    if(originalIntegrationEnabled())return unsupported();
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments/${attachmentId}`), {
+        method: 'DELETE',
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Smazání přílohy selhalo');
+}
+
+export async function downloadAttachmentFile(itemId: number, attachmentId: number, filename: string) {
+    const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments/${attachmentId}/file`), {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Stažení přílohy selhalo');
+    const blob = await r.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+// ==========================================
+// REJSTŘÍK SUBJEKTŮ / AUTORŮ (PARTIES)
+// ==========================================
+
+export async function searchParties(q: string) {
+    const r = await fetch(resolveApiUrl(`/api/v1/parties?q=${encodeURIComponent(q)}`), {
+        headers: getAuthHeader()
+    });
+    if (!r.ok) throw new Error('Hledání subjektů selhalo');
+    return r.json();
+}
+
+export async function createParty(data: { type: string; firstName?: string; lastName: string; birthDate?: string; deathDate?: string; note?: string }) {
+    const r = await fetch(resolveApiUrl('/api/v1/parties'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify(data)
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message || 'Vytvoření subjektu selhalo');
+    }
+    return r.json();
+}
