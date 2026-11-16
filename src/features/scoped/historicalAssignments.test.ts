@@ -1,0 +1,11 @@
+import {it,expect,vi,afterEach} from 'vitest';
+import {scopedApi,historicalBindings} from './scopedApi';
+const ref={recordId:'1'.repeat(64),sourceSha256:'a'.repeat(64),rowHash:'b'.repeat(64),occurrence:'1',table:'Materialy',typedKey:{Material_MA:{kind:'TEXT',value:'dřevo'}},code:'dřevo',label:null,groupingCode:null};
+const signal=()=>new AbortController().signal;
+const body=(bindings:unknown,change={})=>({catalogId:1,itemId:3,itemVersion:2,section:'historical-refs',values:{bindings},hasCurrentAssertion:true,origin:'CURRENT_CURATOR_STATEMENT_NOT_SOURCE',...change});
+const response=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store, no-store',ETag:'"2"'}});
+afterEach(()=>vi.unstubAllGlobals());
+it('reads full typed identity independently from UUID fields and saves clear with If-Match',async()=>{const f=vi.fn().mockResolvedValue(response(body({MATERIAL:ref})));vi.stubGlobal('fetch',f);const api=scopedApi(1,'generated');const loaded=await api.historicalAssignments(3,signal());expect(loaded.value.MATERIAL).toEqual(ref);f.mockResolvedValue(response(body({})));expect(await api.saveHistoricalAssignments(3,'"1"',{},signal())).toBe('"2"');expect(f.mock.calls.at(-1)![1].headers['If-Match']).toBe('"1"');expect(f.mock.calls.at(-1)![1].body).toBe('{"bindings":{}}');expect(f.mock.calls.every(([url])=>!String(url).includes('/dictionaries/'))).toBe(true);});
+it.each([{catalogId:2},{itemId:4},{section:'professional'},{origin:'SOURCE'}])('rejects response scope/semantics drift %j',async change=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response(body({MATERIAL:ref},change))));await expect(scopedApi(1,'generated').historicalAssignments(3,signal())).rejects.toThrow();});
+it.each([{...ref,recordId:'dřevo'},{...ref,table:'Adresar'},{...ref,occurrence:'0'},{...ref,typedKey:[]},{...ref,extra:'unsafe'}])('rejects malformed identities before writing',r=>{expect(()=>historicalBindings({MATERIAL:r})).toThrow();});
+it('retains server rejection and never returns a false success',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response({message:'stale'},412)));await expect(scopedApi(1,'generated').saveHistoricalAssignments(3,'"1"',{MATERIAL:ref},signal())).rejects.toThrow();});

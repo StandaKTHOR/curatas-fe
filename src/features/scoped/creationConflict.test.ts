@@ -1,0 +1,8 @@
+import {afterEach,it,expect,vi} from 'vitest';
+import {scopedApi,ScopedError} from './scopedApi';
+afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
+it.each(['create','clone'])('explains %s conflicts without claiming success, losing status or repeating a mutation',async operation=>{
+ vi.stubEnv('VITE_LOCAL_AUTH_ENABLED','false');const transport=vi.fn().mockResolvedValue(new Response('{}',{status:409}));vi.stubGlobal('fetch',transport);const api=scopedApi(1,'generated'),key=crypto.randomUUID(),signal=new AbortController().signal;
+ try{if(operation==='create')await api.createItem(key,{title:'Generated',inventoryNumber:'GEN-1',accessionNumber:null},signal);else await api.cloneItem(3,key,'"0"',{title:'Generated',inventoryNumber:'GEN-1',copyGroups:[]},signal);throw new Error('Expected refusal');}catch(error){expect(error).toBeInstanceOf(ScopedError);expect((error as ScopedError).status).toBe(409);expect((error as Error).message).toContain('Inventární číslo');expect((error as Error).message).toContain('Zadání zůstává zachováno');}expect(transport).toHaveBeenCalledOnce();
+});
+it.each([403,412])('preserves %s permission/concurrency diagnostics',async status=>{vi.stubEnv('VITE_LOCAL_AUTH_ENABLED','false');vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('{}',{status})));await expect(scopedApi(1,'generated').createItem(crypto.randomUUID(),{title:'Generated',inventoryNumber:'GEN-1',accessionNumber:null},new AbortController().signal)).rejects.toMatchObject({status,message:status===403?expect.stringContaining('Přístup byl zamítnut'):expect.stringContaining('Verze')});});

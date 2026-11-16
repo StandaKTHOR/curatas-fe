@@ -1,0 +1,234 @@
+import React, { useState, useEffect } from 'react';
+import { GovButton, GovFormInput, GovFormLabel, GovMessage } from '@gov-design-system-ce/react';
+import { createDictionaryItem } from '../lib/api';
+import {suggestedDictionaryCode} from '../features/catalog/managedDictionaryPresentation';
+
+interface AddDictionaryModalProps {
+    isOpen: boolean;
+    dictionaryType: string;
+    dictionaryTitle: string;
+    onClose: () => void;
+    onSuccess: (newItem: { id?: number; code: string; label: string; type: string }) => void;
+    initialValue?:{label:string;code:string|null;parentId:string|null};
+    editing?:boolean;
+    submitLabel?:string;
+    onCreate?:(input:{type:string;code:string;label:string;parentId:string|null})=>Promise<void>;
+    renderParentPicker?:(value:string,onChange:(id:string)=>void)=>React.ReactNode;
+    parentOptions?: {id: number|string; label: string; disabled?:boolean}[];
+}
+
+export default function AddDictionaryModal({
+    isOpen,
+    dictionaryType,
+    dictionaryTitle,
+    onClose,
+    onSuccess,
+    onCreate,initialValue,editing=false,submitLabel,
+    renderParentPicker, parentOptions = []
+}: AddDictionaryModalProps) {
+    const [label, setLabel] = useState('');
+    const [code, setCode] = useState('');
+    const [codeEdited,setCodeEdited]=useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [parentId, setParentId] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setLabel(initialValue?.label??'');
+            setCode(initialValue?.code??'');
+            setCodeEdited(Boolean(initialValue?.code));
+            setError(null);
+            setLoading(false);
+            setParentId(initialValue?.parentId??'');
+        }
+    }, [isOpen,dictionaryType]);
+
+    if (!isOpen) return null;
+
+    const DICT_TYPE_TITLES: Record<string, string> = {
+        GROUP: 'Skupina',
+        LOCALITY: 'Lokalita',
+        SUBJECT: 'Námět',
+        CLASSIFICATION: 'Klasifikace',
+        MATERIAL: 'Materiál',
+        TECHNIQUE: 'Technika',
+        SPRAVCE: 'Správce sbírky',
+        COUNTRY: 'Země původu',
+        OBJECT_TYPE: 'Druh předmětu',
+        FUND: 'Fond',
+        AUTHOR: 'Autor / Původce',
+        AUTHOR_ROLE: 'Role autora',
+        CUSTODIAN: 'Správce sbírky',
+        COLLECTION: 'Podsbírka',
+        ACQUISITION_METHOD: 'Způsob nabytí',
+        DOCUMENT_TYPE: 'Typ dokumentace',
+        DEACCESSION_REASON: 'Důvod vyřazení',
+        DETERMINER: 'Určil'
+    };
+
+    const getPlaceholders = (type: string) => {
+        switch (type.toUpperCase()) {
+            case 'COUNTRY':
+                return { label: 'např. Francie', code: 'např. FRANCIE' };
+            case 'OBJECT_TYPE':
+                return { label: 'např. Porcelán malovaný', code: 'např. PORCELAN_MALOVANY' };
+            case 'MATERIAL':
+                return { label: 'např. Bukové dřevo', code: 'např. BUKOVE_DREVO' };
+            case 'TECHNIQUE':
+                return { label: 'např. Kresba tuší', code: 'např. KRESBA_TUSI' };
+            case 'SPRAVCE':
+                return { label: 'např. Mgr. Jan Novák', code: 'např. NOVAK_J' };
+            case 'GROUP':
+                return { label: 'např. Obrazy', code: 'např. OBRAZY' };
+            case 'LOCALITY':
+                return { label: 'např. Brno-město', code: 'např. BRNO_MESTO' };
+            case 'SUBJECT':
+                return { label: 'např. Krajina', code: 'např. KRAJINA' };
+            case 'CLASSIFICATION':
+                return { label: 'např. Závěsný obraz', code: 'např. ZAVESNY_OBRAZ' };
+            case 'FUND':
+                return { label: 'např. Hlavní sbírkový fond', code: 'např. HLAVNI_FOND' };
+            case 'AUTHOR':
+                return { label: 'např. Jan Novák', code: 'např. NOVAK_JAN' };
+            default:
+                return { label: 'např. Nová hodnota', code: 'např. NOVA_HODNOTA' };
+        }
+    };
+
+    const placeholders = getPlaceholders(dictionaryType);
+
+    const handleLabelChange = (val: string) => {
+        setLabel(val);
+        if (!codeEdited) setCode(suggestedDictionaryCode(val));
+    };
+
+    const getTitle = () => {
+        const upperType = (dictionaryType || '').toUpperCase();
+        if (DICT_TYPE_TITLES[upperType]) {
+            return DICT_TYPE_TITLES[upperType];
+        }
+        if (dictionaryTitle && !dictionaryTitle.toLowerCase().startsWith('položka') && dictionaryTitle.toUpperCase() !== upperType) {
+            return dictionaryTitle;
+        }
+        return dictionaryTitle || 'Číselník';
+    };
+
+    const handleSubmit = async (e?: React.FormEvent) => {
+        if (e) {e.preventDefault();e.stopPropagation();}
+        if(loading)return;
+        if (!label.trim()) {
+            setError('Název položky číselníku je povinný.');
+            return;
+        }
+
+        const finalCode = code.trim() || label.trim().toUpperCase().replace(/[\s-]+/g, '_');
+        setError(null);
+        setLoading(true);
+
+        try {
+            if(onCreate){await onCreate({type:dictionaryType,code:finalCode,label:label.trim(),parentId:parentId||null});onClose();return;}
+            const created = await createDictionaryItem({
+                type: dictionaryType,
+                code: finalCode,
+                label: label.trim(),
+                ...(parentId ? {parentId: Number(parentId)} : {})
+            });
+
+            onSuccess({
+                id: created?.id,
+                code: created?.code || finalCode,
+                label: created?.label || label.trim(),
+                type: dictionaryType
+            });
+            onClose();
+        } catch (err: any) {
+            if (err?.status === 409 || err?.message?.includes('409') || err?.message?.includes('existuje')) {
+                setError(`Položka "${label.trim()}" již v tomto číselníku existuje.`);
+            } else {
+                setError(err.message || 'Uložení do číselníku selhalo');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div data-scoped-reference-editor={onCreate?true:undefined} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full overflow-hidden border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
+                <div className="bg-[#00204a] text-white px-5 py-3.5 flex justify-between items-center">
+                    <div>
+                        <h3 className="font-extrabold text-sm uppercase tracking-tight">{editing?'Upravit položku číselníku':'Přidat do číselníku'}</h3>
+                        <p className="text-[11px] text-blue-200">{getTitle()}</p>
+                    </div>
+                    <button
+                        type="button" onClick={onClose}
+                        className="text-white/80 hover:text-white text-lg font-bold p-1 focus:outline-none"
+                        aria-label="Zavřít"
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-5 space-y-4">
+                    {renderParentPicker?renderParentPicker(parentId,setParentId):parentOptions.length > 0 && <label className="block text-sm">Nadřazená položka
+                        <select aria-label="Nadřazená položka" value={parentId} onChange={e => setParentId(e.target.value)} className="w-full border p-1">
+                            <option value="">— kořen číselníku —</option>
+                            {parentOptions.map(parent => <option key={parent.id} value={parent.id} disabled={parent.disabled}>{parent.label}{parent.disabled?' — nelze odborně rozlišit; výběr vyžaduje ověření':''}</option>)}
+                        </select>
+                    </label>}
+                    {error && (
+                        <GovMessage color="error" type="bold">
+                            <span className="font-bold text-xs">{error}</span>
+                        </GovMessage>
+                    )}
+
+                    <div className="space-y-1">
+                        <GovFormLabel htmlFor="dictLabel">Název položky (zobrazovaný text) *</GovFormLabel>
+                        <GovFormInput
+                            id="dictLabel"
+                            value={label}
+                            onChange={(e: any) => handleLabelChange(e.target.value)}
+                            placeholder={placeholders.label}
+                            required
+                        />
+                    </div>
+
+                    <div className="space-y-1">
+                        <GovFormLabel htmlFor="dictCode">{onCreate?'Kód položky (není UUID)':'Systémový kód (identifikátor)'}</GovFormLabel>
+                        <GovFormInput
+                            id="dictCode"
+                            value={code}
+                            onChange={(e: any) => {setCodeEdited(true);setCode(e.target.value);}}
+                            placeholder={placeholders.code}
+                        />
+                        <p className="text-[10px] text-gray-400">Generuje se automaticky z názvu.</p>
+                        {onCreate&&<p>Vlastní UUID položky přidělí server. Nadřazená položka určuje pouze její místo v hierarchii; její UUID ani kód se nepřebírají.</p>}
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                        <GovButton
+                            type="outlined"
+                            color="neutral"
+                            size="s"
+                            disabled={loading}
+                            nativeType="button" onClick={onClose}
+                        >
+                            Zrušit
+                        </GovButton>
+                        <GovButton
+                            type="solid"
+                            color="primary"
+                            size="s"
+                            nativeType="submit"
+                            disabled={loading || !label.trim()}
+                            onClick={handleSubmit}
+                        >
+                            {loading ? 'Ukládám...' : submitLabel??(editing?'Uložit a vybrat':'Přidat a vybrat')}
+                        </GovButton>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}

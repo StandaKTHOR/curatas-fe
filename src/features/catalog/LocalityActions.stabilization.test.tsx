@@ -1,0 +1,13 @@
+import {fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {beforeEach,it,expect,vi} from 'vitest';
+const m=vi.hoisted(()=>({catalog:{id:1,capabilities:['dictionary.read']} as any,token:'local-test',metadata:vi.fn()}));
+vi.mock('./CatalogContext',()=>({useCatalog:()=>({selectedCatalog:m.catalog})}));
+vi.mock('../../components/AuthContext',()=>({useAuth:()=>({token:m.token})}));
+vi.mock('../scoped/scopedApi',()=>({scopedApi:()=>({dictionaryMetadata:m.metadata})}));
+vi.mock('./LocalityCardDialog',()=>({default:({writable}:any)=><div role="dialog">{writable?'Zápis povolen':'Pouze čtení'}</div>}));
+import LocalityActions from './LocalityActions';
+beforeEach(()=>{m.catalog={id:1,capabilities:['dictionary.read']};m.token='local-test';m.metadata.mockReset().mockResolvedValue({operations:['read','update']});});
+it('offers edit only when catalog metadata confirms update and opens writable dialog',async()=>{render(<LocalityActions id="one" disabled={false} onChanged={()=>{}}/>);fireEvent.click(await screen.findByRole('button',{name:'Upravit lokalitu'}));expect(screen.getByRole('dialog')).toHaveTextContent('Zápis povolen');});
+it('keeps read-only users read-only and explains missing write permission',async()=>{m.metadata.mockResolvedValue({operations:['read']});render(<LocalityActions id="one" disabled={false} onChanged={()=>{}}/>);expect(await screen.findByText(/Lokalita je pouze pro čtení/)).toHaveTextContent('dictionary.write');expect(screen.queryByRole('button',{name:'Upravit lokalitu'})).toBeNull();});
+it('distinguishes catalog selection and missing read permission without API calls',()=>{m.catalog=null;const r=render(<LocalityActions id="one" disabled={false} onChanged={()=>{}}/>);expect(screen.getByRole('status')).toHaveTextContent('nejprve vyberte katalog');m.catalog={id:1,capabilities:[]};r.rerender(<LocalityActions id="one" disabled={false} onChanged={()=>{}}/>);expect(screen.getByRole('status')).toHaveTextContent('dictionary.read');expect(m.metadata).not.toHaveBeenCalled();});
+it('does not reuse rejected metadata or write permissions after changing item scope',async()=>{m.metadata.mockRejectedValueOnce(Object.assign(new Error('denied'),{status:403}));const r=render(<LocalityActions id="one" disabled={false} onChanged={()=>{}}/>);expect(await screen.findByRole('alert')).toHaveTextContent('není ve vybraném katalogu povoleno');r.rerender(<LocalityActions id="two" disabled={true} onChanged={()=>{}}/>);await waitFor(()=>expect(screen.getByRole('button',{name:'Upravit lokalitu'})).toBeDisabled());expect(screen.queryByRole('alert')).toBeNull();});

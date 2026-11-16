@@ -1,0 +1,10 @@
+--- mes-qa-apache.conf
++++ mes-qa-apache.conf
+@@ -23,6 +23,7 @@
+     </Directory>
+     <Location /api/>
+         Require local
++        Header onsuccess unset Cache-Control
+         Header always set Cache-Control "no-store"
+     </Location>
+     <Location /actuator/health>
