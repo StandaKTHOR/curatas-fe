@@ -1,0 +1,32 @@
+/* Update4.6: reflow the existing editors without remounting their state. */
+@media (max-width: 760px) {
+ .curator-item-form :is(.curator-card-column,.curator-card-panel-body,fieldset) { min-inline-size: 0; }
+ .curator-item-form :is(input,select,textarea) { max-inline-size: 100%; min-inline-size: 0; }
+ .curator-item-form .curator-card-tab-bar { min-width: 0; }
+ .curator-item-form .curator-card-tab-bar > nav { flex-wrap: nowrap; overflow-x: auto; }
+ .curator-item-form .curator-card-tab-bar > nav > button { flex: 0 0 auto; min-height: 44px; }
+ .curator-item-form .curator-card-main .curator-card-identification :is(.curator-card-value,.curator-card-field,.curator-card-entry > .space-y-1),
+ .curator-item-form .curator-card-panel :is(.curator-card-value,.curator-card-field,.curator-card-entry > .space-y-1),
+ .curator-item-form .curator-card-main .curator-card-material-row > details > fieldset label { grid-template-columns: minmax(0,1fr); }
+ .curator-item-form .curator-card-main .curator-card-material-row > details > fieldset label > button { grid-column: 1; }
+ .curator-item-form .curator-card-main .curator-card-additional > .curator-card-panel-body { grid-template-columns: minmax(0,1fr); }
+ .curator-item-form .curator-card-dictionary > .curator-card-heading { padding-right: 10px; }
+ .curator-item-form .curator-card-dictionary .curator-card-panel-body > .space-y-1 > button,
+ .curator-item-form .curator-card-dictionary .curator-card-panel-body > .grid > .space-y-1 > button { position: static; }
+ .curator-item-form :is(button,summary) { min-height: 44px; white-space: normal; overflow-wrap: anywhere; }
+ .curator-item-form .curator-card-main .curator-card-panel :is(input,select,textarea) { min-height: 40px; }
+ .curator-item-form .curator-card-main .curator-card-material-row > details > fieldset { padding-inline: 4px; }
+ .curator-item-form .curator-card-main .curator-card-panel :is(output,p,a) { overflow-wrap: anywhere; }
+ .curator-item-form #item-editor-body { padding: 6px; }
+ .curator-item-form :is(.overflow-x-auto,.overflow-auto) { max-width: 100%; }
+ .curator-item-form[data-new-item="true"] .demus-primary-fields > .grid:has(#spravce) { grid-template-columns: minmax(0,1fr); }
+}
+[data-dictionary-value-modal] > div { max-block-size: calc(100dvh - 2rem); overflow-y: auto; }
+
+@media (min-width: 1501px) and (max-width: 1700px) {
+ .curator-item-form .curator-card-identification > .curator-card-pair:has(input,select) { grid-template-columns: minmax(0,1fr); }
+}
+
+@media (min-width: 761px) and (max-width: 900px) {
+ .curator-item-form .curator-card-main { grid-template-columns: minmax(0,1fr); gap: 14px; padding: 8px; }
+}

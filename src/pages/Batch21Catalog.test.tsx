@@ -74,3 +74,6 @@ it('keeps original evidence toolbar/search and explicit retry when the API contr
  await screen.findByRole('button',{name:'Recovered'});
  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
+it('renders the four version-scoped summaries in the unchanged original admin datasheet',async()=>{
+ const catalogSummary={author:[{value:'Historický autor',origin:'DEMUS_SOURCE',identity:'a'}],material:[{value:'papírmaš, papír',origin:'DEMUS_SOURCE',identity:'m'}],technique:[{value:'batika vosková - špendlík',origin:'DEMUS_SOURCE',identity:'t'}],accessionNumber:[{value:'Etn 11/99',origin:'DEMUS_SOURCE',identity:'q'}]};vi.mocked(api.listAdminItems).mockResolvedValue({...row('GENERATED SUMMARY'),content:[{id:7,title:'GENERATED SUMMARY',inventoryNumber:'GENERATED SUMMARY',catalogSummary}]} as any);render(<MemoryRouter><AdminItems/></MemoryRouter>);expect(await screen.findByText('Historický autor (DEMUS)')).toBeInTheDocument();expect(screen.getByText('papírmaš, papír (DEMUS)')).toBeInTheDocument();expect(screen.getByText('batika vosková - špendlík (DEMUS)')).toBeInTheDocument();expect(screen.getByText('Etn 11/99 (DEMUS)')).toBeInTheDocument();
+});

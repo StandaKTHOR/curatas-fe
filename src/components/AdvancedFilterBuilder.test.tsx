@@ -52,3 +52,8 @@ it('offers only contract-supported scoped fields and explicitly identifies histo
  for(const id of ['legacyCreatedBy','determinedBy','subCollection','Fond_S','Predmet_S','Zapsal_S','Urcil_S'])expect(scopedFilterFields.find(f=>f.value===id)?.label).toContain('DEMUS');
  expect(scopedFilterFields.some(f=>f.value==='author')).toBe(true);
 });
+
+it('offers precise MatTech UUID conditions separately from current text labels',()=>{
+ for(const value of ['materialAuthorityId','techniqueAuthorityId'])expect(scopedFilterFields.find(f=>f.value===value)?.label).toContain('UUID');
+ expect(scopedFilterFields.find(f=>f.value==='historicalDatingText')?.label).toContain('DEMUS');
+});

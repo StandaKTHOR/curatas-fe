@@ -19,13 +19,13 @@ export function DimensionReview({row}:{row:SourceDimension}){
   ...(row.number.bitPattern!==null?['ORIGINAL_DECIMAL_FORMAT_UNKNOWN']:[]),
   ...(row.number.status.includes('REVIEW_REQUIRED')?['NUMBER_REVIEW_REQUIRED']:[]),
  ];
- return <details className="professional-review"><summary>REVIEW_REQUIRED — odborné posouzení</summary><ul>{reasons.map(reason=><li key={reason}>{labels[reason]}</li>)}</ul></details>;
+ return <details className="professional-review"><summary>Vyžaduje odborné posouzení</summary><ul>{reasons.map(reason=><li key={reason}>{labels[reason]}</li>)}</ul></details>;
 }
 
 /** Honest independent panel boundary until a source-qualified MatTech contract is approved. */
 export function MatTechReadiness(){
  return <section aria-label="MatTech — stav odborné evidence"><h3>MatTech — materiál a technika</h3>
-  <p role="status">REVIEW_REQUIRED — odborná interpretace čeká na potvrzení CITEM.</p>
+  <p role="status">Odborná interpretace vyžaduje potvrzení.</p>
   <p>Zdrojové čtení materiálu a techniky není v tomto zobrazení zpřístupněno. Převod na potvrzené muzejní číselníky čeká na schválení.</p>
   <p>Prázdný panel neznamená, že předmět nemá materiál nebo techniku.</p>
  </section>;

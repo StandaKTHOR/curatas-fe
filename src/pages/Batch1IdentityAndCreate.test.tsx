@@ -52,11 +52,11 @@ describe('preflight edge cases',()=>{
         vi.mocked(api.getAdminItem).mockImplementation(async id=>({...saved,id:Number(id),inventoryNumber:'BATCH-'+id,
             _editSession:{itemId:Number(id),etag:'"3"',museumSnapshot:{itemId:Number(id),records:[],legacyArchived:false}}}));
         const router=mount();await screen.findByDisplayValue('Původní název');
-        await userEvent.click(await screen.findByLabelText('Archiv'));
+        await userEvent.click(await screen.findByLabelText('Archiválie'));
         vi.mocked(window.confirm).mockReturnValue(true);
         await act(async()=>{await router.navigate('/admin/items/edit/8');});
         await waitFor(()=>expect(screen.getAllByText(/BATCH-8/).length).toBeGreaterThan(0));
-        expect(screen.getByLabelText('Archiv')).not.toBeChecked();
+        expect(screen.getByLabelText('Archiválie')).not.toBeChecked();
         await save();expect(api.updateItem).not.toHaveBeenCalled();
     });
     it('does not create a duplicate acquisition after a committed write and failed refresh',async()=>{
@@ -94,7 +94,7 @@ it('preflight subpath router preserves basename and blocks dirty POP',async()=>{
 describe('BATCH 1.1 identity and create outcomes',()=>{
     const identity = (id:number) => ({...saved,id,inventoryNumber:'BATCH-'+id,_editSession:{itemId:id,etag:'"3"',museumSnapshot:{itemId:id,records:[],legacyArchived:false}}});
     it('discards A drafts before opening a new item',async()=>{
-        const router=mount(); await screen.findByDisplayValue('Původní název');await userEvent.click(await screen.findByLabelText('Archiv'));
+        const router=mount(); await screen.findByDisplayValue('Původní název');await userEvent.click(await screen.findByLabelText('Archiválie'));
         vi.mocked(window.confirm).mockReturnValue(true);await act(async()=>{await router.navigate('/admin/items/new');});
         expect(screen.getByLabelText(/Název sbírkového předmětu/)).toHaveValue('');expect(api.updateItem).not.toHaveBeenCalled();
     });
@@ -103,13 +103,13 @@ describe('BATCH 1.1 identity and create outcomes',()=>{
         const router=mount();await waitFor(()=>expect(api.getAdminItem).toHaveBeenCalledWith('7'));
         await act(async()=>{await router.navigate('/admin/items/edit/8');});await screen.findByDisplayValue('Původní název');
         await act(async()=>finish({...identity(7),title:'Late A'}));expect(screen.queryByDisplayValue('Late A')).not.toBeInTheDocument();
-        await userEvent.click(await screen.findByLabelText('Archiv'));await save();
+        await userEvent.click(await screen.findByLabelText('Archiválie'));await save();
         expect(api.updateItem).toHaveBeenCalledWith(8,expect.objectContaining({legacyArchived:true}),expect.objectContaining({itemId:8}));
     });
     it('retains basic drafts across tabs of the same item',async()=>{
-        mount();await screen.findByDisplayValue('Původní název');await userEvent.click(await screen.findByLabelText('Archiv'));
+        mount();await screen.findByDisplayValue('Původní název');await userEvent.click(await screen.findByLabelText('Archiválie'));
         const buttons=screen.getAllByRole('button');const tab=buttons.find(b=>b.textContent?.trim()==='Akvizice');expect(tab).toBeTruthy();await userEvent.click(tab!);
-        await userEvent.click(screen.getByRole('button',{name:'Základ'}));expect(await screen.findByLabelText('Archiv')).toBeChecked();
+        await userEvent.click(screen.getByRole('button',{name:'Základ'}));expect(await screen.findByLabelText('Archiválie')).toBeChecked();
     });
     it.each(['success','rejected','uncertain'])('handles acquisition create %s',async outcome=>{
         const session={itemId:7,etag:'"3"'};const drafts={current:{}};
@@ -131,6 +131,6 @@ describe('BATCH 1.1 identity and create outcomes',()=>{
 });
 
 it('retains A drafts when discarding navigation is rejected',async()=>{
- const router=mount();await screen.findByDisplayValue('Původní název');await userEvent.click(await screen.findByLabelText('Archiv'));
- await act(async()=>{await router.navigate('/admin/items/edit/8');});expect(router.state.location.pathname).toBe('/admin/items/edit/7');expect(screen.getByLabelText('Archiv')).toBeChecked();expect(api.getAdminItem).not.toHaveBeenCalledWith('8');
+ const router=mount();await screen.findByDisplayValue('Původní název');await userEvent.click(await screen.findByLabelText('Archiválie'));
+ await act(async()=>{await router.navigate('/admin/items/edit/8');});expect(router.state.location.pathname).toBe('/admin/items/edit/7');expect(screen.getByLabelText('Archiválie')).toBeChecked();expect(api.getAdminItem).not.toHaveBeenCalledWith('8');
 });

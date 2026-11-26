@@ -3,6 +3,10 @@ import {curatorQuery} from './curatorContract';
 import {scopedApi} from './scopedApi';
 const group=(field='title',operator='CONTAINS',value='Ž %_')=>({id:'generated',conjunction:'AND',conditions:[{id:'condition',field,operator,value}],groups:[]});
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
+it('preserves the distinct historical accession AST, original spaces and existing sort/pagination',()=>{
+ const ast=JSON.stringify(group('historicalAccessionNumber','EQUALS',' Etn 62/2014 '));const q=curatorQuery(1,50,'inventoryNumber,desc',{advancedFilter:ast});expect(q.get('advancedFilter')).toBe(ast);expect(q.get('page')).toBe('1');expect(q.get('sort')).toBe('inventoryNumber,desc');
+ expect(()=>curatorQuery(0,50,'title,asc',{advancedFilter:JSON.stringify(group('historicalAccessionNumber','GREATER_THAN','1'))})).toThrow();
+});
 it('preserves original AST JSON and supports explicit createdAt without aliasing',()=>{
  const ast=JSON.stringify(group());const query=curatorQuery(163,50,'createdAt,desc',{advancedFilter:ast});
  expect(query.get('sort')).toBe('createdAt,desc');expect(query.get('advancedFilter')).toBe(ast);
@@ -26,4 +30,17 @@ it('rejects invalid operators/depth/ranges and retains explicit NULL/empty opera
 it('accepts current country and reviewed calendar dates without guessing historical chronology',()=>{
  for(const [field,op,value] of [['countryOfOrigin','EQUALS','Česká republika'],['datingFrom','GREATER_THAN','0001-01-01'],['datingTo','LESS_THAN','2026-11-04']])expect(()=>curatorQuery(0,50,'title,asc',{advancedFilter:JSON.stringify(group(field,op,value))})).not.toThrow();
  for(const value of ['2025-02-29','0000-01-01','1500','1e5'])expect(()=>curatorQuery(0,50,'title,asc',{advancedFilter:JSON.stringify(group('datingFrom','GREATER_THAN',value))})).toThrow();
+});
+
+it('preserves a separate historical dating filter without converting a year into an ISO date',()=>{
+ const ast=JSON.stringify(group('historicalDatingText','CONTAINS','1982'));expect(curatorQuery(0,50,'inventoryNumber,asc',{advancedFilter:ast}).get('advancedFilter')).toBe(ast);
+ expect(()=>curatorQuery(0,50,'inventoryNumber,asc',{advancedFilter:JSON.stringify(group('historicalDatingText','GREATER_THAN','1982'))})).toThrow();
+});
+
+it('accepts exact MatTech UUID equality and presence but rejects text approximations',()=>{
+ const uuid='00000000-0000-0000-0000-000000000123';for(const field of ['materialAuthorityId','techniqueAuthorityId']){
+ const ast=JSON.stringify(group(field,'EQUALS',uuid));expect(curatorQuery(0,50,'title,asc',{advancedFilter:ast}).get('advancedFilter')).toBe(ast);
+ for(const op of ['CONTAINS','STARTS_WITH'])expect(()=>curatorQuery(0,50,'title,asc',{advancedFilter:JSON.stringify(group(field,op,uuid))})).toThrow();
+ expect(()=>curatorQuery(0,50,'title,asc',{advancedFilter:JSON.stringify(group(field,'EQUALS','Papír'))})).toThrow();
+ }
 });

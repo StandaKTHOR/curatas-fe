@@ -1,8 +1,12 @@
+import {validateAdvancedFilter} from '../features/scoped/advancedFilterContract';
+import CuratorSearchForm, {SearchChips,identifyGroup,withoutCondition,fieldLabel,filterValueLabel,searchLabels} from '../components/CuratorSearchForm';
+import {catalogCell} from '../features/catalog/catalogListSummary';
+import {originalSelectedPrint} from '../features/catalog/originalAdapter';
 import {originalCanClone} from '../features/catalog/originalClone';
 import {originalCanEdit,originalEditHref} from '../features/catalog/originalEdit';
 import {originalCanCreate} from '../features/catalog/originalCreate';
 import {originalIntegrationEnabled,originalItemHref,originalSession} from '../features/catalog/originalAdapter';
-import {demusTableColumns,formatDemusCell} from '../features/scoped/curatorContract';
+import {curatorFields,demusTableColumns,formatDemusCell} from '../features/scoped/curatorContract';
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import {
@@ -15,6 +19,7 @@ import {
     WorksetSummary
 } from '../lib/api'
 import { FaEdit, FaTrash, FaPrint, FaCopy, FaFileExcel, FaPlus, FaSearch, FaFilter, FaIdCard, FaLayerGroup } from 'react-icons/fa'
+import {approveFullPrint} from "../features/catalog/printRequestPolicy";
 import { printLabels } from "@/components/LabelPrinter";
 import { printItemLabel } from "@/lib/LabelService";
 import DeaccessionModal from '@/components/DeaccessionModal';
@@ -30,10 +35,12 @@ export default function AdminItems() {
     const [listLoading,setListLoading]=useState(false);
     const requestRevision = useRef(0);
     const columnScope=originalIntegrationEnabled()?String(originalSession().catalog.id):'legacy';
-    const readColumns=()=>{try{const saved=JSON.parse(localStorage.getItem('mes:demus-columns:'+columnScope)||'null');if(Array.isArray(saved))return demusTableColumns.filter(c=>saved.includes(c.id)).map(c=>c.id);}catch{/* invalid preference defaults to complete source view */}return demusTableColumns.map(c=>c.id);};
+    const readColumns=()=>{try{const saved=JSON.parse(localStorage.getItem('mes:demus-columns:'+columnScope)||'null');if(Array.isArray(saved))return [...new Set(saved.filter((id:any)=>demusTableColumns.some(c=>c.id===id)))] as string[];}catch{/* invalid preference defaults to complete source view */}return demusTableColumns.map(c=>c.id);};
     const [demusColumns,setDemusColumns]=useState<string[]>(readColumns);
     useEffect(()=>{setDemusColumns(readColumns());},[columnScope]);
     const chooseColumns=(values:string[])=>{setDemusColumns(values);try{localStorage.setItem('mes:demus-columns:'+columnScope,JSON.stringify(values));}catch{/* selection still works without local storage */}};
+    const visibleDemusColumns=demusColumns.flatMap(id=>demusTableColumns.filter(col=>col.id===id));
+    const moveColumn=(id:string,delta:number)=>{const values=[...demusColumns],index=values.indexOf(id),next=index+delta;if(index<0||next<0||next>=values.length)return;[values[index],values[next]]=[values[next],values[index]];chooseColumns(values);};
     const selectionAnchor=useRef<number|null>(null);
     const selectRow=(id:number,checked:boolean,shift:boolean)=>{
         const ids=(data?.content??[]).map((v:any)=>v.id);const start=ids.indexOf(selectionAnchor.current),end=ids.indexOf(id);
@@ -56,9 +63,10 @@ export default function AdminItems() {
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(() => (searchParams.get('sortDirection') as 'asc' | 'desc') || 'desc');
     const [selectedWorkset, setSelectedWorkset] = useState<string>(() => searchParams.get('worksetId') || '');
 
+    const [filterParseError,setFilterParseError]=useState(()=>{try{const raw=searchParams.get('advancedFilter');if(raw)validateAdvancedFilter(raw,curatorFields);return false;}catch{return true;}});
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [showAdvancedBuilder, setShowAdvancedBuilder] = useState(false);
-    const [advancedFilterGroup, setAdvancedFilterGroup] = useState<FilterGroup>(() => { try { return JSON.parse(searchParams.get('advancedFilter') || 'null') || createEmptyGroup('AND'); } catch { return createEmptyGroup('AND'); } });
+    const [advancedFilterGroup, setAdvancedFilterGroup] = useState<FilterGroup>(() => { try { return identifyGroup(JSON.parse(searchParams.get('advancedFilter') || 'null') || {...createEmptyGroup('AND'),conditions:[]}); } catch { return createEmptyGroup('AND'); } });
     const [advancedDraftGroup,setAdvancedDraftGroup]=useState<FilterGroup>(advancedFilterGroup);
     const [isAdvancedFilterActive, setIsAdvancedFilterActive] = useState(!!searchParams.get('advancedFilter'));
     const [listPrintModal, setListPrintModal] = useState<{
@@ -73,6 +81,7 @@ export default function AdminItems() {
         totalCount: undefined
     });
     const [isPrintLoading, setIsPrintLoading] = useState(false);
+    const [printError,setPrintError]=useState('');
     const navigate = useNavigate();
 
     // --- STAVY PRO PRACOVNÍ SADY & VÝBĚR ---
@@ -116,7 +125,7 @@ export default function AdminItems() {
         location: searchParams.get('location') || '',
         spravce: searchParams.get('spravce') || '',
         sourceDatingFromYear:searchParams.get('sourceDatingFromYear')||'',sourceDatingToYear:searchParams.get('sourceDatingToYear')||'',
-        ...(originalIntegrationEnabled()?Object.fromEntries([...demusTableColumns.map(c=>c.id),'Fond_S','Predmet_S','datingText','currentQuantity','currentOtherNumber'].map(k=>[k,searchParams.get(k)||''])):{})
+        ...(originalIntegrationEnabled()?Object.fromEntries([...demusTableColumns.map(c=>c.id),'Fond_S','Predmet_S','datingText','historicalDatingText','findingLocality','currentQuantity','currentOtherNumber'].map(k=>[k,searchParams.get(k)||''])):{})
     }));
 
     useEffect(()=>{
@@ -130,8 +139,10 @@ export default function AdminItems() {
         setSortDirection(query.get('sortDirection')==='asc'?'asc':'desc');
         setSelectedWorkset(query.get('worksetId')||'');
         setFilters(previous=>Object.fromEntries(Object.keys(previous).map(key=>[key,query.get(key)||''])) as typeof previous);
-        try{const value=JSON.parse(query.get('advancedFilter')||'null')||createEmptyGroup('AND');setAdvancedFilterGroup(value);setAdvancedDraftGroup(value);}
-        catch{setAdvancedFilterGroup(createEmptyGroup('AND'));setLoadError('Neplatný pokročilý filtr v URL.');}
+        setFilterParseError(false);
+        try{const value=identifyGroup(JSON.parse(query.get('advancedFilter')||'null')||{...createEmptyGroup('AND'),conditions:[]});setAdvancedFilterGroup(value);setAdvancedDraftGroup(value);}
+        catch{setFilterParseError(true);setAdvancedFilterGroup(createEmptyGroup('AND'));setLoadError('Neplatný pokročilý filtr v URL.');}
+        try{const raw=query.get('advancedFilter');if(raw)validateAdvancedFilter(raw,curatorFields);}catch{setFilterParseError(true);}
         setIsAdvancedFilterActive(query.has('advancedFilter'));
     },[location.search]);
 
@@ -162,14 +173,18 @@ export default function AdminItems() {
         if(originalIntegrationEnabled())newParams.set('catalog',String(originalSession().catalog.id));
         return '?'+newParams.toString();
     };
+    const restoredScroll=useRef<string|null>(null);
+    useEffect(()=>{if(!data||restoredScroll.current===location.search)return;restoredScroll.current=location.search;const frame=requestAnimationFrame(()=>window.scrollTo(0,Number(sessionStorage.getItem(`adminItemsScroll:${location.search}`)||0)));return()=>cancelAnimationFrame(frame);},[data,location.search]);
     const openItem = (destination:string) => {
         const fromSearch=currentSearch();
         const ids=location.search===fromSearch?(data?.content||[]).map((v:any)=>v.id):undefined;
         if(location.search!==fromSearch)navigate(location.pathname+fromSearch,{replace:true});
         sessionStorage.setItem('adminItemsSearch',fromSearch);
+        sessionStorage.setItem(`adminItemsScroll:${fromSearch}`,String(window.scrollY));
         navigate(destination,{state:{fromSearch,catalogIds:ids,returnPath:'/admin/items'}});
     };
     const loadData = () => {
+        if(filterParseError){setData(null);setLoadError('Uložený filtr nelze načíst. Upravte nebo vymažte filtry.');setListLoading(false);return;}
         const queryParams=currentQuery();
         const searchStr=currentSearch();
         if (location.search !== searchStr) {
@@ -210,7 +225,7 @@ export default function AdminItems() {
             // Invalidate pending results immediately, including during the next debounce and unmount.
             requestRevision.current++;
         };
-    }, [page, searchTerm, filters, isAdvancedFilterActive, advancedFilterGroup, sortField, sortDirection, selectedWorkset]);
+    }, [page, searchTerm, filters, isAdvancedFilterActive, advancedFilterGroup, sortField, sortDirection, selectedWorkset,filterParseError]);
 
     const handleFilterChange = (key: string, value: string) => {
         setPage(0);
@@ -218,11 +233,12 @@ export default function AdminItems() {
     };
 
     const resetFilters = () => {
+        setFilterParseError(false);setSelectedWorkset('');
         setFilters({
             accessionNumber: '', inventoryNumber: '', subCollection: '',
             objectType: '', author: '', datingFrom: '', datingTo: '',
             originPlace: '', material: '', technique: '', location: '', spravce: '',sourceDatingFromYear:'',sourceDatingToYear:'',
-            ...(originalIntegrationEnabled()?Object.fromEntries([...demusTableColumns.map(c=>c.id),'Fond_S','Predmet_S','datingText','currentQuantity','currentOtherNumber'].map(k=>[k,''])):{})
+            ...(originalIntegrationEnabled()?Object.fromEntries([...demusTableColumns.map(c=>c.id),'Fond_S','Predmet_S','datingText','historicalDatingText','findingLocality','currentQuantity','currentOtherNumber'].map(k=>[k,''])):{})
         });
         const empty=createEmptyGroup('AND');setAdvancedFilterGroup(empty);setAdvancedDraftGroup(empty);
         setIsAdvancedFilterActive(false);
@@ -230,7 +246,10 @@ export default function AdminItems() {
         setPage(0);
     };
 
+    const printSelected=async(mode:'list'|'cards')=>{if(isPrintLoading)return;setIsPrintLoading(true);try{const items=originalIntegrationEnabled()?await originalSelectedPrint(selectedIds):data.content.filter((it:any)=>selectedIds.includes(it.id));setListPrintModal({isOpen:true,mode,items,totalCount:items.length});}catch(e){alert((e as Error).message);}finally{setIsPrintLoading(false);}};
     const handlePrintList = async () => {
+        if(isPrintLoading||listLoading)return;setPrintError('');
+        try{if(originalIntegrationEnabled()&&!approveFullPrint(data?.totalElements,window.confirm.bind(window)))return;}catch(e){setPrintError((e as Error).message);return;}
         setIsPrintLoading(true);
         try {
             const queryParams: any = { q: searchTerm, ...filters, ...(originalIntegrationEnabled()?{sortField,sortDirection}:{}) };
@@ -247,7 +266,7 @@ export default function AdminItems() {
             });
         } catch (err) {
             console.error("Chyba při načítání tiskové sestavy:", err);
-            alert("Nepodařilo se načíst data pro tisk soupisu.");
+            setPrintError("Tisk nebyl připraven: "+(err as Error).message+" Zkuste požadavek opakovat nebo zúžit filtr.");
         } finally {
             setIsPrintLoading(false);
         }
@@ -309,6 +328,7 @@ export default function AdminItems() {
     };
 
     const pagination = <div className="flex flex-wrap items-center gap-2 p-2" aria-label="Stránkování evidence" aria-busy={listLoading}>
+        {listLoading&&<span role="status" aria-live="polite">Načítám stránku evidence…</span>}
         <button type="button" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Předchozí</button>
         <label>Strana <input type="text" inputMode="numeric" aria-label="Číslo stránky evidence" aria-invalid={!!pageError}
             value={pageText} onChange={e => {setPageText(e.target.value);setPageError('');}}
@@ -343,7 +363,7 @@ export default function AdminItems() {
                         </button>
                         {originalIntegrationEnabled()&&import.meta.env.VITE_CURRENT_AUTHORS_ENABLED==='true'&&<button disabled={exporting} aria-busy={exporting} onClick={handleStructuredExport} className="genric-btn success-border radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2">Export odborné evidence</button>}
                         {structuredProgress&&<p role="status">{structuredProgress}</p>}
-                        <button disabled={originalIntegrationEnabled()&&!originalCanCreate()} title="Založení podle katalogového oprávnění item.create a explicitního přepínače" onClick={() => navigate(`/admin/items/new${originalIntegrationEnabled()?'?catalog='+originalSession().catalog.id:''}`, { state: { fromSearch: currentSearch() } })} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
+                        <button disabled={originalIntegrationEnabled()&&!originalCanCreate()} title="Založit nový sbírkový předmět podle oprávnění" onClick={() => navigate(`/admin/items/new${originalIntegrationEnabled()?'?catalog='+originalSession().catalog.id:''}`, { state: { fromSearch: currentSearch() } })} className="genric-btn warning radius px-4 py-2 text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm">
                             <FaPlus /> Nový předmět
                         </button>
                     </div>
@@ -351,8 +371,10 @@ export default function AdminItems() {
 
                 <div className="flex flex-wrap gap-3">
                     <div className="flex-grow relative min-w-[240px]">
+                        <label htmlFor="curator-main-search">Co hledáte?</label>
                         <input
                             className="form-control pl-10 border-gray-200 focus:border-[#ffbc34] focus:ring-0 rounded-pill text-sm py-2 bg-gray-50"
+                            id="curator-main-search" aria-label="Co hledáte?" maxLength={255}
                             placeholder={originalIntegrationEnabled()?"Název, autor, datování, materiál, inventární nebo přírůstkové číslo":"Rychlé hledání: název, inv. číslo, popis, autor..."}
                             value={searchTerm}
                             onChange={e => { setPage(0); setSearchTerm(e.target.value); }}
@@ -376,28 +398,37 @@ export default function AdminItems() {
                         </select>
                     )}
                     <button
-                        onClick={() => {setAdvancedDraftGroup(advancedFilterGroup);setShowAdvancedBuilder(!showAdvancedBuilder);}}
+                        onClick={() => {setAdvancedDraftGroup(advancedFilterGroup.conditions.length||advancedFilterGroup.groups.length?advancedFilterGroup:createEmptyGroup('AND'));setShowAdvancedBuilder(!showAdvancedBuilder);}}
                         className={`genric-btn ${showAdvancedBuilder || isAdvancedFilterActive ? 'warning' : 'default-border'} radius px-4 text-[10px] uppercase font-black transition-all flex items-center gap-2`}
-                        title="Otevřít stavitel pokročilých podmínek (AND/OR/NOT)"
+                        title="Upravit další požadavky a jejich kombinace"
                     >
-                        <FaLayerGroup /> {isAdvancedFilterActive ? 'Pokročilý filtr (aktivní)' : 'Pokročilý filtr (AND/OR)'}
+                        <FaLayerGroup /> {isAdvancedFilterActive ? 'Další podmínky (aktivní)' : 'Složitější kombinace podmínek'}
                     </button>
-                    <button
+                    {!originalIntegrationEnabled()&&<button
                         onClick={() => setShowAdvanced(!showAdvanced)}
                         className={`genric-btn ${showAdvanced ? 'warning' : 'default-border'} radius px-4 text-[10px] uppercase font-black transition-all flex items-center gap-2`}
                     >
                         <FaFilter /> {showAdvanced ? 'Skrýt filtry' : 'Rychlé filtry'}
-                    </button>
+                    </button>}
                 </div>
 
-                <details><summary>Sloupce DEMUS</summary>{demusTableColumns.map(col=><label key={col.id}><input type="checkbox" aria-label={`Zobrazit sloupec DEMUS ${col.label}`} checked={demusColumns.includes(col.id)} onChange={e=>chooseColumns(e.target.checked?[...demusColumns,col.id]:demusColumns.filter(id=>id!==col.id))}/>{col.label} ({col.id})</label>)}<button type="button" onClick={()=>chooseColumns(demusTableColumns.map(col=>col.id))}>Zobrazit všechny sloupce DEMUS</button></details>
+                {originalIntegrationEnabled()&&<CuratorSearchForm group={isAdvancedFilterActive?advancedFilterGroup:{id:'search',conjunction:'AND',conditions:[],groups:[]}} onChange={g=>{const identified=identifyGroup(g);setAdvancedFilterGroup(identified);setAdvancedDraftGroup(identified);setIsAdvancedFilterActive(!!(g.conditions.length||g.groups.length));setPage(0);}} filters={filters} onFilter={handleFilterChange}/>}
+                <div aria-label="Aktivní filtry">
+                    {selectedWorkset&&<button type="button" onClick={()=>{setSelectedWorkset('');setPage(0);}}>Pracovní sada: {worksets.find(w=>w.id===selectedWorkset)?.name??'vybraná sada'} ×</button>}
+                    {searchTerm&&<button type="button" className="genric-btn default-border radius" onClick={()=>{setSearchTerm('');setPage(0);}}>Hledaný text: {searchTerm} ×</button>}
+                    {Object.entries(filters).filter(([,v])=>!!v).map(([key,value])=><button type="button" className="genric-btn default-border radius" key={key} aria-label={`Zrušit filtr ${fieldLabel(key)}`} onClick={()=>handleFilterChange(key,'')}>{fieldLabel(key)}: {filterValueLabel(value)} ×</button>)}
+                    {isAdvancedFilterActive&&<SearchChips group={advancedFilterGroup} onRemove={id=>{const g=identifyGroup(withoutCondition(advancedFilterGroup,id));setAdvancedFilterGroup(g);setAdvancedDraftGroup(g);setIsAdvancedFilterActive(!!(g.conditions.length||g.groups.length));setPage(0);}}/>}
+                    <button type="button" onClick={resetFilters}>Vymazat filtry</button>
+                </div>
+                <details><summary>Sloupce DEMUS</summary><p>Vyberte historické údaje DEMUS, které chcete zobrazit vedle současných polí MES. Nabídka obsahuje pouze podporované zdrojové sloupce; prázdný údaj se tím nedoplňuje. Zaškrtnutí ihned přidá příslušný sloupec do tabulky níže; šipky mění jeho pořadí. Volba mění sloupce, nikoliv filtry nebo počet předmětů. Nastavení zůstává pro vybraný katalog uložené.</p>{demusTableColumns.map(col=><label key={col.id}><input type="checkbox" aria-label={`Zobrazit sloupec DEMUS ${col.label}`} checked={demusColumns.includes(col.id)} onChange={e=>chooseColumns(e.target.checked?[...demusColumns,col.id]:demusColumns.filter(id=>id!==col.id))}/>{col.label} ({col.id})<button type="button" disabled={!demusColumns.includes(col.id)} aria-label={`Sloupec ${col.label} vlevo`} onClick={e=>{e.preventDefault();moveColumn(col.id,-1);}}>←</button><button type="button" disabled={!demusColumns.includes(col.id)} aria-label={`Sloupec ${col.label} vpravo`} onClick={e=>{e.preventDefault();moveColumn(col.id,1);}}>→</button></label>)}<button className="genric-btn primary radius" type="button" title="Přidat do seznamu všechny dostupné historické sloupce DEMUS; současné filtry zůstanou zachované." onClick={()=>chooseColumns(demusTableColumns.map(col=>col.id))}>Zobrazit všechny sloupce DEMUS</button></details>
                 {showAdvancedBuilder && (
                     <AdvancedFilterBuilder
                         filterGroup={advancedDraftGroup}
-                        fields={originalIntegrationEnabled()?scopedFilterFields:undefined}
+                        fields={originalIntegrationEnabled()?[...scopedFilterFields,...Object.entries(searchLabels).filter(([value])=>value.endsWith('Id')).map(([value,label])=>({value,label}))]:undefined}
                         onChange={setAdvancedDraftGroup}
                         onApply={() => {
-                            setAdvancedFilterGroup(advancedDraftGroup);
+                            setFilterParseError(false);
+                            setAdvancedFilterGroup(identifyGroup(advancedDraftGroup));
                             setIsAdvancedFilterActive(true);
                             setPage(0);
                         }}
@@ -409,7 +440,7 @@ export default function AdminItems() {
                     />
                 )}
 
-                {showAdvanced && (
+                {showAdvanced && !originalIntegrationEnabled() && (
                     <div className="p-4 bg-gray-50 border border-gray-100 rounded-lg animate-in slide-in-from-top-2 duration-300">
                         <div className="row g-3">
                             <div className="col-md-3">
@@ -428,7 +459,7 @@ export default function AdminItems() {
                             <label className="col-md-3">Původní DEMUS rok do<input type="number" aria-label="Původní DEMUS rok do" disabled={originalIntegrationEnabled()} title="Filtr není v existujícím scoped kontraktu" value={filters.sourceDatingToYear} onChange={e=>handleFilterChange('sourceDatingToYear',e.target.value)}/></label>
                             {originalIntegrationEnabled() && demusTableColumns.map(col => (
                                 <div key={col.id} className="col-md-3">
-                                    <label className={labelClass} htmlFor={`admin-filter-${col.id}`}>{col.label} ({col.id})</label>
+                                    <label className={labelClass} htmlFor={`admin-filter-${col.id}`}>{col.label} ({col.id})<button type="button" disabled={!demusColumns.includes(col.id)} aria-label={`Sloupec ${col.label} vlevo`} onClick={e=>{e.preventDefault();moveColumn(col.id,-1);}}>←</button><button type="button" disabled={!demusColumns.includes(col.id)} aria-label={`Sloupec ${col.label} vpravo`} onClick={e=>{e.preventDefault();moveColumn(col.id,1);}}>→</button></label>
                                     {col.kind === 'boolean' ? (
                                         <select id={`admin-filter-${col.id}`} aria-label={`Filtr ${col.label}`} className={inputClass} value={(filters as any)[col.id] || ''} onChange={e => handleFilterChange(col.id, e.target.value)}>
                                             <option value="">— Vše —</option>
@@ -462,10 +493,11 @@ export default function AdminItems() {
             </div>
 
             <div className="card-body p-0">
-                {originalIntegrationEnabled()&&<p role="status">Fond a podsbírka jsou původní zdrojové kódy; Předmět je původní Predmet_S, nikoli současné kurátorské tvrzení. Autor, datace, materiál a technika jsou současná kurátorská tvrzení, oddělená od zdroje. Prázdná buňka neprokazuje chybějící data v DEMUS.</p>}
-                {listLoading&&data&&<p role="status">Načítám stránku evidence…</p>}
+                {originalIntegrationEnabled()&&<p role="status">Fond a podsbírka jsou původní zdrojové kódy; Předmět je původní Predmet_S, nikoli současné kurátorské tvrzení. Historický podklad autora, materiálu, techniky a přírůstkového čísla je označen DEMUS; současné údaje mají přednost. Prázdná buňka neprokazuje chybějící data v DEMUS.</p>}
+                {listLoading&&data&&<p role="status">Načítám stránku evidence…</p>}{isPrintLoading&&<p role="status" aria-live="polite">Načítám úplný tiskový soupis. U velkého seznamu může příprava trvat desítky sekund…</p>}{printError&&<p role="alert">{printError}</p>}
                 {loadError && <p role="alert">{loadError} <button type="button" onClick={loadData}>Načíst znovu</button></p>}
                 {!data&&!loadError&&<p role="status" className="p-10 text-center italic text-gray-400">Načítám správu sbírek...</p>}
+                {data&&data.totalElements===0&&!listLoading&&<p role="status">Žádné předměty neodpovídají zadaným podmínkám. <button type="button" onClick={()=>document.getElementById('curator-main-search')?.focus()}>Upravit hledání</button></p>}
                 {data&&pagination}
                 {data&&<div className="table-responsive">
                     <table className="demus-datasheet" aria-label="Sbírky — tabulkové zobrazení">
@@ -477,17 +509,17 @@ export default function AdminItems() {
                             <th>Fond</th><th>Podsbírka</th><th>Předmět</th>
                             <th><button type="button" onClick={() => handleSort('title')}>Titul</button></th>
                             <th><button type="button" onClick={() => handleSort('author')}>Autor</button></th>
-                            <th>Datace</th><th>Materiál</th><th>Technika</th>{demusTableColumns.filter(col=>demusColumns.includes(col.id)).map(col => <th key={col.id}><button type="button" onClick={() => handleSort(col.id)}>{col.label}</button></th>)}<th>Stav</th><th>Akce</th>
+                            <th>Datace</th><th>Materiál</th><th>Technika</th>{visibleDemusColumns.map(col => <th key={col.id}><button type="button" onClick={() => handleSort(col.id)}>{col.label}</button></th>)}<th>Stav</th><th>Akce</th>
                         </tr></thead>
                         <tbody>{data.content.map((item: any) => <tr key={item.id}>
                             <td><input type="checkbox" aria-label={`Vybrat ${item.inventoryNumber || item.id}`} checked={selectedIds.includes(item.id)}
                                 onChange={e => selectRow(item.id,e.target.checked,!!(e.nativeEvent as MouseEvent).shiftKey)}/></td>
                             <td><button type="button" className="underline" onClick={() => openItem(originalIntegrationEnabled()?originalItemHref(item.id):`/admin/items/view/${item.id}`)}>{item.inventoryNumber || '—'}</button></td>
-                            <td>{item.accessionNumber || '—'}</td><td>{item.fundLegacyCode || item.fundName || '—'}</td>
+                            <td>{catalogCell(item,'accessionNumber')}</td><td>{(typeof item.fund==='string'&&item.fund) || item.fundLegacyCode || item.fundName || '—'}</td>
                             <td>{item.subCollection || '—'}</td><td title={originalIntegrationEnabled()?'Původní DEMUS Predmet_S; není současným kurátorským tvrzením':undefined}>{originalIntegrationEnabled()?(item.sourceInventory?.Predmet_S===null||item.sourceInventory?.Predmet_S===undefined?'—':item.sourceInventory.Predmet_S===''?'Prázdný řetězec':item.sourceInventory.Predmet_S):(item.objectType || '—')}</td><td>{item.title || '—'}</td>
-                            <td>{item.author || item.authors?.join(', ') || '—'}</td><td>{item.datingText || '—'}</td>
-                            <td>{item.material || item.materials?.join(', ') || '—'}</td><td>{item.technique || '—'}</td>
-                            {demusTableColumns.filter(col=>demusColumns.includes(col.id)).map(col => { const cell = formatDemusCell(item, col); return <td key={col.id} title={cell.title} data-source-field={col.id} data-value-state={cell.state} data-current-assertion={cell.hasCurrent ? 'present' : 'absent'}>{cell.text}</td>; })}
+                            <td>{item.catalogSummary?catalogCell(item,'author'):item.author || item.authors?.join(', ') || '—'}</td><td>{catalogCell(item,'datingText')}</td>
+                            <td>{item.catalogSummary?catalogCell(item,'material'):item.material || item.materials?.join(', ') || '—'}</td><td>{catalogCell(item,'technique')}</td>
+                            {visibleDemusColumns.map(col => { const cell = formatDemusCell(item, col); return <td key={col.id} title={cell.title} data-source-field={col.id} data-value-state={cell.state} data-current-assertion={cell.hasCurrent ? 'present' : 'absent'}>{cell.text}</td>; })}
                             <td>{item.catalogingStatus==='VYRAZENO'?'Vyřazeno':item.published ? 'Zveřejněno' : 'Neveřejné'}</td>
                             <td className="demus-row-actions">
                                 <button type="button" aria-label="Upravit předmět" disabled={originalIntegrationEnabled()&&!originalCanEdit('professional')&&!originalCanEdit('inventory')} title="Současná odborná sekce podle oprávnění" onClick={() => openItem(originalIntegrationEnabled()?originalEditHref(item.id,originalCanEdit('professional')?'professional':'inventory'):`/admin/items/edit/${item.id}`)}><FaEdit/></button>
@@ -499,6 +531,7 @@ export default function AdminItems() {
                         </tr>)}</tbody>
                     </table>
                 </div>}
+
                 {data&&pagination}
             </div>
 
@@ -517,8 +550,7 @@ export default function AdminItems() {
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => {
-                                const selectedItems = data.content.filter((it: any) => selectedIds.includes(it.id));
-                                setListPrintModal({ isOpen: true, mode: 'cards', items: selectedItems, totalCount: selectedItems.length });
+                                void printSelected('cards');
                             }}
                             className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold text-xs uppercase rounded transition-colors flex items-center gap-1.5"
                             title="Vytisknout katalogizační karty vybraných předmětů"
@@ -528,8 +560,7 @@ export default function AdminItems() {
 
                         <button
                             onClick={() => {
-                                const selectedItems = data.content.filter((it: any) => selectedIds.includes(it.id));
-                                setListPrintModal({ isOpen: true, mode: 'list', items: selectedItems, totalCount: selectedItems.length });
+                                void printSelected('list');
                             }}
                             className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold text-xs uppercase rounded transition-colors flex items-center gap-1.5"
                             title="Vytisknout soupis vybraných předmětů"

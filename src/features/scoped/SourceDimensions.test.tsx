@@ -45,3 +45,8 @@ describe('read-only professional panel',()=>{
   const fatal=vi.fn(),api={sourceDimensions:vi.fn().mockRejectedValue(new ScopedError(403))} as unknown as ScopedApi;render(<SourceDimensionsPanel api={api} itemId={1001} onFatal={fatal}/>);await waitFor(()=>expect(fatal).toHaveBeenCalledWith(403));
  });
 });
+
+it('keeps exact measurement visible while technical explanation is collapsed',async()=>{
+ const api={sourceDimensions:vi.fn().mockResolvedValue({value:{items:[row],nextOffset:null},etag:'"0"'})} as unknown as ScopedApi;
+ render(<SourceDimensionsPanel api={api} itemId={1001} onFatal={vi.fn()}/>);expect(await screen.findByTestId('source-dimension-value')).toBeVisible();expect(screen.getByText('Jak číst historické míry DEMUS').closest('details')).not.toHaveAttribute('open');expect(screen.getByText('Podrobnosti zdrojové hodnoty').closest('details')).not.toHaveAttribute('open');
+});

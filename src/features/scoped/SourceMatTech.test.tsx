@@ -20,7 +20,23 @@ it('renders repeated tuples NULL missing dictionary and original order without e
  render(<SourceMatTechPanel api={api} itemId={1001} onFatal={vi.fn()}/>);
  expect(await screen.findAllByTestId('source-material')).toHaveLength(2);expect(screen.getAllByTestId('source-material')[0].textContent).toBe(' GEN ');
  expect(screen.getAllByTestId('source-technique')[0]).toHaveTextContent('Neuvedeno');expect(screen.getAllByText(/Chybí přesná vazba/)).toHaveLength(2);expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
- expect(screen.getAllByTestId('mattech-reference-review')).toHaveLength(2);
+ expect(screen.queryByTestId('mattech-reference-review')).not.toBeInTheDocument(); // NULL is not an unresolved technique.
+});
+it('automatically distinguishes current assignments from unresolved historical dictionary references without writes',async()=>{
+ const api={sourceMatTech:vi.fn().mockResolvedValue({value:{items:[{...row,technique:'nejednoznačná technika',techniqueState:'AMBIGUOUS'}],nextOffset:null},etag:'"0"'}),professionalRecords:vi.fn().mockResolvedValue({items:[{kind:'MATERIAL_TECHNIQUE',payload:{materialAuthorityId:'uuid'}}],etag:'"0"'})} as unknown as ScopedApi;
+ render(<SourceMatTechPanel api={api} itemId={1001} onFatal={vi.fn()}/>);
+ expect(await screen.findByText(/Současná přiřazení automaticky načtena: materiály 1, techniky 0/)).toBeInTheDocument();
+ expect(screen.getByTestId('mattech-reference-review')).toHaveTextContent('Historické přiřazení vyžaduje odborné ověření');
+ expect(api.professionalRecords).toHaveBeenCalledWith(1001,expect.any(AbortSignal));
+});
+it('does not report completed current assignments for mixed item versions',async()=>{
+ const api={sourceMatTech:vi.fn().mockResolvedValue({value:{items:[row],nextOffset:null},etag:'"0"'}),professionalRecords:vi.fn().mockResolvedValue({items:[{kind:'MATERIAL_TECHNIQUE',payload:{materialAuthorityId:'uuid'}}],etag:'"1"'})} as unknown as ScopedApi;
+ render(<SourceMatTechPanel api={api} itemId={1001} onFatal={vi.fn()}/>);await screen.findByRole('alert');
+ expect(screen.getByTestId('mattech-current-status')).not.toHaveTextContent('materiály 1');
+});
+it('keeps historical reading available in catalogs without current professional records',async()=>{
+ const api={sourceMatTech:vi.fn().mockResolvedValue({value:{items:[row],nextOffset:null},etag:'"0"'}),professionalRecords:vi.fn().mockRejectedValue(new Error('Disabled'))} as unknown as ScopedApi;
+ render(<SourceMatTechPanel api={api} currentEnabled={false} itemId={1001} onFatal={vi.fn()}/>);await screen.findByTestId('source-material');expect(api.professionalRecords).not.toHaveBeenCalled();
 });
 it('discards mixed-version pages rather than appending another source version',async()=>{
  const api={sourceMatTech:vi.fn().mockResolvedValueOnce({value:{items:[row],nextOffset:1},etag:'"0"'}).mockResolvedValueOnce({value:{items:[{...row,recordId:'d'.repeat(64)}],nextOffset:null},etag:'"1"'})} as unknown as ScopedApi;

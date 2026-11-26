@@ -1,3 +1,4 @@
+import {dictionaryLabel} from '../features/catalog/dictionaryLabel';
 import type { MuseumRecord, MuseumRecordKind } from './api';
 
 export const professionalFields: Record<MuseumRecordKind, [string,string][]> = {
@@ -17,10 +18,23 @@ export const professionalFields: Record<MuseumRecordKind, [string,string][]> = {
 export function professionalValue(record: MuseumRecord, key: string): unknown {
     return Object.prototype.hasOwnProperty.call(record.payload,key) ? record.payload[key] : record.legacyData?.[key];
 }
+export function professionalHistoricalLabel(record: MuseumRecord): string {
+    return ['materialHistoricalRef','techniqueHistoricalRef'].flatMap(key=>{
+        const ref=record.payload[key] as {label?:string|null;code?:string|null;recordId?:string}|null|undefined;
+        return ref?.recordId?[(record as MuseumRecord & {authorityLabels?:Record<string,string>}).authorityLabels?.[key]??dictionaryLabel(ref)]:[];
+    }).join(' / ');
+}
+/** Current UUID payload and legacy bigint links are distinct identities. */
+export function professionalAuthorityId(record: MuseumRecord, type: 'MATERIAL'|'TECHNIQUE'): string|number|null {
+    const key=type==='MATERIAL'?'materialAuthorityId':'techniqueAuthorityId';
+    const current=record.payload[key];
+    if(typeof current==='string'&&current.length>0)return current;
+    return (type==='MATERIAL'?record.materialDictionaryId:record.techniqueDictionaryId)??null;
+}
 export function professionalDraft(record: MuseumRecord): Record<string,unknown> {
-    return Object.fromEntries(professionalFields[record.kind].map(([key])=>[key,professionalValue(record,key)]));
+    return Object.fromEntries([...professionalFields[record.kind].map(([key])=>key),...(record.kind==='MATERIAL_TECHNIQUE'?['materialAuthorityId','techniqueAuthorityId','materialHistoricalRef','techniqueHistoricalRef']:[])].map(key=>[key,professionalValue(record,key)]));
 }
 export function professionalDelta(kind: MuseumRecordKind, draft: Record<string,unknown>, record?: MuseumRecord | null) {
-    return Object.fromEntries(professionalFields[kind].filter(([key]) => draft[key] !== undefined &&
+    return Object.fromEntries([...professionalFields[kind],...(kind==='MATERIAL_TECHNIQUE'?[['materialAuthorityId',''],['techniqueAuthorityId',''],['materialHistoricalRef',''],['techniqueHistoricalRef','']]:[])].filter(([key]) => draft[key] !== undefined &&
         (!record || JSON.stringify(draft[key]) !== JSON.stringify(professionalValue(record,key)))).map(([key])=>[key,draft[key]]));
 }

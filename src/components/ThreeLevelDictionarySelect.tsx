@@ -1,4 +1,5 @@
 import PagedThreeLevelDictionarySelect from './PagedThreeLevelDictionarySelect';
+import PagedMatTechPositions from './PagedMatTechPositions';
 import AddDictionaryModal from './AddDictionaryModal';
 import {managedAuthoritiesEnabled} from '../features/catalog/useManagedAuthorities';
 import {originalDictionaryTree} from '../features/catalog/originalDictionary';
@@ -30,9 +31,11 @@ function findPath(nodes: Node[], id: number|string | null, path: Node[] = []): N
     return [];
 }
 function OriginalThreeLevelDictionarySelect({ type, label, value, historicalValue, onChange, readOnly = false, allowEmpty = true, scoped = false, scopedValue, onScopedChange, unavailableReason,historicalSource=false }: {
-    type: 'MATERIAL' | 'TECHNIQUE'; label: string; value: number | null; scoped?:boolean; scopedValue?:string|null; onScopedChange?:(id:string|null)=>void;
+    type: 'MATERIAL' | 'TECHNIQUE'; label: string; value: number | null; scoped?:boolean; scopedValue?:string|null; onScopedChange?:(id:string|null)=>void;sourceValue?:import("../features/scoped/scopedApi").HistoricalVocabularyValue|null;onHistoricalChange?:(source:import("../features/scoped/scopedApi").HistoricalVocabularyValue|null)=>void;
+    historicalSlots?:Record<string,import("../features/scoped/scopedApi").HistoricalVocabularyValue>;onHistoricalSlotChange?:(position:number,source:import("../features/scoped/scopedApi").HistoricalVocabularyValue|null)=>void;
     historicalValue?: string | null;historicalSource?:boolean; readOnly?: boolean; allowEmpty?: boolean;
     unavailableReason?:string;
+    positions?:import('./MatTechPositions').MatTechPosition[];positionAdding?:boolean;onPositionChange?:(index:number,id:string|null)=>void;
     onChange: (id: number | null, choice?: Choice) => void;
 }) {
     const [managedModal,setManagedModal]=useState<'create'|'edit'|null>(null);
@@ -101,11 +104,11 @@ function OriginalThreeLevelDictionarySelect({ type, label, value, historicalValu
                 </select>
             </label>;
         })}
-        <p className="text-xs text-gray-600">{scoped?(onScopedChange?'Výběr se uloží až tlačítkem Přidat vazbu. Současný text ani historický zdroj se nemění.':'Prohlížení katalogového číselníku: výběr je dočasný. Pro přiřazení použijte část Současné číselníkové vazby. Současný text ani zdroj se nemění.'):'Vyberte dostupné úrovně od kořene. Změna nadřazené úrovně zruší výběr jejích potomků; údaje se uloží až po potvrzení formuláře.'}</p>
+        <p className="text-xs text-gray-600">{scoped?(onScopedChange?'Výběr se uloží až výslovným potvrzením v příslušné části formuláře. Současný text ani historický zdroj se nemění.':'Prohlížení katalogového číselníku: výběr je dočasný. Pro přiřazení použijte část Současné číselníkové vazby. Současný text ani zdroj se nemění.'):'Vyberte dostupné úrovně od kořene. Změna nadřazené úrovně zruší výběr jejích potomků; údaje se uloží až po potvrzení formuláře.'}</p>
         {scoped&&managedAuthoritiesEnabled()&&<><button data-scoped-reference-editor type="button" disabled={readOnly||!managedWritable||loading} title={!managedWritable?'Vyžaduje dictionary.write a zapnutý zapisovatelný kontrakt.':undefined} onClick={()=>void manage(false)}>+ Nová položka číselníku</button><button data-scoped-reference-editor type="button" disabled={readOnly||!managedWritable||!selectedValue||loading} onClick={()=>void manage(true)}>Upravit vybranou položku</button></>}
         {managedModal&&<AddDictionaryModal isOpen dictionaryType={type} dictionaryTitle={label} onClose={()=>setManagedModal(null)} onSuccess={()=>{}} editing={managedModal==='edit'} initialValue={managedVersion??undefined} parentOptions={flat(nodes).filter(n=>n.id!==managedVersion?.id).map(n=>({id:n.id,label:n.label}))} onCreate={async input=>{const {api,signal}=originalSession();const result=await api.saveDictionary(type,{label:input.label,code:input.code,parentId:input.parentId,reason:managedModal==='edit'?'Výslovná úprava současného číselníku':'Vytvoření současné položky číselníku'},signal,managedVersion?.id,managedVersion?.etag);if(signal.aborted)return;invalidateHierarchy(type);setRevision(v=>v+1);onScopedChange?.(result.value.id);}}/>}
         {!allowEmpty && <p className="text-xs text-gray-600">Stávající vazbu lze změnit. Její úplné odebrání tento záznam zatím nepodporuje; úprava jiných polí ji zachová.</p>}
     </fieldset>;
 }
 
-export default function ThreeLevelDictionarySelect(props:Parameters<typeof OriginalThreeLevelDictionarySelect>[0]){return props.scoped&&managedAuthoritiesEnabled()?<PagedThreeLevelDictionarySelect {...props}/>:<OriginalThreeLevelDictionarySelect {...props}/>;}
+export default function ThreeLevelDictionarySelect(props:Parameters<typeof OriginalThreeLevelDictionarySelect>[0]){return props.positions&&props.onPositionChange?<PagedMatTechPositions type={props.type} label={props.label} positions={props.positions} readOnly={props.readOnly??false} adding={props.positionAdding??false} onPositionChange={props.onPositionChange}/>:props.scoped&&managedAuthoritiesEnabled()?<PagedThreeLevelDictionarySelect {...props}/>:<OriginalThreeLevelDictionarySelect {...props}/>;}

@@ -5,6 +5,8 @@ import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import AuthorityAndRangeBindings from './AuthorityAndRangeBindings';
 import MuseumSection from '../../components/MuseumSection';
 import {bindOriginalCatalog} from './originalAdapter';
+vi.mock('./CatalogContext',()=>({useCatalog:()=>({selectedCatalog:catalog})}));
+vi.mock('../../components/AuthContext',()=>({useAuth:()=>({token:'SYNTHETIC_TOKEN'})}));
 
 const catalog={
  id:71,catalogId:71,code:'GEN',name:'Generated',version:0,
@@ -36,17 +38,18 @@ afterEach(()=>{
 describe('Priority 2: AuthorityAndRangeBindings (Určil, GROUP, Author role, Fund, Subcollection, Inventory Range)',()=>{
  it('loads and saves inventory-range and authorities with source-choices, validation, and ETag propagation',async()=>{
   let version=0;
-  let rangeState={lowerNumber:null as string|null,upperNumber:null as string|null,seriesRecordId:null as string|null};
+  let rangeState:Record<string,string|null>={lowerNumber:null,upperNumber:null,seriesRecordId:null};
   let rangePresent=false;
   let authState={determinedByText:null as string|null,authorRoleText:null as string|null,groupRecordId:null as string|null,fundRecordId:null as string|null,collectionRecordId:null as string|null,departmentRecordId:null as string|null,objectTypeRecordId:null as string|null};
   let authPresent=false;
   const f=vi.fn().mockImplementation((url:string,init:any={})=>{
    const u=new URL(String(url),'https://unit.invalid');
+   if(u.pathname.endsWith('/professional-registers/capabilities'))return Promise.resolve(new Response('{}',{status:404}));
    if(u.pathname.endsWith('/curator-record/inventory-range')){
     if(init.method==='PUT'){
      expect(init.headers['If-Match']).toBe(`"${version}"`);
      const body=JSON.parse(init.body);
-     rangeState={lowerNumber:String(body.lowerNumber),upperNumber:body.upperNumber===null?null:String(body.upperNumber),seriesRecordId:body.seriesRecordId};
+     rangeState={lowerNumber:String(body.lowerNumber),upperNumber:body.upperNumber===null?null:String(body.upperNumber),seriesRecordId:body.seriesRecordId,prefix:body.prefix,postfix:body.postfix};
      rangePresent=true;version++;
     }
     return Promise.resolve(reply({catalogId:71,itemId:101,itemVersion:version,section:'inventory-range',values:rangeState,hasCurrentAssertion:rangePresent,origin:'CURRENT_CURATOR_STATEMENT_NOT_SOURCE'},version));
@@ -71,7 +74,7 @@ describe('Priority 2: AuthorityAndRangeBindings (Určil, GROUP, Author role, Fun
   const onSave=vi.fn();
   render(<AuthorityAndRangeBindings itemId={101} onSave={onSave}/>);
   await screen.findByRole('option',{name:'R-1 — Řada 1'});
-  await screen.findByRole('option',{name:'F-1 — Fond 1'});
+  await screen.findByRole('option',{name:'Fond 1 — F-1'});
 
   // Invalid reversed range rejected before transport
   await userEvent.type(screen.getByLabelText('Dolní pořadové číslo'),'20');
@@ -79,6 +82,10 @@ describe('Priority 2: AuthorityAndRangeBindings (Určil, GROUP, Author role, Fun
   await userEvent.click(screen.getByRole('button',{name:'Uložit rozsah a řadu'}));
   expect(await screen.findByRole('alert')).toHaveTextContent('Dolní pořadové číslo musí být menší nebo rovno hornímu');
 
+  // Explicit current text qualification before a valid range save
+  await userEvent.click(screen.getByRole('button',{name:'Upřesnit prefix a postfix pro kontrolu překryvů'}));
+  await userEvent.type(screen.getByLabelText('Rozsah: prefix'),'N ');
+  await userEvent.type(screen.getByLabelText('Rozsah: postfix'),'_CZE6MM E');
   // Valid range + series save
   await userEvent.clear(screen.getByLabelText('Dolní pořadové číslo'));
   await userEvent.type(screen.getByLabelText('Dolní pořadové číslo'),'12');
@@ -87,7 +94,7 @@ describe('Priority 2: AuthorityAndRangeBindings (Určil, GROUP, Author role, Fun
   await userEvent.selectOptions(screen.getByLabelText('Inventární řada (číselník InvRady)'),hex('1'));
   await userEvent.click(screen.getByRole('button',{name:'Uložit rozsah a řadu'}));
   await waitFor(()=>expect(onSave).toHaveBeenCalledWith('"1"'));
-  expect(rangeState).toEqual({lowerNumber:'12',upperNumber:'15',seriesRecordId:hex('1')});
+  expect(rangeState).toEqual({lowerNumber:'12',upperNumber:'15',seriesRecordId:hex('1'),prefix:'N ',postfix:'_CZE6MM E'});
 
   // Authorities save (Určil, Role autora, Fond, Podsbírka, Skupina, Oddělení, Předmět)
   await userEvent.type(screen.getByLabelText('Určil (současné kurátorské tvrzení)'),'Doc. GENERATED');
@@ -113,7 +120,7 @@ describe('Priority 2: AuthorityAndRangeBindings (Určil, GROUP, Author role, Fun
 
 describe('Priority 3: Specialist Tabs (Reference, Manipulace, Akce, ISO) in MuseumSection',()=>{
  it.each([
-  ['bibliography','reference','Reference — nativní klíč','Ref_RF','GEN-REF-1',{Ref_RF:null,Str_RF:null}],
+  ['bibliography','reference','Strany','Str_RF','10–12',{Ref_RF:'EXISTING',Str_RF:null}],
   ['manipulation','manipulation','Typ manipulace','Typ_MN','Revize 2026',{Typ_MN:null,DatMan_MN:null,Kdo_MN:null,Stav_MN:null,Osetreni_MN:null,InvRev_MN:null,PopisSt_MN:null}],
   ['action','action','Prezentace','Prezentace_AK','Stálá expozice',{Poradi_AK:null,Prezentace_AK:null,Revers_AK:null,CKtlg_AK:null,Pozn_AK:null}],
   ['iso','iso','Kód ISO','KodISO_SO','ISO-99',{KodISO_SO:null,CharISO_SO:null,MatISO_SO:null,CenaISO_SO:null,MenaISO_SO:null,PovrchISO_SO:null,TvarISO_SO:null}],
@@ -123,6 +130,7 @@ describe('Priority 3: Specialist Tabs (Reference, Manipulace, Akce, ISO) in Muse
   let present=true;
   const f=vi.fn().mockImplementation((url:string,init:any={})=>{
    const u=new URL(String(url),'https://unit.invalid');
+   if(u.pathname.endsWith('/professional-registers/capabilities'))return Promise.resolve(new Response('{}',{status:404}));
    if(u.pathname.endsWith('/curator-record/'+curatorSec)){
     if(init.method==='PUT'){
      expect(init.headers['If-Match']).toBe(`"${version}"`);
@@ -150,7 +158,7 @@ describe('Priority 3: Specialist Tabs (Reference, Manipulace, Akce, ISO) in Muse
   expect(stored[fieldKey]).toBe(entered);
   expect(editSession.etag).toBe('"1"');
   expect(onSave).toHaveBeenCalledTimes(1);
-  expect(screen.getByText('Současné kurátorské tvrzení · #0')).toBeInTheDocument();
+  expect(screen.getByText('Současné kurátorské tvrzení')).toBeInTheDocument();
  });
 });
 
@@ -171,3 +179,4 @@ it('blocks input before the authoritative snapshot and preserves a reversed rang
  await userEvent.click(screen.getByRole('button',{name:'Uložit rozsah a řadu'}));expect(await screen.findByRole('alert')).toHaveTextContent('Dolní pořadové číslo musí být menší nebo rovno hornímu');expect(drafts.current.rangeBindings.dirty).toBe(true);
  component.unmount();render(<AuthorityAndRangeBindings itemId={101} mode="range" drafts={drafts}/>);await waitFor(()=>expect(screen.getByLabelText('Dolní pořadové číslo')).toBeEnabled());expect(screen.getByLabelText('Dolní pořadové číslo')).toHaveValue('20');expect(screen.getByLabelText('Horní pořadové číslo')).toHaveValue('10');expect(f.mock.calls.every(c=>c[1]?.method!=='PUT')).toBe(true);
 });
+

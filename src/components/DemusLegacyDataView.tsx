@@ -1,3 +1,4 @@
+import TechnicalDemus,{useCleanItemCard} from '../features/catalog/TechnicalDemus';
 import React from 'react';
 
 type Props = {
@@ -60,7 +61,16 @@ function formatVal(val: any): string {
     return String(val);
 }
 
-export default function DemusLegacyDataView({ legacyData, title = 'DEMUS – Historická a doplňková data', showRawJson = true, unavailableMessage }: Props) {
+export default function DemusLegacyDataView(props:Props){const clean=useCleanItemCard();if(!clean)return <LegacyData {...props}/>;const rows=legacyBusinessEntries(props.legacyData);return <><section aria-label="Původní odborné údaje DEMUS"><dl className="demus-evidence-grid">{rows.map((r,i)=><div key={i}><dt>{r.label}</dt><dd style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{r.value}</dd></div>)}</dl></section><TechnicalDemus title="Úplná historická data"><LegacyData {...props}/></TechnicalDemus></>;}
+export function legacyBusinessEntries(data:unknown):{label:string;value:string}[]{
+ const result:{label:string;value:string}[]=[];const technical=new Set(['recordId','artifactId','sourceSha256','rowHash','occurrence','parentRecordId','parentField','sourcePath','relationshipId','sourceLocalId','id','uuid','record_id','artifact_id','source_id','sha256','sourceKey','sourceTable','sourceRecord']);
+ const labels:Record<string,string>={Karta_S:'Karta',Opsana_S:'Opsána',Overena_S:'Ověřena',JineC_S:'Jiné číslo',Fond_S:'Fond',Skupina_S:'Skupina',Zapsal_S:'Zapsal v DEMUS',DatZap_S:'Datum zápisu v DEMUS',DatZm_S:'Datum změny v DEMUS',Titul_S:'Titul',Predmet_S:'Předmět',Autor_S:'Autor',Datace_S:'Datace'};
+ const visit=(object:unknown,depth=0)=>{if(!object||typeof object!=='object'||depth>8)return;for(const [key,value] of Object.entries(object)){if(technical.has(key)||/^IdC_/.test(key))continue;if(/^[a-f0-9]{64}$/.test(key)||['fields','raw'].includes(key)){visit(value,depth+1);continue;}if(Array.isArray(value)){for(const [i,entry] of value.entries()){if(entry&&typeof entry==='object')visit(entry,depth+1);else if(entry!==null&&entry!==undefined)result.push({label:formatKey(key)+' '+(i+1),value:String(entry)});}continue;}const typed=value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:null;
+ let shown:unknown=value;if(typed){if(typed.kind==='NULL')shown='Neuvedeno';else if(['TEXT','INTEGER','TEMPORAL','BOOLEAN'].includes(String(typed.kind)))shown=typed.value;else if(!('kind' in typed)){visit(typed,depth+1);continue;}else shown='Údaj vyžaduje odborné ověření; původní zápis je v technických údajích.';}
+ if(shown===null||shown===undefined||typeof shown==='object')continue;result.push({label:labels[key]??formatKey(key.replace(/_[A-Z]+$/,'')),value:typeof shown==='boolean'?shown?'Ano':'Ne':String(shown)});
+ }};visit(data);return result;
+}
+function LegacyData({ legacyData, title = 'DEMUS – Historická a doplňková data', showRawJson = true, unavailableMessage }: Props) {
     if (!legacyData || typeof legacyData !== 'object') {
         return (
             <div className="rounded border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500 italic">

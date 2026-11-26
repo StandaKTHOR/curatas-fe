@@ -11,8 +11,11 @@ import Login from './pages/Login';
 import ProtectedRoute, { getUserRoles } from './components/ProtectedRoute';
 import AdminItemForm from './pages/AdminItemForm';
 import DataImport from './pages/DataImport';
+import Dictionaries from './pages/Dictionaries';
+import ProfessionalRegistry from './features/catalog/ProfessionalRegistry';
 import { importTexts } from './features/import/texts';
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import Help from './features/help/Help';
 
 function AppContent() {
     const appRef = useRef<HTMLDivElement>(null);
@@ -45,7 +48,8 @@ function AppContent() {
             <nav aria-label="Hlavní menu" className="demus-menubar">
                 <NavLink end to="/">Katalog sbírek</NavLink>
                 {token && <NavLink to="/admin/items">Sbírky — evidence předmětů</NavLink>}
-                {token && selectedCatalog?.capabilities?.some(c => (['catalog.grant.manage', 'catalog.access.delegate', 'catalog.audit.read'].includes(c)||import.meta.env.VITE_MANAGED_AUTHORITIES_ENABLED==='true'&&c==='dictionary.write')) && <NavLink to="/admin">Správa uživatelů a přístupů</NavLink>}
+                {token && selectedCatalog?.capabilities?.some(c => ['catalog.grant.manage', 'catalog.access.delegate', 'catalog.audit.read'].includes(c)) && <NavLink to="/admin">Správa uživatelů a přístupů</NavLink>}
+                {token && import.meta.env.VITE_MANAGED_AUTHORITIES_ENABLED==='true' && selectedCatalog?.capabilities?.includes('dictionary.read') && <NavLink to={selectedCatalog?`/admin/dictionaries?catalog=${selectedCatalog.id}`:'/admin/dictionaries'}>Správa číselníků</NavLink>}
                 {admin && <NavLink to="/admin/import">{importTexts.title}</NavLink>}
                 <NavLink to={selectedCatalog?`/feedback?catalog=${selectedCatalog.id}`:'/feedback'}>Připomínky</NavLink>
                 {token && <label>Katalog <select aria-label="Katalog" disabled={catalogLoading} value={selectedCatalog?.id??''}
@@ -59,8 +63,10 @@ function AppContent() {
                 </span>}
                 {token ? <button type="button" onClick={logout}>Odhlásit se</button>
                     : <NavLink to="/login">Vstup pro kurátory</NavLink>}
+                <Help/>
             </nav>
         </header>}
+        {login&&<Help standalone/>}
         <main className="demus-workspace">
             {restoring?<p role="status">Obnovuji přihlášení…</p>:<Routes key={`${token??'anonymous'}:${selectedCatalog?.id??'none'}`}>
                 <Route path="/" element={!token?<Navigate to="/login" replace />:selectedCatalog?<Catalog />:<p role="status">Vyberte katalog.</p>} />
@@ -70,6 +76,10 @@ function AppContent() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/admin" element={!token?<Navigate to="/login" replace />:selectedCatalog?<Admin />:<p role="status">Vyberte katalog.</p>} />
                 <Route path="/scoped/users" element={!token?<Navigate to="/login" replace />:selectedCatalog?<Admin />:<p role="status">Vyberte katalog.</p>} />
+                <Route path="/admin/dictionaries" element={!token?<Navigate to="/login" replace />:selectedCatalog?<Dictionaries />:<p role="status">Vyberte katalog.</p>} />
+                <Route path="/admin/parties" element={!token?<Navigate to="/login" replace />:selectedCatalog?<ProfessionalRegistry kind="PARTY"/>:<p>Vyberte katalog.</p>} />
+                <Route path="/admin/literature" element={!token?<Navigate to="/login" replace />:selectedCatalog?<ProfessionalRegistry kind="LITERATURE"/>:<p>Vyberte katalog.</p>} />
+                <Route path="/admin/iso-states" element={!token?<Navigate to="/login" replace />:selectedCatalog?<ProfessionalRegistry kind="ISO_STATE"/>:<p>Vyberte katalog.</p>} />
                 <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
                     <Route path="/admin/import" element={<DataImport />} />
                 </Route>

@@ -37,3 +37,11 @@ export const historicalStateLabel=(state:string)=>({SOURCE_PARENT_MISSING:'Zdroj
 export function historicalFieldLines(fields:Record<string,TypedHistorical>){
  return Object.entries(fields).map(([key,value])=>`${key} [${value.kind}]: ${historicalText(value)}`).join('\n');
 }
+
+/** Curator caption only; exact typed payload stays in the technical source disclosure. */
+export function historicalCuratorText(value:TypedHistorical|undefined){
+ if(!value||value.kind==='NULL')return 'Neuvedeno';
+ if(value.kind==='BOOLEAN')return value.value?'Ano':'Ne';
+ if(['TEXT','INTEGER','TEMPORAL'].includes(value.kind))return value.value===''?'Prázdný údaj':String(value.value);
+ return 'Údaj vyžaduje odborné ověření; původní zápis je v technických údajích.';
+}

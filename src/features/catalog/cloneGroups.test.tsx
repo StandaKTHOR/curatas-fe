@@ -1,0 +1,22 @@
+import {render,screen,fireEvent,cleanup} from '@testing-library/react';
+import {afterEach,it,expect,vi} from 'vitest';
+import {cloneGroups,allCloneGroups,checkedCloneGroups,CloneGroupSelection} from './cloneGroups';
+import {scopedApi} from '../scoped/scopedApi';
+import {bindOriginalCatalog} from './originalAdapter';
+import {applyOriginalCreationBoundary} from './originalCreate';
+afterEach(()=>{cleanup();bindOriginalCatalog(null,null);vi.unstubAllGlobals();vi.unstubAllEnvs();});
+it('offers all supported groups, partial selection and an explicit empty profile',()=>{const changed=vi.fn();render(<CloneGroupSelection value={[...allCloneGroups]} onChange={changed}/>);expect(screen.getAllByRole('checkbox')).toHaveLength(18);fireEvent.click(screen.getByLabelText(cloneGroups[0][1]));expect(changed).toHaveBeenLastCalledWith(allCloneGroups.filter(v=>v!=='professional'));fireEvent.click(screen.getByRole('button',{name:'Nevybrat žádnou skupinu'}));expect(changed).toHaveBeenLastCalledWith([]);fireEvent.click(screen.getByRole('button',{name:'Vybrat všechny podporované skupiny'}));expect(changed).toHaveBeenLastCalledWith(allCloneGroups);});
+it('rejects source, identity and audit groups or duplicate group names',()=>{for(const value of [['source'],['inventory-range'],['audit'],['inventory','inventory']])expect(()=>checkedCloneGroups(value)).toThrow();expect(checkedCloneGroups([])).toEqual([]);});
+it('sends the selected groups to the actual scoped clone transport with CAS and idempotency',async()=>{vi.stubEnv('VITE_LOCAL_AUTH_ENABLED','false');const key='11111111-1111-4111-8111-111111111111';const fetch=vi.fn().mockResolvedValue(new Response('{}',{status:409}));vi.stubGlobal('fetch',fetch);const api=scopedApi(1,'generated');await expect(api.cloneItem(3,key,'"7"',{title:'Židle',inventoryNumber:'EXPLICIT-NEW',copyGroups:['inventory','dimensions']},new AbortController().signal)).rejects.toThrow();const [url,input]=fetch.mock.calls[0];expect(url).toContain('/catalogs/1/items/3/clone');expect(JSON.parse(input.body).copyGroups).toEqual(['dimensions','inventory']);expect(input.headers).toMatchObject({'If-Match':'"7"','Idempotency-Key':key});});
+it('survives the real creation boundary only with create and clone capabilities',()=>{
+ const catalog={id:1,code:'G',name:'Generated',version:0,institution:{id:1,code:'G',name:'Generated'},capabilities:['item.read','item.create'],creationEnabled:true,cloneEnabled:true,cloneReadEnabled:true};bindOriginalCatalog(catalog,'generated');const changed=vi.fn(),v=render(<CloneGroupSelection value={[...allCloneGroups]} onChange={changed}/>);
+ applyOriginalCreationBoundary(v.container,true);const none=screen.getByRole('button',{name:'Nevybrat žádnou skupinu'});expect(none).toBeEnabled();fireEvent.click(none);expect(changed).toHaveBeenCalledWith([]);
+ bindOriginalCatalog({...catalog,cloneEnabled:false},'generated');applyOriginalCreationBoundary(v.container,true);expect(none).toBeDisabled();expect(screen.getAllByRole('checkbox').every(v=>(v as HTMLInputElement).disabled)).toBe(true);
+});
+it.each([{}, {selectedGroups:[]}, {selectedGroups:['inventory'],historicalSourceEvidenceCopied:true}])('never confirms a successful HTTP response with a missing or conflicting selected profile',async copied=>{
+ vi.stubEnv('VITE_LOCAL_AUTH_ENABLED','false');const key='11111111-1111-4111-8111-111111111111';const item={id:4,catalogId:1,title:'Generated',inventoryNumber:'NEW',accessionNumber:null,version:0};
+ vi.stubGlobal('fetch',vi.fn().mockImplementation(()=>Promise.resolve(new Response(JSON.stringify({item,requestId:key,replayed:false,clonedFromItemId:3,copied:{historicalSourceEvidenceCopied:false,inventoryIdentityCopied:false,historicalActivityCopied:0,...copied}}),{status:201,headers:{ETag:'"0"','Cache-Control':'no-store',Location:'/api/v2/catalogs/1/items/4'}}))));
+ const api=scopedApi(1,'generated'),signal=new AbortController().signal;await expect(api.cloneItem(3,key,'"7"',{title:'Generated',inventoryNumber:'NEW',copyGroups:['inventory']},signal)).rejects.toThrow('Server nepotvrdil');await expect(api.cloneOutcome(key,signal,['inventory'])).rejects.toThrow('Server nepotvrdil');
+});
+
+it('defaults to the complete supported current record including history, determination, media and E/F',()=>{expect(allCloneGroups).toEqual(expect.arrayContaining(['history','professional-records','media','authorities','acquisitions','professional-links']));expect(checkedCloneGroups(['authorities','acquisitions','professional-links'])).toEqual(['acquisitions','authorities','professional-links']);});

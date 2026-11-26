@@ -851,6 +851,7 @@ export async function uploadAttachment(itemId: number, file: File, caption?: str
 }
 
 export async function deleteAttachment(itemId: number, attachmentId: number) {
+    if(originalIntegrationEnabled())return unsupported();
     const r = await fetch(resolveApiUrl(`/api/v1/items/${itemId}/attachments/${attachmentId}`), {
         method: 'DELETE',
         headers: getAuthHeader()

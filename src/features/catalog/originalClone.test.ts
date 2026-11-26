@@ -1,3 +1,4 @@
+import {allCloneGroups} from './cloneGroups';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {bindOriginalCatalog,originalDemusIdentity} from './originalAdapter';
 import {cloneOriginalItem,originalCanClone,originalCloneOutcome} from './originalClone';
@@ -11,8 +12,8 @@ it.each(['clone','creation','permission','evidence-read'])('requires explicit %s
  bindOriginalCatalog({...catalog,cloneReadEnabled:missing!=='evidence-read',cloneEnabled:missing!=='clone',creationEnabled:missing!=='creation',capabilities:missing==='permission'?['catalog.read','item.read']:catalog.capabilities},'OTHER');const fetch=vi.fn();vi.stubGlobal('fetch',fetch);expect(originalCanClone()).toBe(false);await expect(cloneOriginalItem(10,crypto.randomUUID(),{title:'A',inventoryNumber:'G-2'})).rejects.toThrow('nemáte');expect(fetch).not.toHaveBeenCalled();
 });
 it('uses the actual source version and independent request key; never sends old IDs, children or audit',async()=>{
- const key=crypto.randomUUID(),item={...source,id:42,inventoryNumber:'  G-002/Ž  ',version:0};const fetch=vi.fn().mockResolvedValueOnce(reply(source,{ETag:'"3"'})).mockResolvedValueOnce(reply({item,requestId:key,replayed:false,clonedFromItemId:10,copied:{media:2}},{Location:'/api/v2/catalogs/1/items/42'},201));vi.stubGlobal('fetch',fetch);
- expect((await cloneOriginalItem(10,key,{title:'GENERATED',inventoryNumber:'  G-002/Ž  '})).value.item.id).toBe(42);expect(fetch.mock.calls[1][0]).toContain('/catalogs/1/items/10/clone');const init=fetch.mock.calls[1][1];expect(init.headers['If-Match']).toBe('"3"');expect(init.headers['Idempotency-Key']).toBe(key);expect(JSON.parse(init.body)).toEqual({title:'GENERATED',inventoryNumber:'  G-002/Ž  '});
+ const key=crypto.randomUUID(),item={...source,id:42,inventoryNumber:'  G-002/Ž  ',version:0};const fetch=vi.fn().mockResolvedValueOnce(reply(source,{ETag:'"3"'})).mockResolvedValueOnce(reply({item,requestId:key,replayed:false,clonedFromItemId:10,copied:{media:2,selectedGroups:[...allCloneGroups].sort(),historicalSourceEvidenceCopied:false,inventoryIdentityCopied:false,historicalActivityCopied:0}},{Location:'/api/v2/catalogs/1/items/42'},201));vi.stubGlobal('fetch',fetch);
+ expect((await cloneOriginalItem(10,key,{title:'GENERATED',inventoryNumber:'  G-002/Ž  '})).value.item.id).toBe(42);expect(fetch.mock.calls[1][0]).toContain('/catalogs/1/items/10/clone');const init=fetch.mock.calls[1][1];expect(init.headers['If-Match']).toBe('"3"');expect(init.headers['Idempotency-Key']).toBe(key);expect(JSON.parse(init.body)).toEqual({title:'GENERATED',inventoryNumber:'  G-002/Ž  ',copyGroups:[...allCloneGroups].sort()});
 });
 it('checks an uncertain result with GET only and accepts no foreign target',async()=>{
  const key=crypto.randomUUID();const fetch=vi.fn().mockResolvedValue(reply({item:{...source,catalogId:2},requestId:key,replayed:true,clonedFromItemId:10,copied:{}}));vi.stubGlobal('fetch',fetch);await expect(originalCloneOutcome(key)).rejects.toThrow('Foreign item');expect(fetch.mock.calls[0][1].method).toBeUndefined();expect(fetch.mock.calls[0][0]).toContain('/clone-requests/'+key);

@@ -1,3 +1,4 @@
+import {originalCanClone} from './originalClone';
 import {originalSession} from './originalAdapter';
 import type {NewItemFields} from '../scoped/scopedApi';
 import {originalCanEdit,additionalFields} from './originalEdit';
@@ -5,10 +6,12 @@ import {originalCanEdit,additionalFields} from './originalEdit';
 export function originalCanCreate(){try{const {catalog}=originalSession();return catalog.creationEnabled===true&&catalog.capabilities?.includes('item.create')===true;}catch{return false;}}
 export class CreationValidationError extends Error {constructor(public field:string,message:string){super(message);}}
 export function originalCreationFields(form:Record<string,unknown>):NewItemFields{
- const fields:NewItemFields={title:String(form.title??''),inventoryNumber:String(form.inventoryNumber??''),accessionNumber:form.accessionNumber===''||form.accessionNumber==null?null:String(form.accessionNumber)};
+ const fields:NewItemFields={title:String(form.title??'').trim()?String(form.title):null,inventoryNumber:String(form.inventoryNumber??''),accessionNumber:form.accessionNumber===''||form.accessionNumber==null?null:String(form.accessionNumber)};
+ const hasType=originalCanEdit('professional')&&(String(form.objectType??'').trim()||!!(form._managedAuthorities as {OBJECT_TYPE?:string}|undefined)?.OBJECT_TYPE);
  for(const key of ['inventoryNumber','title','accessionNumber'] as const){
   const value=fields[key];if(key==='accessionNumber'&&value===null)continue;
-  if(!value?.trim())throw new CreationValidationError(key,key==='inventoryNumber'?'Inventární číslo je povinné.':key==='title'?'Vyplňte název předmětu na kartě Základ.':'Přírůstkové číslo ponechte prázdné nebo zadejte jeho hodnotu.');
+  if(key==='title'&&value===null&&hasType)continue;
+  if(!value?.trim())throw new CreationValidationError(key,key==='inventoryNumber'?'Inventární číslo je povinné.':key==='title'?'Vyplňte titul předmětu v horním panelu.':'Přírůstkové číslo ponechte prázdné nebo zadejte jeho hodnotu.');
   if(value.includes('\0')||value.length>(key==='title'?4096:255))throw new CreationValidationError(key,'Hodnota obsahuje nepovolený znak nebo je příliš dlouhá.');
  }
  const professional={objectType:'objectType',description:'description',authorText:'author',datingText:'datingText',originPlace:'originPlace',materialText:'material',techniqueText:'technique',materialNote:'materialNote'};
@@ -26,6 +29,13 @@ export function originalCreationFields(form:Record<string,unknown>):NewItemField
   if(entered.length)fields.additional=Object.fromEntries(additionalFields.map(k=>[k,k==='coordinateSystem'&&form[k]==='WGS-84'&&!entered.some(v=>v==='latitude'||v==='longitude')?null:form[k]===null||form[k]===undefined||form[k]===''?null:String(form[k])]));
  }
  if(originalCanEdit('professional')&&form._managedAuthorities&&typeof form._managedAuthorities==='object')fields.references={...form._managedAuthorities as NewItemFields['references']};
+ if(originalCanEdit('professional')&&originalSession().catalog.historicalAssignmentsEnabled&&form._historicalAuthorities)fields.historicalReferences={...form._historicalAuthorities as NewItemFields['historicalReferences']};
+ const parts=form._inventoryParts as {prefix:string;number:string;postfix:string;upper?:string}|undefined;
+ if(parts&&/^[1-9][0-9]{0,7}$/.test(parts.number)&&originalCanEdit('inventory')){
+  if(parts.upper&&(!/^[1-9][0-9]{0,7}$/.test(parts.upper)||Number(parts.upper)<Number(parts.number)))throw new CreationValidationError('inventoryNumber','Horní mez musí být platné číslo nejméně rovné dolní mezi.');
+  if(`${parts.prefix}${parts.number}${parts.postfix}`!==fields.inventoryNumber)throw new CreationValidationError('inventoryNumber','Složky inventárního čísla se změnily; zkontrolujte úplné číslo.');
+  fields.inventoryRange={lowerNumber:Number(parts.number),upperNumber:parts.upper?Number(parts.upper):null,seriesRecordId:null,prefix:parts.prefix,postfix:parts.postfix};
+ }else if(parts?.upper)throw new CreationValidationError('inventoryNumber','Rozsah vyžaduje kladné nejvýše osmimístné hlavní číslo.');
  return fields;
 }
 export async function createOriginalItem(requestId:string,form:Record<string,unknown>){
@@ -42,7 +52,7 @@ export function applyOriginalCreationBoundary(root:HTMLElement|null,enabled:bool
   const approvedProfessional=originalCanEdit('professional')&&(node.hasAttribute('data-scoped-dating')||[...additionalFields,'current-object-type','description','author','datingText','originPlace','current-material-text','current-technique-text','materialNote'].includes(node.id));
   const approvedInventory=originalCanEdit('inventory')&&['quantity','current-other-number','locationBuilding','locationRoom','permanentLocation'].includes(node.id);
   if(node.closest('[data-scoped-reference-editor]')&&originalCanEdit('professional'))return;
-  const active=enabled&&(['title','accessionNumber'].includes(node.id)||node.getAttribute('aria-label')?.startsWith('Inventární číslo:')||node.hasAttribute('data-scoped-save')||approvedProfessional||approvedInventory);
+  const active=enabled&&(['title','accessionNumber'].includes(node.id)||node.getAttribute('aria-label')?.startsWith('Inventární číslo:')||node.hasAttribute('data-scoped-save')||node.hasAttribute('data-scoped-bulk-control')&&originalCanClone()||approvedProfessional||approvedInventory);
   (node as HTMLInputElement).disabled=!active;if(active)node.removeAttribute('disabled');else node.setAttribute('disabled','');
  });
 }

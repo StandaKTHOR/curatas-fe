@@ -1,3 +1,4 @@
+import {catalogCell} from '../features/catalog/catalogListSummary';
 import {originalCanEdit} from '../features/catalog/originalEdit';
 import {curatorFields,demusTableColumns,formatDemusCell} from '../features/scoped/curatorContract';
 import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
@@ -575,22 +576,22 @@ export default function Catalog() {
                                                 <td className={`${rowPad} font-mono font-black text-blue-800 break-all`}>{it.inventoryNumber || '—'}</td>
                                             )}
                                             {isColVisible('accessionNumber') && (
-                                                <td className={`${rowPad} font-mono font-semibold text-gray-500 break-all`}>{it.accessionNumber || '—'}</td>
+                                                <td className={`${rowPad} font-mono font-semibold text-gray-500 break-all`}>{catalogCell(it,'accessionNumber')}</td>
                                             )}
                                             {isColVisible('title') && (
                                                 <td className={`${rowPad} font-bold text-gray-900 break-words`}>{it.title}</td>
                                             )}
                                             {isColVisible('author') && (
-                                                <td className={`${rowPad} italic text-gray-600 break-words`}>{it.author || '—'}</td>
+                                                <td className={`${rowPad} italic text-gray-600 break-words`}>{catalogCell(it,'author')}</td>
                                             )}
                                             {isColVisible('datingText') && (
-                                                <td className={`${rowPad} text-gray-600`}>{it.datingText || '—'}</td>
+                                                <td className={`${rowPad} text-gray-600`}>{catalogCell(it,'datingText')}</td>
                                             )}
                                             {isColVisible('material') && (
-                                                <td className={`${rowPad} text-gray-600`}>{it.material || '—'}</td>
+                                                <td className={`${rowPad} text-gray-600`}>{catalogCell(it,'material')}</td>
                                             )}
                                             {isColVisible('technique') && (
-                                                <td className={`${rowPad} text-gray-600`}>{it.technique || '—'}</td>
+                                                <td className={`${rowPad} text-gray-600`}>{catalogCell(it,'technique')}</td>
                                             )}
                                             {isColVisible('subCollection') && (
                                                 <td className={`${rowPad} text-gray-500`}>{it.subCollection || '—'}</td>

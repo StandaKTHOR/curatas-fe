@@ -1,3 +1,4 @@
+import ScopedFeedbackThread from '../features/catalog/ScopedFeedbackThread';
 import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
 import ScopedFeedbackQueue from '../features/catalog/ScopedFeedbackQueue';
 import { useRef,useState } from 'react';
@@ -7,6 +8,7 @@ export default function Feedback() {
     const pending=useRef<{catalog:number;id:string;message:string}|null>(null);
     const [msg, setMsg] = useState('');
     const [ok, setOk] = useState('');
+    const [threadId,setThreadId]=useState<string|null>(null);
     const [err, setErr] = useState('');
     const [sending, setSending] = useState(false);
     let scopedAvailable=true;if(originalIntegrationEnabled()){try{originalSession();}catch{scopedAvailable=false;}}
@@ -28,7 +30,7 @@ export default function Feedback() {
                 r=await api.submitFeedback(pending.current.id,msg,signal);if(signal.aborted)return;pending.current=null;
             }else r=await sendFeedback({ targetType: 'GENERAL', message: msg, consentToContact: false });
             setOk(`Připomínka byla úspěšně odeslána (ID: ${r.feedbackId}). Děkujeme!`);
-            setMsg('');
+            setMsg('');if(originalIntegrationEnabled())setThreadId(r.feedbackId);
         } catch (e: any) {
             setErr(String(e.message || e));
         } finally {
@@ -59,7 +61,7 @@ export default function Feedback() {
                 </button>
             </div>
             {ok && <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-medium">{ok}</div>}
-            {originalIntegrationEnabled()&&<ScopedFeedbackQueue/>}
+            {originalIntegrationEnabled()&&<><ScopedFeedbackQueue/>{threadId&&<ScopedFeedbackThread rootId={threadId}/>}</>}
             {err && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 font-medium">{err}</div>}
         </div>
     );

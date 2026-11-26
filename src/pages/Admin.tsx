@@ -1,4 +1,4 @@
-import ManagedDictionaries from '../features/catalog/ManagedDictionaries';
+import {Link} from 'react-router-dom';
 import {useAuth} from '../components/AuthContext';
 import {useCatalog} from '../features/catalog/CatalogContext';
 import LocalUsers from '../features/localAuth/LocalUsers';
@@ -14,7 +14,7 @@ export default function Admin(){
             <h1 className='text-2xl font-semibold'>Admin</h1>
             <p className='text-sm text-gray-600 mt-2'>Správa uživatelů, oprávnění a auditu vybraného katalogu.</p>
             <LocalUsers />
-            <ManagedDictionaries/>
+            {import.meta.env.VITE_MANAGED_AUTHORITIES_ENABLED==='true'&&caps.includes('dictionary.read')&&<p><Link to={`/admin/dictionaries?catalog=${selectedCatalog?.id}`}>Správa číselníků</Link></p>}
             {token && selectedCatalog && caps.includes('catalog.access.delegate') && (
                 <CatalogSharingPanel catalogId={selectedCatalog.id} token={token} onDenied={clearAccess} />
             )}

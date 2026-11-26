@@ -2,6 +2,7 @@ import {render,screen,waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import MuseumSection from './MuseumSection';
+vi.mock('../features/catalog/CurrentDeaccessionProposal',()=>({default:()=>null}));
 import {bindOriginalCatalog} from '../features/catalog/originalAdapter';
 const api=vi.hoisted(()=>({professionalRecords:vi.fn(),lifecycle:vi.fn(),deaccession:vi.fn()}));
 vi.mock('../features/scoped/scopedApi',async original=>({...await original<typeof import('../features/scoped/scopedApi')>(),scopedApi:()=>api}));

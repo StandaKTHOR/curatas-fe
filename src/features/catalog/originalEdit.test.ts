@@ -1,11 +1,16 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-import {applyOriginalEditBoundary,currentSectionDraft,saveOriginalCurrent,additionalFields} from './originalEdit';
+import {applyOriginalEditBoundary,currentSectionDraft,currentDimensionsDraft,saveOriginalCurrent,additionalFields} from './originalEdit';
 import {bindOriginalCatalog} from './originalAdapter';
 const p={objectType:null,description:'old',authorText:null,datingText:null,originPlace:null,materialText:null,techniqueText:null,materialNote:null};
 const i={quantity:'0',otherNumber:null};
 const catalog={id:71,catalogId:71,code:'GEN',name:'Generated',version:0,institution:{id:1,code:'G',name:'Generated'},capabilities:['catalog.read','item.read','item.professional.write','item.inventory.write'],professionalWriteEnabled:true,inventoryWriteEnabled:true};
 const session=()=>({itemId:101,etag:'"0"',scopedCurrent:{catalogId:71,etag:'"0"',professional:{...p},inventory:{...i}}});
 const form=()=>({objectType:'',description:'old',author:'',datingText:'',originPlace:'',material:'',technique:'',materialNote:'',quantity:0,otherNumber:null});
+it('November CITEM: sends comma decimals exactly, including zero, without float conversion',()=>{
+ expect(currentDimensionsDraft([], [{dimensionType:'Šířka',value:'4,00',unit:'cm',note:null}])[0].value).toBe('4.00');
+ expect(currentDimensionsDraft([], [{dimensionType:'Váha',value:'0,0',unit:null,note:null}])[0].value).toBe('0.0');
+ expect(()=>currentDimensionsDraft([], [{dimensionType:'Délka',value:'1,2,3'}])).toThrow();
+});
 beforeEach(()=>{vi.stubEnv('VITE_LOCAL_AUTH_ENABLED','false');bindOriginalCatalog(catalog,'t');});
 afterEach(()=>{bindOriginalCatalog(null,null);vi.unstubAllGlobals();vi.unstubAllEnvs();});
 it('allows century text shortcuts only for an enabled current professional editor',()=>{
@@ -83,3 +88,28 @@ it.each(['scope','item','value','disabled'])('refuses foreign or invalid flags b
  const draft={itemId:which==='item'?102:101,scopeSignal:which==='scope'?new AbortController().signal:signal,values:{archive:null,card:which==='value'?'DEMUS':'true',copied:null,verified:null,marked:null},dirty:true};
  await expect(saveOriginalCurrent(101,'professional',session(),{...form(),description:'new'},draft)).rejects.toThrow();expect(f).not.toHaveBeenCalled();expect(draft.dirty).toBe(true);
 });
+
+import {originalReturnPath} from './originalEdit';
+it.each([['/admin/items','/items/101','/admin/items'],['/','/admin/items/view/101','/'],[null,'/items/101','/'],[null,'/admin/items/edit/101','/admin/items'],['https://foreign','/admin/items/view/101','/admin/items']])('preserves explicit list origin %s through %s',(origin,path,expected)=>expect(originalReturnPath(origin,path!)).toBe(expected));
+
+import {originalDetailReturn} from './originalEdit';
+it('CITEM T6/T12: edits one field, preserves omitted populated fields and explicit NULL/empty',async()=>{
+ const populated={objectType:'typ',description:'popis',authorText:'autor',datingText:'1900',originPlace:'místo',materialText:'papír',techniqueText:'tisk',materialNote:'poznámka'};
+ expect(currentSectionDraft('professional',populated,{description:'nový popis'})).toEqual({changed:true,values:{...populated,description:'nový popis'}});
+ expect(currentSectionDraft('professional',populated,{})).toEqual({changed:false,values:populated});
+ expect(currentSectionDraft('professional',populated,{author:undefined}).changed).toBe(false);
+ expect(currentSectionDraft('professional',populated,{author:null}).values.authorText).toBeNull();
+ expect(currentSectionDraft('professional',populated,{author:''}).values.authorText).toBe('');
+ const original={...session(),scopedCurrent:{...session().scopedCurrent,professional:populated,core:{title:'title',inventoryNumber:'ZV 818'},dimensions:[{id:7,type:'width',value:'2',unit:'cm',note:null,createdInScopedApi:false}],historicalAuthorities:{MATERIAL:{recordId:'source-id'}}}};
+ bindOriginalCatalog({...catalog,historicalAssignmentsEnabled:true},'t');
+ let persisted={...populated};const fetch=vi.fn().mockImplementation(async(_url,options)=>{persisted=JSON.parse(options.body);return new Response('{}');});vi.stubGlobal('fetch',fetch);
+ await saveOriginalCurrent(101,'professional',original,{description:'nový popis'});
+ expect(persisted).toEqual({...populated,description:'nový popis'});expect(original.scopedCurrent.core.inventoryNumber).toBe('ZV 818');expect(original.scopedCurrent.historicalAuthorities.MATERIAL.recordId).toBe('source-id');expect(fetch).toHaveBeenCalledTimes(1);
+});
+it('CITEM T3/T4/T5: detail return preserves catalog and original route; rejects foreign routes',()=>{
+ expect(originalDetailReturn(101,'/items/101?catalog=71')).toBe('/items/101?catalog=71');
+ expect(originalDetailReturn(101,'/admin/items/view/101?catalog=71&tab=origin')).toBe('/admin/items/view/101?catalog=71&tab=origin');
+ for(const path of ['https://foreign/items/101?catalog=71','/items/102?catalog=71','/items/101?catalog=72',null])expect(originalDetailReturn(101,path)).toBe('/admin/items/view/101?catalog=71');
+});
+
+it('keeps explicit NULL different from an existing empty text value',()=>{expect(currentSectionDraft('professional',{...p,description:''},{description:null})).toEqual({changed:true,values:{...p,description:null}});});

@@ -1,3 +1,4 @@
+import TechnicalDemus from '../features/catalog/TechnicalDemus';
 import {useEffect,useState} from 'react';
 import {getDemusIdentity,type DemusIdentity} from '../lib/demusIdentity';
 import {evidenceValue,LineageBrowser} from './MuseumSourceEvidence';
@@ -22,9 +23,9 @@ export default function DemusSourceIdentity({itemId}:{itemId:number}) {
         <QuantityEvidence sourceQuantity={data.sourceQuantity} quantity={data.quantity}/>
         <dl className="demus-evidence-grid">{([
             ['Původní inventární číslo','sourceInventoryNumber'],['Řada','series'],['Pořadové číslo','ordinal'],['Lomení','division'],
-            ['Stát správce','stateCode'],['Instituce','custodianCode'],['Oddělení','departmentCode'],['Původní lokální ID','sourceLocalId'],
+            ['Stát správce','stateCode'],['Instituce','custodianCode'],['Oddělení','departmentCode'],
             ['Nativní rok od','sourceDatingFromYear'],['Nativní rok do','sourceDatingToYear'],['Původní určení','determinedBy'],['Původní datum určení','determinedAtRaw'],
         ] as const).map(([label,key])=><div key={key}><dt>{label}</dt><dd>{evidenceValue(data[key])}</dd></div>)}</dl>
-        <LineageBrowser category="items" id={itemId}/>
+        <TechnicalDemus title="Identita a původ předmětu"><p>Původní lokální ID: {data.sourceLocalId}</p><LineageBrowser category="items" id={itemId}/></TechnicalDemus>
     </section>;
 }

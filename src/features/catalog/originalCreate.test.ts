@@ -12,7 +12,12 @@ it('allows century text only with current professional capability and blocks it 
 it('preserves entered components/Unicode and sends explicit NULL for optional empty accession only',()=>{
  expect(originalCreationFields({title:'  Ω  ',inventoryNumber:'G-0001/Ž',accessionNumber:'',legacyData:{private:true},id:99})).toEqual({title:'  Ω  ',inventoryNumber:'G-0001/Ž',accessionNumber:null});
 });
-it.each([['inventoryNumber','   ','Inventární číslo'],['title','','Vyplňte název'],['accessionNumber','  ','Přírůstkové číslo'],['inventoryNumber','x'.repeat(256),'příliš dlouhá']])('validates %s before transport',async(field,value,message)=>{
+it('creates from current type alone without inventing a title or copying historical values',()=>{
+ bindOriginalCatalog({...catalog,professionalWriteEnabled:true,capabilities:[...catalog.capabilities,'item.professional.write']},'writer');
+ const result=originalCreationFields({title:'',inventoryNumber:'TYPE-ONLY',objectType:'židle',source:{Titul_S:'NEPŘEBÍRAT'}});
+ expect(result.title).toBeNull();expect(result.professional?.objectType).toBe('židle');expect(JSON.stringify(result)).not.toContain('NEPŘEBÍRAT');
+});
+it.each([['inventoryNumber','   ','Inventární číslo'],['title','','Vyplňte titul'],['accessionNumber','  ','Přírůstkové číslo'],['inventoryNumber','x'.repeat(256),'příliš dlouhá']])('validates %s before transport',async(field,value,message)=>{
  const fetch=vi.fn();vi.stubGlobal('fetch',fetch);await expect(createOriginalItem(crypto.randomUUID(),{title:'A',inventoryNumber:'001',accessionNumber:'', [field]:value})).rejects.toThrow(message);expect(fetch).not.toHaveBeenCalled();
 });
 it.each(['flag','permission'])('fails closed without creation %s',async which=>{

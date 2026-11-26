@@ -4,6 +4,7 @@ import { cloneItemSelective, CloneItemOptions } from '../lib/api';
 import {originalIntegrationEnabled} from '../features/catalog/originalAdapter';
 import {cloneOriginalItem,originalCanClone,originalCloneOutcome} from '../features/catalog/originalClone';
 import {ScopedError} from '../features/scoped/scopedApi';
+import {allCloneGroups,CloneGroupSelection,type CloneGroup} from '../features/catalog/cloneGroups';
 
 interface SelectiveCloneModalProps {
     isOpen: boolean;
@@ -24,6 +25,7 @@ export default function SelectiveCloneModal({
 }: SelectiveCloneModalProps) {
     const scoped=originalIntegrationEnabled();
     const [title,setTitle]=useState(itemTitle??'');
+    const [copyGroups,setCopyGroups]=useState<CloneGroup[]>([...allCloneGroups]);
     const requestId=useRef(crypto.randomUUID()),busy=useRef(false);
     const [uncertain,setUncertain]=useState(false);
     const [options, setOptions] = useState<CloneItemOptions>({
@@ -48,13 +50,13 @@ export default function SelectiveCloneModal({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if(busy.current||uncertain)return;
-        if(scoped&&(!originalCanClone()||!title.trim()||!options.targetInventoryNumber?.trim())){setError('Vyplňte název a nové inventární číslo; klonování musí být povoleno v katalogu.');return;}
+        if(scoped&&(!originalCanClone()||!options.targetInventoryNumber?.trim())){setError('Vyplňte nové inventární číslo; kopie bez titulu vyžaduje současný typ předlohy.');return;}
         busy.current=true;
         setError(null);
         setLoading(true);
 
         try {
-            const cloned = scoped?(await cloneOriginalItem(itemId,requestId.current,{title,inventoryNumber:options.targetInventoryNumber!})).value.item:await cloneItemSelective(itemId, options);
+            const cloned = scoped?(await cloneOriginalItem(itemId,requestId.current,{title:title.trim()||null,inventoryNumber:options.targetInventoryNumber!,copyGroups})).value.item:await cloneItemSelective(itemId, options);
             onSuccess(cloned);
             onClose();
         } catch (err: any) {
@@ -86,15 +88,15 @@ export default function SelectiveCloneModal({
                     </button>
                 </div>
 
-                <p className="text-sm">{scoped?'Nezávislá kopie současných údajů a podporovaných vlastních podzáznamů včetně fotografií a příloh. Všechna média dostanou vlastní objekty a data. Zdrojové míry a MatTech zůstávají označené jako podklad, nikoli současné tvrzení. Historická aktivita ani původní inventární identita se nekopírují. Akvizice ani vyřazení se nepřenášejí; předloha s takovými záznamy se odmítne. Neověřený podzáznam celou operaci zastaví.':'Kopírují se vybrané popisné údaje a odborné záznamy. Foto, přílohy, akvizice, původní audit, pohyby a vyřazení se nepřenášejí. Klon má vlastní identitu a audit; historické auditní údaje originálu jsou samostatný podklad.'}</p>
+                <p className="text-sm">{scoped?'Nezávislá kopie vybraných současných údajů. Fotografie a přílohy se přenesou pouze při výběru příslušné skupiny a dostanou vlastní objekty a data. Historické DEMUS podklady, identifikátory, lineage ani původní audit se nepřenášejí. Současné akvizice se přenesou bez původního přírůstkového čísla. Historické akvizice, vyřazení a návrhy na vyřazení se nepřenášejí. Neověřený podzáznam celou operaci zastaví.':'Kopírují se vybrané popisné údaje a odborné záznamy. Foto, přílohy, akvizice, původní audit, pohyby a vyřazení se nepřenášejí. Klon má vlastní identitu a audit; historické auditní údaje originálu jsou samostatný podklad.'}</p>
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     {error && (
                         <GovMessage color="error" type="bold">
                             <span className="font-bold">{error}</span>
                         </GovMessage>
                     )}
-                    {scoped&&<div className="space-y-1"><GovFormLabel htmlFor="cloneTitle">Název nového předmětu</GovFormLabel><GovFormInput id="cloneTitle" value={title} disabled={loading||uncertain} onChange={(e:any)=>{setTitle(e.target.value);requestId.current=crypto.randomUUID();}} required/></div>}
-                    {uncertain&&<button type="button" disabled={loading} onClick={async()=>{if(busy.current)return;busy.current=true;setLoading(true);try{const result=await originalCloneOutcome(requestId.current);onSuccess(result.value.item);onClose();}catch{setError('Výsledek zatím není doložen. Zápis zůstává zamčený; zkontrolujte seznam nebo požádejte správce o ověření požadavku '+requestId.current+'.');}finally{busy.current=false;setLoading(false);}}}>Ověřit výsledek bez opakování zápisu</button>}
+                    {scoped&&<div className="space-y-1"><GovFormLabel htmlFor="cloneTitle">Název nového předmětu</GovFormLabel><GovFormInput id="cloneTitle" value={title} disabled={loading||uncertain} onChange={(e:any)=>{setTitle(e.target.value);requestId.current=crypto.randomUUID();}}/></div>}
+                    {uncertain&&<button type="button" disabled={loading} onClick={async()=>{if(busy.current)return;busy.current=true;setLoading(true);try{const result=await originalCloneOutcome(requestId.current,copyGroups);onSuccess(result.value.item);onClose();}catch{setError('Výsledek zatím není doložen. Zápis zůstává zamčený; zkontrolujte seznam nebo požádejte správce o ověření požadavku '+requestId.current+'.');}finally{busy.current=false;setLoading(false);}}}>Ověřit výsledek bez opakování zápisu</button>}
 
                     <div className="space-y-1">
                         <GovFormLabel htmlFor="targetInv">Cílové inventární číslo (nový unikátní kód)</GovFormLabel>
@@ -113,10 +115,10 @@ export default function SelectiveCloneModal({
 
                     <div className="space-y-3 border-t border-b border-gray-100 py-4">
                         <span className="text-xs uppercase font-extrabold text-gray-500 tracking-wider block">
-                            {scoped?'Nezávisle kopírované současné údaje (všechny podporované části):':'Vyberte pole pro přenesení do nového předmětu:'}
+                            {scoped?'Podporované skupiny současných údajů:':'Vyberte pole pro přenesení do nového předmětu:'}
                         </span>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        {scoped?<CloneGroupSelection disabled={loading||uncertain} value={copyGroups} onChange={value=>{setCopyGroups(value);requestId.current=crypto.randomUUID();}}/>:<div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                             <label className="flex items-center gap-2 cursor-pointer select-none">
                                 <input
                                     type="checkbox" disabled={scoped||loading}
@@ -186,7 +188,7 @@ export default function SelectiveCloneModal({
                                 />
                                 <span className="font-semibold text-gray-800">{scoped?'Místo vzniku (uložení a GPS se nekopírují)':'Umístění, depozitář a GPS'}</span>
                             </label>
-                        </div>
+                        </div>}
                     </div>
 
                     <div className="flex justify-end gap-3 pt-2">

@@ -55,16 +55,16 @@ const unload = () => {const event=new Event('beforeunload',{cancelable:true});wi
 describe('BATCH 1 saving and navigation', () => {
     it('saves Archiv and publication together, reloads them and leaves without a false warning', async () => {
         const router=mount(); await screen.findByDisplayValue('Původní název');
-        await userEvent.click(await screen.findByLabelText('Archiv'));await userEvent.click(screen.getByLabelText('Zveřejněno'));
+        await userEvent.click(await screen.findByLabelText('Archiválie'));await userEvent.click(screen.getByLabelText('Zveřejněno'));
         expect(unload()).toBe(true);await save(); await screen.findByText(/Změny byly úspěšně uloženy/);
         expect(api.updateItem).toHaveBeenCalledWith(7,expect.objectContaining({legacyArchived:true,published:true}),expect.anything());
-        expect(screen.getByLabelText('Archiv')).toBeChecked();expect(screen.getByLabelText('Zveřejněno')).toBeChecked();
+        expect(screen.getByLabelText('Archiválie')).toBeChecked();expect(screen.getByLabelText('Zveřejněno')).toBeChecked();
         expect(unload()).toBe(false);await back();expect(router.state.location.pathname).toBe('/admin/items');expect(window.confirm).not.toHaveBeenCalled();
     });
     it('saves only the section and retains a dirty main field until its own save', async () => {
         mount();await screen.findByDisplayValue('Původní název');
         await userEvent.type(screen.getByLabelText(/Název sbírkového předmětu/),' lokální');
-        await userEvent.click(await screen.findByLabelText('Archiv'));
+        await userEvent.click(await screen.findByLabelText('Archiválie'));
         await userEvent.click(screen.getByRole('button',{name:'Uložit sekci'}));
         await waitFor(()=>expect(api.patchMuseumItem).toHaveBeenCalled());
         expect(screen.getByLabelText(/Název sbírkového předmětu/)).toHaveValue('Původní název lokální');expect(unload()).toBe(true);
@@ -79,15 +79,15 @@ describe('BATCH 1 saving and navigation', () => {
     });
     it.each([412,500])('retains main and section drafts on backend error %s', async status => {
         vi.mocked(api.updateItem).mockRejectedValue(new api.ApiError(status,'Odmítnuto serverem'));
-        const router=mount();await screen.findByDisplayValue('Původní název');await userEvent.click(await screen.findByLabelText('Archiv'));
+        const router=mount();await screen.findByDisplayValue('Původní název');await userEvent.click(await screen.findByLabelText('Archiválie'));
         await userEvent.type(screen.getByLabelText(/Název sbírkového předmětu/),' moje');await save();
-        await screen.findByText(/Odmítnuto serverem/);expect(screen.getByLabelText('Archiv')).toBeChecked();expect(unload()).toBe(true);
+        await screen.findByText(/Odmítnuto serverem/);expect(screen.getByLabelText('Archiválie')).toBeChecked();expect(unload()).toBe(true);
         expect(screen.getByLabelText(/Název sbírkového předmětu/)).toHaveValue('Původní název moje');
         await back();expect(router.state.location.pathname).toBe('/admin/items/edit/7');
         expect(screen.queryByText('Změny byly úspěšně uloženy.')).not.toBeInTheDocument();
     });
     it('blocks menu links and browser history when a draft is dirty', async () => {
-        const router=mount();await screen.findByDisplayValue('Původní název');await userEvent.click(await screen.findByLabelText('Archiv'));
+        const router=mount();await screen.findByDisplayValue('Původní název');await userEvent.click(await screen.findByLabelText('Archiválie'));
         await userEvent.click(screen.getByRole('link',{name:'Jiné menu'}));expect(router.state.location.pathname).toBe('/admin/items/edit/7');
         await act(async()=>{await router.navigate(-1);});expect(router.state.location.pathname).toBe('/admin/items/edit/7');
         expect(window.confirm).toHaveBeenCalledTimes(2);
@@ -153,7 +153,7 @@ it('BATCH 2 retains hierarchy draft on a stale-version conflict',async()=>{
 it('BATCH 2.1 preserves null dictionary IDs after a basic section save',async()=>{
     saved.materialDictionaryId=null;saved.techniqueDictionaryId=null;saved.material='Historical text without FK';
     hierarchyFixture();mount();await screen.findByDisplayValue('Původní název');
-    await userEvent.click(screen.getByLabelText('Archiv'));
+    await userEvent.click(screen.getByLabelText('Archiválie'));
     await userEvent.click(screen.getByRole('button',{name:'Uložit sekci'}));
     await waitFor(()=>expect(api.getAdminItem).toHaveBeenCalledTimes(2));
     await userEvent.click(screen.getByRole('button',{name:'MatTech'}));
@@ -162,10 +162,10 @@ it('BATCH 2.1 preserves null dictionary IDs after a basic section save',async()=
     expect(screen.getByText(/Původní text: Historical text without FK/)).toBeInTheDocument();
     expect(unload()).toBe(false);
 });
-it.each(['Uložit','Uložit sbírkový předmět'])('BATCH 2.2 validates a missing inventory at %s in Czech',async button=>{
+it.each(['Uložit'])('BATCH 2.2 validates a missing inventory at %s in Czech',async button=>{
     mount('/admin/items/new');await userEvent.type(await screen.findByLabelText(/Název sbírkového předmětu/),'Create proof');
     await userEvent.click(screen.getByRole('button',{name:button}));
-    expect(await screen.findByText(/Vyplňte inventární číslo na kartě Základ/)).toBeInTheDocument();
+    expect(await screen.findByText(/Vyplňte inventární číslo v horním panelu/)).toBeInTheDocument();
     expect(screen.getByRole('textbox',{name:'Inventární číslo: Hlavní číslo'})).toHaveAttribute('aria-invalid','true');
     expect(api.createItem).not.toHaveBeenCalled();expect(unload()).toBe(true);
 });
@@ -191,11 +191,11 @@ it('BATCH 2.2 never repeats CREATE when the saved editor refresh fails',async()=
 });
 it('renders DEMUS evidence in the actual original read-only form without selecting a current fund ID',async()=>{
  saved.title='';saved.objectType='';saved.subCollection='';saved.quantity=null;
- historical.data={fields:{Predmet_S:'kredenc kuchyňská',Fond_S:'nábytek',Podsb_S:'SOURCE_CODE',Pocet_S:'0',Zapsal_S:'Čeřovský',Urcil_S:'Žluťoučký',DatZap_S:'1899-12-30',DatZm_S:'1900-01-01'},authorities:{}};
- mount('/admin/items/view/7');await waitFor(()=>expect(screen.getByLabelText(/Název sbírkového předmětu/)).toHaveValue('kredenc kuchyňská (DEMUS)'));
- expect(screen.getByLabelText(/Název sbírkového předmětu/)).toHaveValue('kredenc kuchyňská (DEMUS)');
- expect(screen.getByLabelText('Fond',{exact:true})).toHaveValue('');
- expect(screen.getAllByRole('option',{name:'nábytek (DEMUS)'})).toHaveLength(1);
+ historical.data={fields:{Titul_S:'Historický titul',Predmet_S:'kredenc kuchyňská',Fond_S:'nábytek',Podsb_S:'SOURCE_CODE',Pocet_S:'0',Zapsal_S:'Čeřovský',Urcil_S:'Žluťoučký',DatZap_S:'1899-12-30',DatZm_S:'1900-01-01'},authorities:{}};
+ mount('/admin/items/view/7');await screen.findByText('Historický titul (DEMUS)');
+ expect(screen.getByText('nábytek (DEMUS)')).toBeInTheDocument();
+ expect(document.getElementById('fundDictionaryId')).toBeNull();
+ expect(document.getElementById('title')).toBeNull();
  expect(screen.getByLabelText('Podsbírka')).toHaveValue('SOURCE_CODE (DEMUS)');
  expect(screen.getByLabelText(/Současný katalogový počet/)).toHaveValue(null);
  expect(screen.getByText(/historický počet: 0 \(DEMUS\)/)).toBeInTheDocument();
@@ -205,10 +205,10 @@ it('renders DEMUS evidence in the actual original read-only form without selecti
 });
 it('keeps DEMUS as an edit placeholder, does not dirty a current draft and prioritizes current values',async()=>{
  saved.title='';saved.objectType='';saved.subCollection='';saved.quantity=0;
- historical.data={fields:{Predmet_S:'židle',Fond_S:'nábytek',Podsb_S:'SOURCE_CODE',Pocet_S:'9'},authorities:{}};
+ historical.data={fields:{Titul_S:'Historický titul židle',Predmet_S:'židle',Fond_S:'nábytek',Podsb_S:'SOURCE_CODE',Pocet_S:'9'},authorities:{}};
  const router=mount();await screen.findByDisplayValue('BATCH-7');
  const name=screen.getByLabelText(/Název sbírkového předmětu/);
- expect(name).toHaveValue('');expect(name).toHaveAttribute('placeholder','židle (DEMUS)');
+ expect(name).toHaveValue('');expect(name).toHaveAttribute('placeholder','Historický titul židle (DEMUS)');
  expect(screen.getByLabelText('Podsbírka')).toHaveValue('');
  expect(screen.getByLabelText(/Současný katalogový počet/)).toHaveValue(0);
  expect(screen.queryByText(/historický počet: 9/)).not.toBeInTheDocument();
@@ -219,8 +219,8 @@ it('keeps DEMUS as an edit placeholder, does not dirty a current draft and prior
 
 it('shows newly exposed source author/dating/description only as read evidence in the existing controls',async()=>{
  fullHistory.data={state:'AVAILABLE',items:[{fields:{Autor_S:{kind:'TEXT',value:'Historický autor'},Datace_S:{kind:'TEXT',value:'počátek 20. století'},Popis_S:{kind:'TEXT',value:'Původní český popis'},PoznMT_S:{kind:'TEXT',value:'Původní technologie'}}}]};
- mount('/admin/items/view/7');await screen.findByDisplayValue('Původní název');
- expect(document.getElementById('author')).toHaveValue('Historický autor (DEMUS)');expect(document.getElementById('datingText')).toHaveValue('počátek 20. století (DEMUS)');expect(document.getElementById('description')).toHaveValue('Původní český popis (DEMUS)');
+ mount('/admin/items/view/7');await screen.findByText('Původní název');
+ expect(screen.getByText('Historický autor (DEMUS)')).toBeInTheDocument();expect(screen.getByText('počátek 20. století (DEMUS)')).toBeInTheDocument();expect(document.getElementById('description')).toHaveValue('Původní český popis (DEMUS)');
  expect(api.updateItem).not.toHaveBeenCalled();expect(unload()).toBe(false);
 });
 it('never saves root historical fields when editing a different current field',async()=>{

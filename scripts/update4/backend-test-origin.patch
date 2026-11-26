@@ -1,0 +1,13 @@
+diff --git a/src/test/java/cz/curatas/auth/LocalAuthenticationPostgres17Test.java b/src/test/java/cz/curatas/auth/LocalAuthenticationPostgres17Test.java
+index fd94fb7..c5e439e 100644
+--- a/src/test/java/cz/curatas/auth/LocalAuthenticationPostgres17Test.java
++++ b/src/test/java/cz/curatas/auth/LocalAuthenticationPostgres17Test.java
+@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
+ 
+ @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+ class LocalAuthenticationPostgres17Test {
+- static final String ORIGIN="http://127.0.0.1:18213",PASSWORD="GENERATED_ONLY-"+UUID.randomUUID();
++ static final String ORIGIN=System.getProperty("curatas.test.http-origin","http://127.0.0.1:18213"),PASSWORD="GENERATED_ONLY-"+UUID.randomUUID();
+  final ObjectMapper json=new ObjectMapper();final HttpClient http=HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+  IsolatedPostgres17 pg;DriverManagerDataSource owner;JdbcTemplate db;ConfigurableApplicationContext app;String base;Path evidence;
+  String[] applicationArguments;

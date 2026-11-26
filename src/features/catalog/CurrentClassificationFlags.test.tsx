@@ -8,3 +8,22 @@ it('saves only explicit current flags with shared ETag and preserves NULL/false 
  render(<CurrentClassificationFlags itemId={3} parentEtag={'"0"'} readOnly={false} blocked={false} drafts={drafts} onSave={saved}/>);const card=await screen.findByRole('checkbox',{name:'Současný příznak Karta'});await waitFor(()=>expect(card).not.toBeDisabled());expect(card).toBePartiallyChecked();expect(screen.getByRole('checkbox',{name:'Současný příznak Opsáno'})).not.toBeChecked();fireEvent.click(card);fireEvent.click(screen.getByRole('button',{name:'Uložit sekci'}));await waitFor(()=>expect(saved).toHaveBeenCalledWith('"1"'));const put=f.mock.calls.find(c=>c[1].method==='PUT')!;expect(put[1].headers['If-Match']).toBe('"0"');expect(JSON.parse(put[1].body)).toEqual({...initial,card:'true'});expect(JSON.stringify(put[1].body)).not.toMatch(/DEMUS|Archiv_S|legacy/);
 });
 it('blocks writes while another current section is dirty without discarding its flags draft',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response(initial)));const drafts:any={current:{}};const props={itemId:3,parentEtag:'"0"',readOnly:false,blocked:false,drafts,onSave:vi.fn()};const v=render(<CurrentClassificationFlags {...props}/>);const card=await screen.findByRole('checkbox',{name:'Současný příznak Karta'});await waitFor(()=>expect(card).not.toBeDisabled());fireEvent.click(card);v.rerender(<CurrentClassificationFlags {...props} blocked/>);expect(card).toBeDisabled();expect(drafts.current.currentFlags.values.card).toBe('true');expect(screen.getByRole('button',{name:'Uložit sekci'})).toBeDisabled();});
+it('does not show a success banner when the subsequent parent refresh fails',async()=>{
+ let values:any=initial,version=0;vi.stubGlobal('fetch',vi.fn(async(_url:string,init:any)=>{if(init.method==='PUT'){values=JSON.parse(init.body);version=1;}return response(values,version);}));
+ const drafts:any={current:{}};render(<CurrentClassificationFlags itemId={3} parentEtag={'"0"'} readOnly={false} blocked={false} drafts={drafts} onSave={vi.fn().mockRejectedValue(new Error('Verze se změnila.'))}/>);
+ const archive=await screen.findByRole('checkbox',{name:'Současný příznak Archiválie'});await waitFor(()=>expect(archive).toBeEnabled());fireEvent.click(archive);fireEvent.click(screen.getByRole('button',{name:'Uložit sekci'}));
+ await screen.findByText('Příznaky byly uloženy; obnovení karty selhalo. Verze se změnila.');expect(screen.queryByText(/Současné příznaky byly uloženy a znovu načteny/)).toBeNull();expect(drafts.current.currentFlags.dirty).toBe(false);
+});
+it('keeps unknown and false distinct and allows clearing a flag by its accessible name',async()=>{
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response(initial)));
+ const drafts:any={current:{}};render(<CurrentClassificationFlags itemId={3} parentEtag={'"0"'} readOnly={false} blocked={false} drafts={drafts} onSave={vi.fn()}/>);
+ const copied=await screen.findByRole('checkbox',{name:'Současný příznak Opsáno'});await waitFor(()=>expect(copied).toBeEnabled());
+ expect(copied).not.toBePartiallyChecked();fireEvent.click(screen.getByRole('button',{name:'Vymazat tvrzení Opsáno'}));
+ expect(copied).toBePartiallyChecked();expect(drafts.current.currentFlags.values.copied).toBeNull();expect(drafts.current.currentFlags.dirty).toBe(true);
+});
+it('keeps the compact flags read-only without write permission or in view mode',async()=>{
+ const fetch=vi.fn().mockResolvedValue(response(initial));vi.stubGlobal('fetch',fetch);
+ render(<CurrentClassificationFlags itemId={3} parentEtag={'"0"'} readOnly blocked={false} drafts={{current:{}}} onSave={vi.fn()}/>);
+ await waitFor(()=>expect(fetch).toHaveBeenCalled());expect(screen.getByRole('checkbox',{name:'Současný příznak Karta'})).toBeDisabled();
+ expect(screen.getByRole('button',{name:'Uložit sekci'})).toBeDisabled();expect(fetch.mock.calls.every(([,init]:any)=>init.method!=='PUT')).toBe(true);
+});

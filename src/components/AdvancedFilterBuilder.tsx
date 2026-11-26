@@ -1,3 +1,5 @@
+import SearchVocabulary from './SearchVocabulary';
+import type {ManagedDictionaryType} from '../features/scoped/scopedApi';
 import {curatorFields,demusTableColumns} from '../features/scoped/curatorContract';
 import {validateAdvancedFilter} from '../features/scoped/advancedFilterContract';
 import React from 'react';
@@ -27,8 +29,11 @@ interface AdvancedFilterBuilderProps {
 }
 
 export const FILTER_FIELDS = [
+    {value:'materialAuthorityId',label:'Materiál — přesná současná UUID autorita (včetně podzáznamů)'},
+    {value:'techniqueAuthorityId',label:'Technika — přesná současná UUID autorita (včetně podzáznamů)'},
     {value:'historicalInventoryNumber',label:'Historické inventární číslo (alias; přesné mezery)'},
-    {value:'acquisitionRecordNumber',label:'Přírůstkové číslo akvizičního záznamu'},
+    {value:'historicalAccessionNumber',label:'Historické přírůstkové číslo DEMUS (včetně je vyplněno / není vyplněno)'},
+    {value:'acquisitionRecordNumber',label:'Přírůstkové číslo v akviziční evidenci MES'},
     { value: 'inventoryNumber', label: 'Inventární číslo (inv_cislo)' },
     { value: 'inventory.series', label: 'Inventární řada (Rada_S)' },
     { value: 'inventory.ordinal', label: 'Pořadové číslo (PorC_S)' },
@@ -36,22 +41,23 @@ export const FILTER_FIELDS = [
     { value: 'inventory.hierarchyOrdinal', label: 'HPorC_S (původní složka)' },
     { value: 'inventory.hierarchyDivision', label: 'HLomeni_S (původní složka)' },
     { value: 'inventory.stateCode', label: 'Kód státu správce' },
-    { value: 'inventory.custodianCode', label: 'Kód instituce' },
+    { value: 'inventory.custodianCode', label: 'Správce (původní kód)' },
     { value: 'inventory.departmentCode', label: 'Kód oddělení' },
     { value: 'inventory.collectionCode', label: 'Kód podsbírky' },
     { value: 'fundLegacyCode', label: 'Fond (původní kód)' },
     { value: 'legacyCreatedBy', label: 'Zapsal' },
     { value: 'determinedBy', label: 'Určil (původní zápis)' },
-    { value: 'accessionNumber', label: 'Přírůstkové číslo (prir_cislo)' },
+    { value: 'accessionNumber', label: 'Současné přírůstkové číslo předmětu MES' },
     { value: 'title', label: 'Název předmětu' },
     { value: 'author', label: 'Autor / Tvůrce (včetně účastníků)' },
     { value: 'subCollection', label: 'Podsbírka' },
     { value: 'objectType', label: 'Typ předmětu / Obor' },
     { value: 'material', label: 'Materiál' },
     { value: 'technique', label: 'Technika' },
-    { value: 'datingText', label: 'Datace (textová)' },
-    { value: 'datingFrom', label: 'Revidovaná datace od (rok)' },
-    { value: 'datingTo', label: 'Revidovaná datace do (rok)' },
+    { value: 'datingText', label: 'Současná datace (textová)' },
+    { value: 'historicalDatingText', label: 'Historická datace DEMUS (Sbirky.Datace_S)' },
+    { value: 'datingFrom', label: 'Revidovaná datace od (ISO datum)' },
+    { value: 'datingTo', label: 'Revidovaná datace do (ISO datum)' },
     { value: 'originPlace', label: 'Místo vzniku' },
     { value: 'countryOfOrigin', label: 'Země původu' },
     { value: 'locationBuilding', label: 'Budova' },
@@ -68,27 +74,34 @@ export const FILTER_FIELDS = [
 ];
 
 export const scopedFilterFields=[...FILTER_FIELDS,...demusTableColumns.map(c=>({value:c.id,label:`${c.label} (DEMUS ${c.id})`})),{value:'Fond_S',label:'Fond (DEMUS Fond_S)'},{value:'Predmet_S',label:'Předmět (DEMUS Predmet_S)'}].filter(f=>{
- try{validateAdvancedFilter(JSON.stringify({conjunction:'AND',conditions:[{field:f.value,operator:'EQUALS',value:''}],groups:[]}),curatorFields);return true;}catch{return false;}
-}).map(f=>({...f,label:['subCollection','fundLegacyCode','legacyCreatedBy','determinedBy'].includes(f.value)?`${f.label} (DEMUS)`:f.label}));
+ try{validateAdvancedFilter(JSON.stringify({conjunction:'AND',conditions:[{field:f.value,operator:'EQUALS',value:['materialAuthorityId','techniqueAuthorityId'].includes(f.value)?'00000000-0000-0000-0000-000000000001':''}],groups:[]}),curatorFields);return true;}catch{return false;}
+}).map(f=>({...f,label:searchFieldLabel(f.value,f.label)}));
+
+export function searchFieldLabel(value:string,label:string){
+ const names:Record<string,string>={'inventory.hierarchyOrdinal':'Konec původního číselného rozsahu','inventory.hierarchyDivision':'Lomení původního rozsahu',HPorC_S:'Konec původního číselného rozsahu',Spravce_S:'Správce sbírky – původní kód',Odd_S:'Oddělení – původní kód',Podsb_S:'Podsbírka – původní kód',DatZap_S:'Datum původního zápisu',DatZm_S:'Datum původní změny',materialAuthorityId:'Materiál – současné přiřazení',techniqueAuthorityId:'Technika – současné přiřazení'};
+ return names[value]??label.replace(/\s*\([^)]*\)/g,'').replace(/ — .*/, '');
+}
 
 export const FILTER_OPERATORS = [
-    { value: 'CONTAINS', label: 'obsahuje' },
-    { value: 'EQUALS', label: 'rovná se' },
+    { value: 'CONTAINS', label: 'Obsahuje text' },
+    { value: 'EQUALS', label: 'Je přesně' },
     { value: 'NOT_EQUALS', label: 'nerovná se' },
     { value: 'NOT_CONTAINS', label: 'neobsahuje' },
     { value: 'STARTS_WITH', label: 'začíná na' },
     { value: 'ENDS_WITH', label: 'končí na' },
-    { value: 'GREATER_THAN', label: 'větší než (>)' },
-    { value: 'LESS_THAN', label: 'menší než (<)' },
+    { value: 'GREATER_THAN', label: 'Je větší než' },
+    { value: 'LESS_THAN', label: 'Je menší než' },
     { value: 'BETWEEN', label: 'v rozmezí (od - do)' },
     { value: 'IS_EMPTY', label: 'je prázdné / nevyplněné' },
     { value: 'IS_NOT_EMPTY', label: 'je vyplněné' }
 ];
 
 export function filterOperatorsForField(field: string) {
+    if(field.endsWith('AuthorityId')||field.endsWith('HistoricalId'))return FILTER_OPERATORS.filter(op=>['EQUALS','NOT_EQUALS','IS_EMPTY','IS_NOT_EMPTY'].includes(op.value));
     const textComponent = (field.startsWith('inventory.') &&
-        !['inventory.ordinal', 'inventory.hierarchyOrdinal'].includes(field)) || ['determinedBy','historicalInventoryNumber','acquisitionRecordNumber'].includes(field);
-    return textComponent ? FILTER_OPERATORS.filter(op =>
+        !['inventory.ordinal', 'inventory.hierarchyOrdinal'].includes(field)) || ['determinedBy','historicalInventoryNumber','acquisitionRecordNumber','historicalAccessionNumber'].includes(field);
+    const comparable=['inventory.ordinal','inventory.hierarchyOrdinal','PorC_S','HPorC_S','Pocet_S','currentQuantity','datingFrom','datingTo'].includes(field);
+    return textComponent||!comparable ? FILTER_OPERATORS.filter(op =>
         !['GREATER_THAN', 'LESS_THAN', 'BETWEEN'].includes(op.value)) : FILTER_OPERATORS;
 }
 
@@ -171,7 +184,7 @@ export default function AdvancedFilterBuilder({
                 <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-gray-200">
                     <div className="flex items-center gap-2">
                         <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                            {isRoot ? 'Hlavní filtr:' : 'Vnořená skupina:'}
+                            {isRoot ? 'Předmět splňuje:' : 'Možnosti:'}
                         </span>
                         <div className="inline-flex rounded-md shadow-sm" role="group">
                             {(['AND', 'OR', 'NOT'] as const).map(conj => (
@@ -185,7 +198,7 @@ export default function AdvancedFilterBuilder({
                                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
                                     }`}
                                 >
-                                    {conj === 'AND' ? 'AND (vše)' : conj === 'OR' ? 'OR (alespoň jedno)' : 'NOT (žádné)'}
+                                    {conj === 'AND' ? 'Všechny požadavky' : conj === 'OR' ? 'Alespoň jedna možnost' : 'Nesplňuje všechny požadavky'}
                                 </button>
                             ))}
                         </div>
@@ -221,10 +234,10 @@ export default function AdvancedFilterBuilder({
                                     }}
                                     className="bg-gray-50 border border-gray-300 rounded px-2 py-1 text-xs font-medium text-gray-800 focus:outline-none focus:border-[#00204a]"
                                 >
-                                    {!fields.some(f=>f.value===c.field)&&<option value={c.field} disabled>{c.field} (nedostupné pole; upravte podmínku)</option>}
+                                    {!fields.some(f=>f.value===c.field)&&<option value={c.field} disabled>Uložený údaj (není dostupný v nabídce)</option>}
                                     {fields.map(f => (
                                         <option key={f.value} value={f.value}>
-                                            {f.label}
+                                            {searchFieldLabel(f.value,f.label)}
                                         </option>
                                     ))}
                                 </select>
@@ -242,9 +255,10 @@ export default function AdvancedFilterBuilder({
                                     ))}
                                 </select>
 
-                                {!isUnary && (
+                                {!isUnary && (c.field.endsWith('AuthorityId')||c.field.endsWith('HistoricalId'))&&<SearchVocabulary type={c.field.replace(/(Authority|Historical)Id$/,'').toUpperCase() as ManagedDictionaryType} label="Vybraná položka" historical={c.field.endsWith('HistoricalId')} value={c.value} onSelect={value=>onGroupChange(updateCondition(group,c.id,{value}))}/>}
+                                {!isUnary && !c.field.endsWith('AuthorityId')&&!c.field.endsWith('HistoricalId') && (
                                     <input
-                                        type="text"
+                                        type={['datingFrom','datingTo'].includes(c.field)?'date':'text'}
                                         placeholder={isBetween ? 'Hodnota od...' : 'Hledaný výraz...'}
                                         value={c.value}
                                         onChange={e => onGroupChange(updateCondition(group, c.id, { value: e.target.value }))}
@@ -254,7 +268,7 @@ export default function AdvancedFilterBuilder({
 
                                 {isBetween && (
                                     <input
-                                        type="text"
+                                        type={['datingFrom','datingTo'].includes(c.field)?'date':'text'}
                                         placeholder="Hodnota do..."
                                         value={c.valueTo || ''}
                                         onChange={e => onGroupChange(updateCondition(group, c.id, { valueTo: e.target.value }))}
@@ -304,7 +318,7 @@ export default function AdvancedFilterBuilder({
                             onClick={() => onGroupChange(addSubGroup(group))}
                             className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-blue-50 border border-blue-300 rounded text-blue-800 hover:bg-blue-100 shadow-xs"
                         >
-                            <FaLayerGroup size={10} /> Přidat skupinu (AND/OR)
+                            <FaLayerGroup size={10} /> Přidat alternativní možnosti
                         </button>
                     )}
                 </div>
@@ -317,7 +331,7 @@ export default function AdvancedFilterBuilder({
             <div className="flex items-center justify-between pb-2 border-b border-gray-200">
                 <div className="flex items-center gap-2 text-sm font-bold text-[#00204a]">
                     <FaFilter />
-                    <span>Pokročilý filtr sbírkových předmětů (AND / OR / NOT)</span>
+                    <span>Další podmínky hledání</span>
                 </div>
             </div>
 

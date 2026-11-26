@@ -1,3 +1,6 @@
+import {useState} from 'react';
+import {printDocument,printColumns,downloadPrint,firstPrintImage,printImages,type PrintVariant} from '../features/catalog/printDocument';
+import {originalIntegrationEnabled,originalSession} from '../features/catalog/originalAdapter';
 import React from 'react';
 import { resolveApiUrl } from '@/lib/api';
 
@@ -41,6 +44,16 @@ export default function ItemListPrint({
     mode = 'list',
     onClose
 }: ItemListPrintProps) {
+    const [variant,setVariant]=useState<PrintVariant>('list'),[columns,setColumns]=useState(Object.keys(printColumns)),[photos,setPhotos]=useState(false),[photoMode,setPhotoMode]=useState<'one'|'all'>('one'),[busy,setBusy]=useState(false),[error,setError]=useState('');
+    async function documentOutput(download=false){
+        if(busy)return;const preview=download?null:window.open('','_blank');if(!download&&!preview){setError('Povolte otevření tiskového náhledu.');return;}
+        if(preview)preview.opener=null;setBusy(true);setError('');
+        try{const images:Record<number,string[]>={};if(photos&&originalIntegrationEnabled()){
+            if(items.length>50)throw new Error('Tisk s fotografiemi je omezen na 50 předmětů; zúžte výběr.');
+            const {api,signal}=originalSession();for(const row of items){const load=(after?:string)=>api.media(row.id,signal,after);const first=photoMode==='one'?await firstPrintImage(load):undefined;const entries=photoMode==='all'?await printImages(load):first?[first]:[];images[row.id]=[];for(const image of entries){const blob=await api.bytes(row.id,image,image.variants.includes('thumbnail')?'thumbnail':'content',signal,5*1024*1024);images[row.id].push(await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=reject;reader.readAsDataURL(blob);}));}}
+        }const html=printDocument(items,columns,variant,images);if(download)downloadPrint(html);else if(preview){preview.document.open();preview.document.write(html);preview.document.close();preview.focus();}}
+        catch(e){preview?.close();setError((e as Error).message);}finally{setBusy(false);}
+    }
     const handlePrint = () => {
         window.print();
     };
@@ -80,6 +93,7 @@ export default function ItemListPrint({
                     </div>
                 </div>
 
+                <fieldset disabled={busy}><legend>Podporované tiskové varianty</legend><select aria-label="Tisková varianta" value={variant} onChange={e=>setVariant(e.target.value as PrintVariant)}><option value="list">Soupis</option><option value="a5">Technická karta A5 na šířku</option><option value="two-a5">Technické karty 2× A5 na A4</option></select><label><input type="checkbox" checked={photos} onChange={e=>setPhotos(e.target.checked)}/>S fotografií (nejvýše 50 položek)</label>{photos&&<label>Počet fotografií<select aria-label="Počet fotografií v tisku" value={photoMode} onChange={e=>setPhotoMode(e.target.value as 'one'|'all')}><option value="one">Jedna fotografie</option><option value="all">Všechny fotografie (nejvýše 20 na předmět)</option></select></label>}<details><summary>Sloupce / pole tisku</summary>{Object.entries(printColumns).map(([key,label])=><label key={key}><input type="checkbox" checked={columns.includes(key)} onChange={e=>setColumns(v=>e.target.checked?[...v,key]:v.filter(k=>k!==key))}/>{label}</label>)}</details><button type="button" disabled={!columns.length} onClick={()=>void documentOutput()}>Otevřít tiskový náhled</button><button type="button" disabled={!columns.length} onClick={()=>void documentOutput(true)}>Stáhnout tiskový dokument</button></fieldset><p>Technická A5 šablona není schválený vzor DEMUS. Dlouhý obsah může pokračovat na další stránce; žádný údaj se neořezává. Náhled vytiskněte přes Ctrl+P.</p>{busy&&<p role="status">Generuji tiskový dokument…</p>}{error&&<p role="alert">{error}</p>}
                 {totalCount && totalCount > items.length && (
                     <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 rounded flex items-center gap-2">
                         <span>⚠️</span>

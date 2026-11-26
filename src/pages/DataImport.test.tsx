@@ -85,12 +85,14 @@ describe('Import dat', () => {
 
   it('starts once, displays progress and final statistics, then stops polling', async () => {
     const api = mockApi('VALID');
+    let importing = true;
     api.start.mockImplementation(async () => {
-      api.status.mockResolvedValueOnce(snapshot('IMPORTING')).mockResolvedValue(snapshot('COMPLETED'));
+      api.status.mockImplementation(async () => snapshot(importing ? 'IMPORTING' : 'COMPLETED'));
     });
     mount(api, true, 30);
     await userEvent.click(await screen.findByRole('button', { name: t.start }));
     expect(await screen.findByRole('progressbar', { name: t.status.IMPORTING })).toBeInTheDocument();
+    importing = false;
     const completed = await screen.findByRole('region', { name: t.completed });
     expect(within(completed).getByText('80')).toBeInTheDocument();
     expect(within(completed).getAllByText(t.unavailableValue)).toHaveLength(2);

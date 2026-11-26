@@ -2,9 +2,10 @@ import {useEffect,useState} from 'react';
 import {type ScopedApi,type SourceSummary} from './scopedApi';
 import {useTask} from './useTask';
 
-export default function SourceSummaryPanel({api,itemId,onFatal}:{api:ScopedApi;itemId:number;onFatal:(status:number)=>void}){
+export default function SourceSummaryPanel({api,itemId,onFatal,onError}:{api:ScopedApi;itemId:number;onFatal:(status:number)=>void;onError?:(message:string)=>void}){
     const [value,setValue]=useState<SourceSummary|null>(null);const {run,busy,error}=useTask(onFatal);
     useEffect(()=>{if(api.sourceSummary)void run(signal=>api.sourceSummary!(itemId,signal),setValue);},[api,itemId,run]);
+    useEffect(()=>{if(error)onError?.(error);},[error,onError]);
     if(!api.sourceSummary)return null;
     return <section aria-label="Doložené údaje zdroje"><h3>Doložené údaje zdroje</h3>
         {busy&&<p role="status">Načítání údajů zdroje…</p>}{error&&<p role="alert">{error}</p>}

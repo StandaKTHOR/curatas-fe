@@ -1,0 +1,29 @@
+import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {beforeEach,expect,it,vi} from 'vitest';
+import UnifiedDictionaries from './UnifiedDictionaries';
+const m=vi.hoisted(()=>({catalog:{id:1,capabilities:['dictionary.read','item.read']},api:{unifiedKinds:vi.fn(),unifiedValues:vi.fn(),unifiedValue:vi.fn(),saveUnifiedValue:vi.fn()}}));
+vi.mock('./CatalogContext',()=>({useCatalog:()=>({selectedCatalog:m.catalog})}));
+vi.mock('../../components/AuthContext',()=>({useAuth:()=>({token:'token'})}));
+vi.mock('../scoped/scopedApi',()=>({scopedApi:()=>m.api}));
+const source={key:'s:'+'a'.repeat(64),label:'Dřevo',code:'D',groupingCode:'01',parentKey:null,version:'0',binding:{recordId:'a'.repeat(64)},writable:true};
+const current={...source,key:'c:00000000-0000-0000-0000-000000000001',label:'Kov',code:'K',binding:null};
+beforeEach(()=>{vi.clearAllMocks();m.catalog={id:1,capabilities:['dictionary.read','item.read']};m.api.unifiedKinds.mockResolvedValue([{type:'MATERIAL',name:'Materiály',create:true,update:true},{type:'TECHNIQUE',name:'Techniky',create:true,update:true}]);m.api.unifiedValues.mockResolvedValue({items:[current,source],nextAfterId:null});m.api.unifiedValue.mockResolvedValue(source);});
+it('renders one catalog list without provenance or technical identifiers',async()=>{const {container}=render(<UnifiedDictionaries/>);await screen.findByRole('cell',{name:'Dřevo'});expect(screen.getAllByRole('table')).toHaveLength(1);expect(screen.getByRole('cell',{name:'Kov'})).toBeVisible();expect(container.textContent).not.toMatch(/DEMUS|historick|současn|[a-f0-9]{64}|00000000/);});
+it('uses the single continuation cursor and retains both namespaces without name merging',async()=>{m.api.unifiedValues.mockResolvedValueOnce({items:[current],nextAfterId:current.key}).mockResolvedValueOnce({items:[{...source,label:'Kov',code:'K2'}],nextAfterId:null});render(<UnifiedDictionaries/>);fireEvent.click(await screen.findByRole('button',{name:'Další položky číselníku'}));await waitFor(()=>expect(screen.getAllByRole('cell',{name:'Kov'})).toHaveLength(2));expect(m.api.unifiedValues).toHaveBeenLastCalledWith('MATERIAL',expect.any(AbortSignal),'',current.key);});
+it('does not apply an old page to a replacement type',async()=>{let resolve!:(p:unknown)=>void;m.api.unifiedValues.mockResolvedValueOnce({items:[source],nextAfterId:source.key}).mockImplementationOnce(()=>new Promise(r=>resolve=r)).mockResolvedValue({items:[{...current,label:'Kování'}],nextAfterId:null});render(<UnifiedDictionaries/>);fireEvent.click(await screen.findByRole('button',{name:'Další položky číselníku'}));fireEvent.change(screen.getByLabelText('Typ číselníku'),{target:{value:'TECHNIQUE'}});await screen.findByRole('cell',{name:'Kování'});await act(async()=>resolve({items:[{...source,label:'NEPATŘÍ SEM'}],nextAfterId:null}));expect(screen.queryByText('NEPATŘÍ SEM')).toBeNull();});
+it('saves a source caption only after an explicit action, with CAS and verified reload',async()=>{m.api.saveUnifiedValue.mockResolvedValue({...source,label:'Jasan',version:'1'});m.api.unifiedValue.mockResolvedValueOnce(source).mockResolvedValue({...source,label:'Jasan',version:'1'});render(<UnifiedDictionaries/>);fireEvent.click(await screen.findByRole('button',{name:'Detail Dřevo — D (zařazení 01)'}));fireEvent.click(await screen.findByRole('button',{name:'Upravit tuto položku'}));fireEvent.change(screen.getByLabelText('Název položky'),{target:{value:'Jasan'}});fireEvent.change(screen.getByLabelText('Důvod úpravy'),{target:{value:'Oprava kurátorem'}});expect(m.api.saveUnifiedValue).not.toHaveBeenCalled();fireEvent.click(screen.getByRole('button',{name:'Uložit položku'}));await waitFor(()=>expect(m.api.saveUnifiedValue).toHaveBeenCalledWith('MATERIAL',source.key,{label:'Jasan',code:'D',reason:'Oprava kurátorem'},'"0"',expect.any(AbortSignal)));await screen.findByRole('heading',{name:'Jasan — D (zařazení 01)'});});
+it('keeps failed or conflicting overlay edits open and visible',async()=>{m.api.saveUnifiedValue.mockRejectedValue(new Error('Záznam byl mezitím změněn'));render(<UnifiedDictionaries/>);fireEvent.click(await screen.findByRole('button',{name:'Detail Dřevo — D (zařazení 01)'}));fireEvent.click(await screen.findByRole('button',{name:'Upravit tuto položku'}));fireEvent.change(screen.getByLabelText('Důvod úpravy'),{target:{value:'Doložená oprava'}});fireEvent.click(screen.getByRole('button',{name:'Uložit položku'}));expect(await screen.findByRole('alert')).toHaveTextContent('mezitím změněn');expect(screen.getByRole('form',{name:'Upravit položku'})).toBeVisible();});
+it('hides the catalog when dictionary.read is missing',()=>{m.catalog={id:1,capabilities:['item.read']};const {container}=render(<UnifiedDictionaries/>);expect(container).toBeEmptyDOMElement();expect(m.api.unifiedValues).not.toHaveBeenCalled();});
+
+it('reports a scoped total and matching count independently of the rows already loaded',async()=>{
+ m.api.unifiedValues.mockResolvedValueOnce({items:[source],nextAfterId:source.key,totalCount:43,matchCount:43})
+  .mockResolvedValueOnce({items:[current],nextAfterId:null,totalCount:43,matchCount:43})
+  .mockResolvedValueOnce({items:[],nextAfterId:null,totalCount:43,matchCount:0});
+ render(<UnifiedDictionaries/>);
+ expect(await screen.findByText(/Celkem 43 položek · Výsledky hledání 43 · Zobrazeno 1/)).toBeVisible();
+ fireEvent.click(screen.getByRole('button',{name:'Další položky číselníku'}));
+ expect(await screen.findByText(/Celkem 43 položek · Výsledky hledání 43 · Zobrazeno 2/)).toBeVisible();
+ fireEvent.change(screen.getByLabelText('Hledat v číselníku'),{target:{value:'bez výsledku'}});
+ expect(await screen.findByText(/Celkem 43 položek · Výsledky hledání 0 · Zobrazeno 0/)).toBeVisible();
+ expect(screen.queryByRole('button',{name:'Další položky číselníku'})).not.toBeInTheDocument();
+});

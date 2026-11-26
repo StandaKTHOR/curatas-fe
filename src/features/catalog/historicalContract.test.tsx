@@ -28,8 +28,8 @@ it('accepts duplicate no-store and preserves precise NULL/zero/false/bit values'
 it('appends repeated DEMUS rows to the existing read-only table and pages even inside a disabled fieldset',async()=>{
  const f=vi.fn().mockResolvedValueOnce(reply(page([row()],{nextAfterId:'a'.repeat(64)}))).mockResolvedValueOnce(reply(page([row('e','židle')])));vi.stubGlobal('fetch',f);
  render(<fieldset disabled><table className="demus-datasheet"><tbody><tr><td>Současné tvrzení má přednost</td></tr><HistoricalTableRows itemId={3} table="Urceni" etag={'"0"'} fields={[["Predmet_UR","Předmět"],["N","NULL"],["Z","Nula"]]}/></tbody></table></fieldset>);
- await screen.findByText('kredenc kuchyňská (DEMUS)');expect(screen.getByText('Současné tvrzení má přednost')).toBeInTheDocument();expect(screen.queryByRole('button',{name:'Upravit'})).not.toBeInTheDocument();
- fireEvent.click(screen.getByRole('link',{name:'Další historické záznamy DEMUS'}));await screen.findByText('židle (DEMUS)');expect(screen.getAllByText('NULL (DEMUS)')).toHaveLength(2);expect(f).toHaveBeenCalledTimes(2);expect(f.mock.calls.every(call=>!call[1].method||call[1].method==='GET')).toBe(true);
+ await screen.findByText('kredenc kuchyňská');expect(screen.getByText('Současné tvrzení má přednost')).toBeInTheDocument();expect(screen.queryByRole('button',{name:'Upravit'})).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('link',{name:'Další historické záznamy DEMUS'}));await screen.findByText('židle');expect(screen.getAllByText('Neuvedeno')).toHaveLength(2);expect(f).toHaveBeenCalledTimes(2);expect(f.mock.calls.every(call=>!call[1].method||call[1].method==='GET')).toBe(true);
 });
 it('discards source rows on item, catalog, authentication and parent ETag changes',async()=>{
  const f=vi.fn().mockResolvedValue(reply(page()));vi.stubGlobal('fetch',f);const v=renderHook(({id,etag})=>useHistoricalRows(id,'Urceni',etag),{initialProps:{id:3,etag:'"0"'}});await waitFor(()=>expect(v.result.current.page?.items).toHaveLength(1));
@@ -54,7 +54,7 @@ it.each([{catalogId:72},{sourceRecordId:'f'.repeat(64)},{semantics:'CURRENT'},{n
 });
 it('loads declared source authority rows only after expanding original evidence and labels ambiguity',async()=>{
  const f=vi.fn().mockImplementation((url:string)=>Promise.resolve(reply(url.includes('/relations?')?related():page())));vi.stubGlobal('fetch',f);
- render(<fieldset disabled><table><tbody><HistoricalTableRows itemId={3} table="Urceni" etag={'"0"'} fields={[["Predmet_UR","Předmět"]]}/></tbody></table></fieldset>);await screen.findByText('kredenc kuchyňská (DEMUS)');expect(f).toHaveBeenCalledTimes(1);
+ render(<fieldset disabled><table><tbody><HistoricalTableRows itemId={3} table="Urceni" etag={'"0"'} fields={[["Predmet_UR","Předmět"]]}/></tbody></table></fieldset>);await screen.findByText('kredenc kuchyňská');expect(f).toHaveBeenCalledTimes(1);
  const summary=screen.getByText('Všechna původní pole DEMUS');const detail=summary.parentElement as HTMLDetailsElement;detail.open=true;fireEvent(detail,new Event('toggle'));await screen.findByText('DEMUS Adresar · Nejednoznačná vazba — 2 kandidátů');expect(f).toHaveBeenCalledTimes(2);expect(screen.queryByRole('button',{name:'Použít autoritu'})).not.toBeInTheDocument();
 });
 

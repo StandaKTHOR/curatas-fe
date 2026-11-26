@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GovButton, GovFormInput, GovFormLabel, GovMessage } from '@gov-design-system-ce/react';
 import { createDictionaryItem } from '../lib/api';
+import {suggestedDictionaryCode} from '../features/catalog/managedDictionaryPresentation';
 
 interface AddDictionaryModalProps {
     isOpen: boolean;
@@ -10,8 +11,10 @@ interface AddDictionaryModalProps {
     onSuccess: (newItem: { id?: number; code: string; label: string; type: string }) => void;
     initialValue?:{label:string;code:string|null;parentId:string|null};
     editing?:boolean;
+    submitLabel?:string;
     onCreate?:(input:{type:string;code:string;label:string;parentId:string|null})=>Promise<void>;
-    parentOptions?: {id: number|string; label: string}[];
+    renderParentPicker?:(value:string,onChange:(id:string)=>void)=>React.ReactNode;
+    parentOptions?: {id: number|string; label: string; disabled?:boolean}[];
 }
 
 export default function AddDictionaryModal({
@@ -20,11 +23,12 @@ export default function AddDictionaryModal({
     dictionaryTitle,
     onClose,
     onSuccess,
-    onCreate,initialValue,editing=false,
-    parentOptions = []
+    onCreate,initialValue,editing=false,submitLabel,
+    renderParentPicker, parentOptions = []
 }: AddDictionaryModalProps) {
     const [label, setLabel] = useState('');
     const [code, setCode] = useState('');
+    const [codeEdited,setCodeEdited]=useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [parentId, setParentId] = useState('');
@@ -33,6 +37,7 @@ export default function AddDictionaryModal({
         if (isOpen) {
             setLabel(initialValue?.label??'');
             setCode(initialValue?.code??'');
+            setCodeEdited(Boolean(initialValue?.code));
             setError(null);
             setLoading(false);
             setParentId(initialValue?.parentId??'');
@@ -53,6 +58,9 @@ export default function AddDictionaryModal({
         OBJECT_TYPE: 'Druh předmětu',
         FUND: 'Fond',
         AUTHOR: 'Autor / Původce',
+        AUTHOR_ROLE: 'Role autora',
+        CUSTODIAN: 'Správce sbírky',
+        COLLECTION: 'Podsbírka',
         ACQUISITION_METHOD: 'Způsob nabytí',
         DOCUMENT_TYPE: 'Typ dokumentace',
         DEACCESSION_REASON: 'Důvod vyřazení',
@@ -92,10 +100,7 @@ export default function AddDictionaryModal({
 
     const handleLabelChange = (val: string) => {
         setLabel(val);
-        // Automaticky generovat kód pokud uživatel ještě kód nezadal
-        if (!code || code === label.toUpperCase().replace(/\s+/g, '_')) {
-            setCode(val.toUpperCase().trim().replace(/[\s-]+/g, '_').replace(/[^A-Z0-9_]/gi, ''));
-        }
+        if (!codeEdited) setCode(suggestedDictionaryCode(val));
     };
 
     const getTitle = () => {
@@ -149,7 +154,7 @@ export default function AddDictionaryModal({
     };
 
     return (
-        <div data-scoped-reference-editor={onCreate?true:undefined} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+        <div data-scoped-reference-editor={onCreate?true:undefined} data-dictionary-value-modal className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full overflow-hidden border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
                 <div className="bg-[#00204a] text-white px-5 py-3.5 flex justify-between items-center">
                     <div>
@@ -166,10 +171,10 @@ export default function AddDictionaryModal({
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-5 space-y-4">
-                    {parentOptions.length > 0 && <label className="block text-sm">Nadřazená položka
+                    {renderParentPicker?renderParentPicker(parentId,setParentId):parentOptions.length > 0 && <label className="block text-sm">Nadřazená položka
                         <select aria-label="Nadřazená položka" value={parentId} onChange={e => setParentId(e.target.value)} className="w-full border p-1">
                             <option value="">— kořen číselníku —</option>
-                            {parentOptions.map(parent => <option key={parent.id} value={parent.id}>{parent.label}</option>)}
+                            {parentOptions.map(parent => <option key={parent.id} value={parent.id} disabled={parent.disabled}>{parent.label}{parent.disabled?' — nelze odborně rozlišit; výběr vyžaduje ověření':''}</option>)}
                         </select>
                     </label>}
                     {error && (
@@ -190,14 +195,15 @@ export default function AddDictionaryModal({
                     </div>
 
                     <div className="space-y-1">
-                        <GovFormLabel htmlFor="dictCode">Systémový kód (identifikátor)</GovFormLabel>
+                        <GovFormLabel htmlFor="dictCode">Kód položky</GovFormLabel>
                         <GovFormInput
                             id="dictCode"
                             value={code}
-                            onChange={(e: any) => setCode(e.target.value)}
+                            onChange={(e: any) => {setCodeEdited(true);setCode(e.target.value);}}
                             placeholder={placeholders.code}
                         />
                         <p className="text-[10px] text-gray-400">Generuje se automaticky z názvu.</p>
+                        {onCreate&&<p>Novou položku založíte výslovným uložením. Nadřazená položka určuje její místo v hierarchii.</p>}
                     </div>
 
                     <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
@@ -218,7 +224,7 @@ export default function AddDictionaryModal({
                             disabled={loading || !label.trim()}
                             onClick={handleSubmit}
                         >
-                            {loading ? 'Ukládám...' : editing?'Uložit a vybrat':'Přidat a vybrat'}
+                            {loading ? 'Ukládám...' : submitLabel??(editing?'Uložit a vybrat':'Přidat a vybrat')}
                         </GovButton>
                     </div>
                 </form>

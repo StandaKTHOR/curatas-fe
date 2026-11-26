@@ -4,6 +4,7 @@ import { GovButton, GovFormInput, GovFormLabel } from '@gov-design-system-ce/rea
 import {localAuthEnabled,resetLocal} from '../features/localAuth/localAuthClient';
 import { login } from '../lib/api';
 import { useAuth } from '../components/AuthContext';
+import MaintenanceNotice from '../components/MaintenanceNotice';
 
 export default function Login() {
     const [params]=useSearchParams();
@@ -61,6 +62,7 @@ export default function Login() {
                     </p>
                 </div>
 
+                <MaintenanceNotice/>
                 <form onSubmit={handleLogin} className="space-y-6">
                     {/* UŽIVATELSKÉ JMÉNO */}
                     <div className="space-y-2">

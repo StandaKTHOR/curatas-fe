@@ -1,8 +1,18 @@
+import {dictionaryLabel,type DictionaryCaption} from '../catalog/dictionaryLabel';
+export const localityFieldKeys=['zeme','stat','kraj','oblast','okres','katastr','nmVyska','zSirka','zDelka','ctverec','mapa','poznamka','plusT'] as const;
+export type LocalityFields=Record<typeof localityFieldKeys[number],string|null>;
+export type LocalityAddress=Partial<Record<"obec"|"castObce"|"ulice"|"cisloDomovni"|"druhCisla"|"cisloOrientacni"|"znakOrientacni"|"psc"|"ruianAdresa",string|null>>;
+export type LocalityCardInput={address?:LocalityAddress;label:string;code:string|null;parentId:string|null;fields:LocalityFields;geoToken:string|null};
+export type LocalityCard={address?:LocalityAddress;value:DictionaryValue;fields:LocalityFields;provenance:Record<string,{origin:string;sourceUrl?:string;retrievedAt?:string;recordedAt?:string}>;etag:string};
+export type GeographyPreview={address?:LocalityAddress;token:string;label:string;fields:Partial<LocalityFields>;sources:Record<string,{origin:string;sourceUrl:string;retrievedAt:string}>;cadastres:{code:number;label:string}[];notice:string;provider:string};
+export type CatalogSummaryValue={value:string;origin:'CURRENT'|'DEMUS_SELECTED'|'DEMUS_SOURCE';identity:string};
+export type CatalogSummary=Record<'author'|'material'|'technique'|'accessionNumber',CatalogSummaryValue[]>&{datingText?:CatalogSummaryValue[];authorRole?:CatalogSummaryValue[]};
 export interface CurrentAuditRow {id:string;actorId:string;action:string;fromVersion:string;toVersion:string;occurredAt:string;note:string|null}
 export const managedDictionaryTypes=['MATERIAL','TECHNIQUE','FUND','OBJECT_TYPE','CUSTODIAN','AUTHOR','AUTHOR_ROLE','COUNTRY','COLLECTION','GROUP','LOCALITY','CLASSIFICATION','SUBJECT'] as const;
 export type ManagedDictionaryType=typeof managedDictionaryTypes[number];
 import {professionalFields} from '../../lib/professional';
 import {hasPrivateNoStore} from '../../lib/privateResponsePolicy';
+import {checkedCloneGroups,type CloneGroup} from '../catalog/cloneGroups';
 import {historicalTables,historicalRelatedTables,historicalStates,typedHistorical,type HistoricalTable,type HistoricalPage,type HistoricalRow} from '../catalog/historicalContract';
 import {validateCuratorPage} from './curatorPageContract';
 import { effectiveToken, localAuthEnabled } from '../localAuth/localAuthClient';
@@ -11,9 +21,32 @@ import {curatorQuery,curatorCurrentFields,curatorCurrentInventoryFields} from '.
 
 export interface Item { id: number; catalogId: number; title: string | null; inventoryNumber: string | null; accessionNumber: string | null; version: string; sourceInventory?:Record<string,string|null> }
 export interface MuseumHistoryRow {id:number;eventType:'REVISION'|'RESTORATION'|'LOAN';eventDate:string|null;description:string|null}
-export type CuratorSection='audit-note'|'flags'|'inventory'|'professional'|'inventory-range'|'authorities'|'reference'|'manipulation'|'action'|'iso'|'storage'|'additional';
-export const curatorSectionFields:Record<CuratorSection,readonly string[]>={'audit-note':['note'],flags:['archive','card','copied','verified','marked'],additional:['extendedDescription','datingFrom','datingTo','countryOfOrigin','objectCondition','insuranceValue','weight','latitude','longitude','coordinateSystem','markant','signature','findingLocality'],storage:['locationBuilding','locationRoom','permanentLocation'],inventory:['quantity','otherNumber'],'inventory-range':['lowerNumber','upperNumber','seriesRecordId'],professional:['objectType','description','authorText','datingText','originPlace','materialText','techniqueText','materialNote'],authorities:['determinedByText','authorRoleText','groupRecordId','fundRecordId','collectionRecordId','departmentRecordId','objectTypeRecordId'],reference:['Ref_RF','Str_RF'],manipulation:['Typ_MN','DatMan_MN','Kdo_MN','Stav_MN','Osetreni_MN','InvRev_MN','PopisSt_MN'],action:['Poradi_AK','Prezentace_AK','Revers_AK','CKtlg_AK','Pozn_AK'],iso:['KodISO_SO','CharISO_SO','MatISO_SO','CenaISO_SO','MenaISO_SO','PovrchISO_SO','TvarISO_SO']};
+export interface CurrentHistoryEvent {id:string;eventType:'REVISION'|'RESTORATION'|'LOAN'|'STORY';eventDate:string|null;description:string|null}
+export type CuratorSection='card-notes'|'custodian'|'recorded-by'|'disposal-draft'|'audit-note'|'flags'|'inventory'|'professional'|'inventory-range'|'authorities'|'reference'|'manipulation'|'action'|'iso'|'storage'|'additional';
+export const curatorSectionFields:Record<CuratorSection,readonly string[]>={'card-notes':['cardNote','originNote','determinationDate','yearFrom','yearTo'],'custodian':['custodianCode'],'recorded-by':['recordedByKey','recordedByName'],'disposal-draft':['reason','proposedOn'],'audit-note':['note'],flags:['archive','card','copied','verified','marked'],additional:['extendedDescription','datingFrom','datingTo','countryOfOrigin','objectCondition','insuranceValue','weight','latitude','longitude','coordinateSystem','markant','signature','findingLocality'],storage:['locationBuilding','locationRoom','permanentLocation'],inventory:['quantity','otherNumber'],'inventory-range':['lowerNumber','upperNumber','seriesRecordId'],professional:['objectType','description','authorText','datingText','originPlace','materialText','techniqueText','materialNote'],authorities:['determinedByText','authorRoleText','groupRecordId','fundRecordId','collectionRecordId','departmentRecordId','objectTypeRecordId'],reference:['Ref_RF','Str_RF'],manipulation:['Typ_MN','DatMan_MN','Kdo_MN','Stav_MN','Osetreni_MN','InvRev_MN','PopisSt_MN'],action:['Poradi_AK','Prezentace_AK','Revers_AK','CKtlg_AK','Pozn_AK'],iso:['KodISO_SO','CharISO_SO','MatISO_SO','CenaISO_SO','MenaISO_SO','PovrchISO_SO','TvarISO_SO']};
 export const inventoryColumns={Predmet_S:'Předmět ve zdroji',Titul_S:'Titul ve zdroji',Rada_S:'Řada',PorC_S:'Poř. č.',Lomeni_S:'Lom',HPorC_S:'Až',StatSpr_S:'Stát',Spravce_S:'Správce',Odd_S:'Oddělení',Podsb_S:'Podsbírka',Pocet_S:'Počet ve zdroji',Ozn_S:'Označeno',JineC_S:'Jiné číslo',Karta_S:'Karta',Opsana_S:'Opsána',Overena_S:'Ověřena',Zapsal_S:'Zapsal',DatZap_S:'Datum zápisu',Skupina_S:'Skupina',Urcil_S:'Určil',DatZm_S:'Datum změny',Fond_S:'Fond'} as const;
+export const historicalVocabularyTables:Record<string,string|null>={MATERIAL:'Materialy',TECHNIQUE:'Techniky',AUTHOR:'Osobnosti',AUTHOR_ROLE:'Role',LOCALITY:'Lokality',OBJECT_TYPE:'Nazvy',FUND:'Fondy',COLLECTION:'Podsbirky',GROUP:'Skupiny',CLASSIFICATION:'System',COUNTRY:'Staty',SUBJECT:'NametyISO',CUSTODIAN:null};
+export interface HistoricalVocabularyValue {recordId:string;sourceSha256:string;rowHash:string;occurrence:string;table:string;typedKey:Record<string,unknown>|null;code:string|null;label:string|null;groupingCode:string|null}
+export interface UnifiedDictionaryEntry {key:string;label:string|null;code:string|null;groupingCode:string|null;parentKey:string|null;version:string;binding:HistoricalVocabularyValue|null;writable:boolean;fields?:Record<string,unknown>|null;editableFields?:string[];relatedItems?:boolean}
+export interface SourceAuthorityItem {id:number;inventoryNumber:string|null;title:string|null;primary:boolean;collaborator:boolean;assigned:boolean}
+export interface CuratorDocument {id:number;typeKey:string|null;typeCaption:string|null;mediaId:string|null}
+export interface UnifiedDictionaryPage {items:UnifiedDictionaryEntry[];nextAfterId:string|null;totalCount?:number;matchCount?:number}
+export const unifiedDictionariesEnabled=()=>import.meta.env.VITE_UNIFIED_DICTIONARIES_ENABLED==='true';
+export function historicalBindings(input:unknown):asserts input is Record<string,HistoricalVocabularyValue>{
+ if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).length>25)throw new Error('Invalid historical assignments');
+ const seen=new Set<string>();
+ for(const [key,v] of Object.entries(input) as [string,HistoricalVocabularyValue][]){
+  const type=/^(MATERIAL|TECHNIQUE)_[2-8]$/.test(key)?key.split('_')[0]:key;
+  if(['MATERIAL','TECHNIQUE'].includes(type)){const identity=type+':'+v?.recordId;if(seen.has(identity))throw new Error('Duplicate historical MatTech position');seen.add(identity);}
+  if(!Object.hasOwn(historicalVocabularyTables,type)||['CUSTODIAN','CLASSIFICATION'].includes(type)||!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).sort().join(',')!==['recordId','sourceSha256','rowHash','occurrence','table','typedKey','code','label','groupingCode'].sort().join(',')||v.table!==historicalVocabularyTables[type]||![v.recordId,v.sourceSha256,v.rowHash].every(h=>typeof h==='string'&&/^[a-f0-9]{64}$/.test(h))||typeof v.occurrence!=='string'||!/^[1-9][0-9]*$/.test(v.occurrence)||v.typedKey!==null&&(typeof v.typedKey!=='object'||Array.isArray(v.typedKey))||[v.code,v.label,v.groupingCode].some(t=>t!==null&&typeof t!=='string'))throw new Error('Invalid historical assignment identity');
+ }
+}
+export interface HistoricalVocabularyPage {sourceSha256:string|null;items:HistoricalVocabularyValue[];nextAfterId:string|null;state:string;captions?:Record<string,DictionaryCaption>}
+function professionalHistoricalRefs(payload:Record<string,unknown>){
+ for(const [key,type,prefix] of [['materialHistoricalRef','MATERIAL','material'],['techniqueHistoricalRef','TECHNIQUE','technique']])if(payload[key]!=null){
+  historicalBindings({[type]:payload[key]});if(payload[prefix+'AuthorityId']!=null)throw new Error('Současná a historická identita řádku se nesmí zaměnit.');
+ }
+}
 export interface SourceChoice {recordId:string;sourceSha256:string;rowHash:string;typedKey:Record<string,unknown>;code:string;label:string|null;groupingCode:string|null}
 export function inventoryDisplay(key:string,value:string|null|undefined){if(value===null||value===undefined)return 'Neuvedeno';return ['Ozn_S','Karta_S','Opsana_S','Overena_S'].includes(key)?value==='true'?'Ano':value==='false'?'Ne':value:value;}
 export function validateInventoryRange(value:Record<string,string|null>){
@@ -46,13 +79,17 @@ export interface CurrentAuthorAssignment {id:string;authorId:string;roleId:strin
 export interface CurrentAuthor extends CurrentAuthorAssignment {authorLabel:string;roleLabel:string|null}
 export interface Versioned<T> { value: T; etag: string }
 export interface CurrentDimensionWrite {id:number|null;type:string;value:string;unit:string|null;note:string|null}
-export type CurrentSectionWrites=Partial<Record<'inventory'|'professional'|'storage'|'additional'|'flags'|'item',Record<string,string|null>>> & {dimensions?:{rows:CurrentDimensionWrite[]}};
+export type CurrentSectionWrites=Partial<Record<'inventory'|'professional'|'storage'|'additional'|'flags'|'item'|'custodian'|'recorded-by'|'card-notes',Record<string,string|null>>> & {dimensions?:{rows:CurrentDimensionWrite[]};'historical-refs'?:{bindings:Record<string,HistoricalVocabularyValue>}};
 export interface LifecycleState {active:boolean|null;published:boolean|null;status:string|null;deaccession:{reason:string;deaccessionDate:string;documentNumber:string|null}|null}
-export interface NewItemFields {title:string;inventoryNumber:string;accessionNumber:string|null;professional?:Record<string,string|null>;inventory?:{quantity:number|null;otherNumber:string|null};storage?:Record<string,string|null>;additional?:Record<string,string|null>;references?:Partial<Record<ManagedDictionaryType,string>>}
+export interface NewItemFields {title:string|null;inventoryNumber:string;accessionNumber:string|null;professional?:Record<string,string|null>;inventory?:{quantity:number|null;otherNumber:string|null};storage?:Record<string,string|null>;additional?:Record<string,string|null>;references?:Partial<Record<ManagedDictionaryType,string>>;historicalReferences?:Record<string,HistoricalVocabularyValue>;inventoryRange?:{lowerNumber:number;upperNumber:number|null;seriesRecordId:string|null;prefix:string;postfix:string}}
 export interface Creation {item:Item;origin:'MES_CREATED';requestId:string;replayed:boolean}
 export interface ItemOrigin {catalogId:number;itemId:number;itemVersion:string;origin:'MES_CREATED'|'UNRECORDED';createdAt:string|null;createdBy?:string|null;createdBySubject?:string|null;createdByLabel?:string|null;modifiedAt?:string|null;modifiedBy?:string|null;modifiedByLabel?:string|null}
 export interface SourceSummary {itemVersion:string;sourceQuantity:string|null;sourceAccessionFlag:boolean|null;sourceSeries?:string|null;sourceDepartmentCode?:string|null;sourceCollectionCode?:string|null;sourceRecordedBy?:string|null;sourceDeterminedBy?:string|null}
 export const dimensionReviewReasons=['PROFESSIONAL_SEMANTICS_UNCONFIRMED','SOURCE_ORDER_MISSING','UNIT_MISSING','TYPE_REFERENCE_MISSING','TYPE_REFERENCE_AMBIGUOUS','ORIGINAL_DECIMAL_FORMAT_UNKNOWN','NUMBER_REVIEW_REQUIRED'] as const;
+export interface CuratorMeasure {id:string;order:number|null;type:string|null;value:string|null;unit:string|null}
+export interface CuratorStory {key:string;date:string|null;location:string|null;person:string|null;text:string|null;year:number|null}
+export type ItemExactBindings=Partial<Record<'DATING'|'DETERMINER',{key:string|null;caption:string|null}>>;
+export interface SourceDimensionCorrection {recordId:string;value:string|null;unit:string|null;type:string|null;valueCleared?:boolean}
 export interface SourceDimension {recordId:string;sourceSha256:string;rowHash:string;occurrence:string;sourceOrder:string|null;type:string|null;unit:string|null;number:{kind:string;value:string|null;bitPattern:string|null;scale:string|null;status:string};dictionaryState:'EXACT_MATCH'|'MISSING'|'AMBIGUOUS';reviewReasons?:string[]}
 export interface Page<T, C> { items: T[]; nextAfterId: C | null }
 export interface SourceMatTech {recordId:string;sourceSha256:string;rowHash:string;occurrence:string;sourceOrder:string|null;material:string|null;technique:string|null;materialState:'EXACT_MATCH'|'MISSING'|'AMBIGUOUS';techniqueState:'EXACT_MATCH'|'MISSING'|'AMBIGUOUS'}
@@ -61,6 +98,10 @@ export interface InventoryEvidence {itemVersion:string;inventoryNumber:string|nu
 export class ScopedTransportError extends TypeError {}
 export class ScopedError extends Error {
     constructor(public readonly status: number) { super(errorText(status)); }
+}
+function creationError(error:unknown):never{
+    if(error instanceof ScopedError&&error.status===409)error.message='Konflikt při založení nebo klonování. Inventární číslo již může existovat v tomto katalogu, současné přírůstkové číslo může kolidovat s databázovým omezením nebo byl stejný požadavek použit s jinými údaji. Zkontrolujte číslo a výsledek původního požadavku. Zadání zůstává zachováno.';
+    throw error;
 }
 export function errorText(status: number) {
     if (status === 401) return 'Přihlášení vypršelo. Přihlaste se znovu.';
@@ -94,19 +135,24 @@ export function strongTag(tag: string) {
     if (!/^"(0|[1-9][0-9]*)"$/.test(tag)) throw new Error('Načtěte silný ETag.'); version(tag.slice(1, -1)); return tag;
 }
 export function scopedApi(catalogId: number, token: string) {
+    function currentHistoryPage(body:any,response:Response,id:number){
+        if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_HISTORY_V1_NOT_DEMUS_NOT_AUDIT'||!Array.isArray(body.items)||body.items.length>100||!hasPrivateNoStore(response.headers))throw new Error('Invalid current history contract');
+        const items:CurrentHistoryEvent[]=body.items.map((v:any)=>{if(!['REVISION','RESTORATION','LOAN','STORY'].includes(v.eventType)||(v.eventDate!==null&&(typeof v.eventDate!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v.eventDate))))throw new Error('Invalid current history event');return {id:uuid(v.id),eventType:v.eventType,eventDate:nullable(v.eventDate),description:nullable(v.description)};});
+        if(new Set(items.map(v=>v.id)).size!==items.length)throw new Error('Duplicate current event');return {items,etag:tag(response,body.itemVersion)};
+    }
     integer(catalogId); if (!token) throw new Error('Catalog and session required');
     const base = `/api/v2/catalogs/${catalogId}`;
     const root = `${base}/items`;
     const itemPath = (id: number) => `${root}/${integer(id)}`;
-    async function request(path: string, signal: AbortSignal, init: RequestInit = {}) {
+    async function request(path: string, signal: AbortSignal, init: RequestInit = {}, optionalFeature:boolean|'caption' = false) {
         if (signal.aborted) throw new Error('Request cancelled');
         const response = await (async()=>{try{return await fetch(resolveApiUrl(path), { ...init, signal, cache: 'no-store', redirect: 'error', credentials: 'omit',
             headers: { Authorization: `Bearer ${effectiveToken(token)}`, ...(localAuthEnabled()?{'X-CURATAS-CSRF':'1'}:{}), ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}), ...init.headers } });}catch(e){if(e instanceof TypeError&&!signal.aborted)throw new ScopedTransportError(e.message,{cause:e});throw e;}})();
         if (signal.aborted) throw new Error('Request cancelled');
-        if (!response.ok) {if([401,403,404].includes(response.status))window.dispatchEvent(new CustomEvent('curatas:scoped-denied',{detail:{status:response.status}})); throw new ScopedError(response.status);} return response;
+        if (!response.ok) {if([401,403,404].includes(response.status)&&!(optionalFeature&&response.status===404)&&!(optionalFeature==='caption'&&response.status===403))window.dispatchEvent(new CustomEvent('curatas:scoped-denied',{detail:{status:response.status}})); throw new ScopedError(response.status);} return response;
     }
-    async function read(path: string, signal: AbortSignal, init?: RequestInit) {
-        const response = await request(path, signal, init); const raw=await response.text();const body=exactJson(raw),wire=JSON.parse(raw);
+    async function read(path: string, signal: AbortSignal, init?: RequestInit, optionalFeature=false) {
+        const response = await request(path, signal, init, optionalFeature); const raw=await response.text();const body=exactJson(raw),wire=JSON.parse(raw);
         if (signal.aborted) throw new Error('Request cancelled'); return { body, response,wire };
     }
     function authorsPage(body:any,response:Response,id:number){
@@ -114,6 +160,15 @@ export function scopedApi(catalogId: number, token: string) {
         const items:CurrentAuthor[]=body.items.map((v:any,i:number)=>{if(integer(v.sortOrder,true)!==i)throw new Error('Neplatné pořadí autorů.');return {id:uuid(v.id),authorId:uuid(v.authorId),roleId:v.roleId===null?null:uuid(v.roleId),sortOrder:i,authorLabel:text(v.authorLabel),roleLabel:nullable(v.roleLabel)};});
         if(new Set(items.map(v=>v.id)).size!==items.length||new Set(items.map(v=>`${v.authorId}:${v.roleId}`)).size!==items.length)throw new Error('Duplicitní současní autoři.');
         return {items,etag:tag(response,body.itemVersion)};
+    }
+    function signedInteger(value:unknown){
+        if((typeof value!=='string'&&typeof value!=='number')||! /^-?(0|[1-9][0-9]*)$/.test(String(value))||!Number.isSafeInteger(Number(value)))throw new Error('Neplatné celé číslo.');
+        return Number(value);
+    }
+    function completionPage<T>(body:any,response:Response,id:number,decode:(value:any)=>T) {
+        if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||!hasPrivateNoStore(response.headers)
+          ||!Array.isArray(body.items)||body.items.length>1000)throw new Error('Neplatná odborná evidence předmětu.');
+        return {items:body.items.map(decode) as T[],etag:tag(response,body.itemVersion)};
     }
     function item(v: any, id?: number): Item {
         if (integer(v.catalogId) !== catalogId || (id !== undefined && integer(v.id) !== id)) throw new Error('Foreign item response');
@@ -153,16 +208,20 @@ export function scopedApi(catalogId: number, token: string) {
         return { value: dimension(body.dimension, parent, id ?? undefined), etag: tag(response, body.itemVersion) };
     }
     async function creation(path:string,requestId:string,signal:AbortSignal,init?:RequestInit):Promise<Versioned<Creation>> {
-        uuid(requestId);const {body,response}=await read(path,signal,init);const created=item(body.item);
+        uuid(requestId);const {body,response}=await read(path,signal,init).catch(creationError);const created=item(body.item);
         if(body.origin!=='MES_CREATED'||body.requestId!==requestId.toLowerCase()||typeof body.replayed!=='boolean'
             ||response.headers.get('Location')!==itemPath(created.id))throw new Error('Invalid creation receipt');
         return {value:{item:created,origin:'MES_CREATED',requestId:body.requestId,replayed:body.replayed},etag:tag(response,created.version)};
     }
     async function cloneResult(path:string,requestId:string,signal:AbortSignal,init?:RequestInit){
-        const {body,response}=await read(path,signal,init);const created=item(body.item);
+        const {body,response}=await read(path,signal,init).catch(creationError);const created=item(body.item);
         if(body.requestId!==uuid(requestId).toLowerCase()||typeof body.replayed!=='boolean'||!body.copied||typeof body.copied!=='object'
             ||!hasPrivateNoStore(response.headers)||(init&&response.headers.get('Location')!==itemPath(created.id)))throw new Error('Invalid clone receipt');
         return {value:{item:created,clonedFromItemId:integer(body.clonedFromItemId),requestId:body.requestId,replayed:body.replayed,copied:body.copied},etag:tag(response,created.version)};
+    }
+    function confirmedCloneProfile(result:Awaited<ReturnType<typeof cloneResult>>,groups?:CloneGroup[]){
+        if(groups!==undefined){const copied=result.value.copied;if(!Array.isArray(copied.selectedGroups)||JSON.stringify(checkedCloneGroups(copied.selectedGroups))!==JSON.stringify(checkedCloneGroups(groups))||copied.historicalSourceEvidenceCopied!==false||copied.inventoryIdentityCopied!==false||integer(copied.historicalActivityCopied,true)!==0)throw new Error('Server nepotvrdil přesný výběr skupin kopie; výsledek zůstává neověřený.');}
+        return result;
     }
     function lifecycle(body:any,response:Response,id:number,wire:any){
         if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_OPERATIONAL_STATE_NOT_SOURCE'||!hasPrivateNoStore(response.headers))throw new Error('Neplatný kontrakt provozního stavu.');
@@ -184,6 +243,16 @@ export function scopedApi(catalogId: number, token: string) {
         integer(body.ownerUserId);const count=integer(body.itemCount,true);if(count>10000)throw new Error('Překročen rozsah pracovní sady.');
         return {id:uuid(body.id),name:text(body.name),description:body.description===null?'':text(body.description),itemCount:count,createdAt:body.createdAt as string,updatedAt:body.updatedAt as string};
     }
+    function catalogSummary(raw:unknown):CatalogSummary|undefined {
+        if(raw===undefined)return undefined;
+        if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('Invalid catalog summary');
+        const value=raw as Record<string,unknown>,keys:readonly (keyof CatalogSummary)[]=['author','material','technique','accessionNumber',...(['datingText','authorRole'] as const).filter(key=>Object.hasOwn(value,key))];
+        if(Object.keys(value).length===0)return undefined;
+        if(Object.keys(value).length!==keys.length||Object.keys(value).some(k=>!keys.includes(k as typeof keys[number])))throw new Error('Invalid catalog summary keys');
+        const result={} as CatalogSummary;
+        for(const key of keys){const entries=value[key];if(!Array.isArray(entries)||entries.length>2000)throw new Error('Invalid catalog summary entries');const ids=new Set<string>();result[key]=entries.map(v=>{if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==3||typeof v.value!=='string'||!v.value.trim()||!['CURRENT','DEMUS_SELECTED','DEMUS_SOURCE'].includes(v.origin)||typeof v.identity!=='string'||!v.identity||v.identity.length>256||ids.has(v.identity))throw new Error('Invalid catalog summary value');ids.add(v.identity);return {value:v.value,origin:v.origin,identity:v.identity};});}
+        return result;
+    }
     function curatorRows(rows:any[],wireRows:any[]){
         if(!Array.isArray(wireRows)||wireRows.length!==rows.length)throw new Error('Invalid curator wire DTO');
         const scalar=(value:unknown)=>value===null||typeof value==='string';
@@ -191,7 +260,7 @@ export function scopedApi(catalogId: number, token: string) {
             if(!row?.item||['title','inventoryNumber','accessionNumber'].some(key=>!scalar(row.item[key]))||!row.current||curatorCurrentFields.some(key=>!scalar(row.current[key]))||!row.source||Object.keys(inventoryColumns).some(key=>!scalar(row.source[key]))||row.currentInventory!==undefined&&row.currentInventory!==null&&curatorCurrentInventoryFields.some(key=>!scalar(row.currentInventory[key])))throw new Error('Invalid curator text JSON type');
         }
         for(const row of wireRows)if(row.currentAuthorityLabels!==undefined&&(!row.currentAuthorityLabels||typeof row.currentAuthorityLabels!=='object'||Object.values(row.currentAuthorityLabels).some(value=>!scalar(value))))throw new Error('Invalid current authority JSON type');
-        const items:{item:Item;current:Record<string,string|null>;currentPresent:boolean;currentAuthorityLabels:Record<string,string|null>;currentInventory:Record<string,string|null>;source:Record<string,string|null>;hasPhoto:boolean|null;hasAttachment:boolean|null;lifecycle?:Omit<LifecycleState,'deaccession'>}[]=rows.map((row:any)=>{
+        const items:{catalogSummary?:CatalogSummary;item:Item;current:Record<string,string|null>;currentPresent:boolean;currentOutput:Record<string,string|null>;currentAuthorityLabels:Record<string,string|null>;currentInventory:Record<string,string|null>;source:Record<string,string|null>;hasPhoto:boolean|null;hasAttachment:boolean|null;lifecycle?:Omit<LifecycleState,'deaccession'>}[]=rows.map((row:any,index:number)=>{
                 const current:Record<string,string|null>={};
                 if(!row.current||Object.keys(row.current).length!==curatorCurrentFields.length||Object.keys(row.current).some(k=>!curatorCurrentFields.includes(k as typeof curatorCurrentFields[number]))||typeof row.currentPresent!=='boolean')throw new Error('Invalid current projection');
                 for(const key of curatorCurrentFields)current[key]=nullable(row.current[key]);
@@ -201,12 +270,37 @@ export function scopedApi(catalogId: number, token: string) {
                 if(![true,false,null].includes(row.hasPhoto)||![true,false,null].includes(row.hasAttachment))throw new Error('Invalid media presence');
                 let lifecycle:Omit<LifecycleState,'deaccession'>|undefined;
                 if(row.lifecycle!==undefined){const state=row.lifecycle;if(!state||Object.keys(state).length!==3||!['active','published','status'].every(k=>Object.hasOwn(state,k))||!['true','false',null].includes(state.active)||!['true','false',null].includes(state.published))throw new Error('Invalid lifecycle flags');lifecycle={active:state.active===null?null:state.active==='true',published:state.published===null?null:state.published==='true',status:nullable(state.status)};}
-                const currentInventory:Record<string,string|null>={quantity:null,otherNumber:null};if(row.currentInventory!==undefined&&row.currentInventory!==null){if(typeof row.currentInventory!=='object'||Array.isArray(row.currentInventory)||Object.keys(row.currentInventory).length!==curatorCurrentInventoryFields.length||Object.keys(row.currentInventory).some(k=>!curatorCurrentInventoryFields.includes(k as typeof curatorCurrentInventoryFields[number])))throw new Error('Invalid current inventory projection');for(const key of curatorCurrentInventoryFields)currentInventory[key]=nullable(row.currentInventory[key]);}return {item:item(row.item),lifecycle,current,currentPresent:row.currentPresent,currentAuthorityLabels,currentInventory,source:sourceInventory(row.source),hasPhoto:row.hasPhoto as boolean|null,hasAttachment:row.hasAttachment as boolean|null};
+                const currentOutput:Record<string,string|null>={description:null,objectCondition:null};if(row.currentOutput!==undefined){if(!row.currentOutput||Object.keys(row.currentOutput).length!==2||!['description','objectCondition'].every(k=>Object.hasOwn(row.currentOutput,k)))throw new Error('Invalid output projection');for(const key of Object.keys(currentOutput)){if(wireRows[index].currentOutput?.[key]!==null&&typeof wireRows[index].currentOutput?.[key]!=='string')throw new Error('Invalid output JSON type');currentOutput[key]=nullable(row.currentOutput[key]);}}
+                const currentInventory:Record<string,string|null>={quantity:null,otherNumber:null};if(row.currentInventory!==undefined&&row.currentInventory!==null){if(typeof row.currentInventory!=='object'||Array.isArray(row.currentInventory)||Object.keys(row.currentInventory).length!==curatorCurrentInventoryFields.length||Object.keys(row.currentInventory).some(k=>!curatorCurrentInventoryFields.includes(k as typeof curatorCurrentInventoryFields[number])))throw new Error('Invalid current inventory projection');for(const key of curatorCurrentInventoryFields)currentInventory[key]=nullable(row.currentInventory[key]);}return {catalogSummary:catalogSummary(wireRows[index].catalogSummary),item:item(row.item),lifecycle,current,currentOutput,currentPresent:row.currentPresent,currentAuthorityLabels,currentInventory,source:sourceInventory(row.source),hasPhoto:row.hasPhoto as boolean|null,hasAttachment:row.hasAttachment as boolean|null};
             });
         if(new Set(items.map(row=>row.item.id)).size!==items.length)throw new Error('Duplicate curator identity');
         return items;
     }
+    async function fillCatalogSummaries(items:ReturnType<typeof curatorRows>,deferred:unknown,signal:AbortSignal){
+        if(deferred!==undefined&&typeof deferred!=='boolean')throw new Error('Invalid deferred catalog summary flag');
+        if(deferred!==true)return items;
+        for(let offset=0;offset<items.length;offset+=100){
+            const chunk=items.slice(offset,offset+100),expected=new Map(chunk.map(r=>[r.item.id,r]));
+            const {body,wire,response}=await read(`${root}/catalog-summary`,signal,{method:'POST',body:JSON.stringify({items:chunk.map(r=>({itemId:r.item.id,itemVersion:r.item.version}))})});
+            if(integer(body.catalogId)!==catalogId||body.semantics!=='CURRENT_AND_LABELLED_DEMUS_CATALOG_SUMMARY_V1'||!hasPrivateNoStore(response.headers)||!Array.isArray(body.items)||!Array.isArray(wire.items)||body.items.length!==chunk.length||wire.items.length!==chunk.length)throw new Error('Invalid catalog summary batch');
+            const seen=new Set<number>();for(let i=0;i<body.items.length;i++){const row=body.items[i],id=integer(row.itemId),target=expected.get(id);if(!target||seen.has(id)||version(row.itemVersion)!==target.item.version||!wire.items[i]||Object.keys(wire.items[i]).length!==3)throw new Error('Stale or foreign catalog summary');seen.add(id);const value=catalogSummary(wire.items[i].catalogSummary);if(!value)throw new Error('Missing catalog summary');target.catalogSummary=value;}
+        }
+        return items;
+    }
+    async function sourceCaptions(requests:{type:string;key:string}[],signal:AbortSignal):Promise<Record<string,DictionaryCaption>>{
+        const unique=[...new Map(requests.map(v=>[v.type+':'+v.key,v])).values()];const result:Record<string,DictionaryCaption>={};
+        for(let offset=0;offset<unique.length;offset+=100){const page=unique.slice(offset,offset+100);if(page.some(v=>!(managedDictionaryTypes as readonly string[]).includes(v.type)||!/^s:[a-f0-9]{64}$/.test(v.key)))throw new Error('Neplatné identity položek');
+            const response=await request(`${base}/unified-dictionaries/captions`,signal,{method:'POST',body:JSON.stringify(page)},'caption');const body=exactJson(await response.text());if(signal.aborted)throw new Error('Request cancelled');
+            if(integer(body.catalogId)!==catalogId||!Array.isArray(body.items)||body.items.length>page.length||!hasPrivateNoStore(response.headers))throw new Error('Neplatné popisky položek');
+            for(const v of body.items){if(!page.some(p=>p.type===v.type&&p.key===v.key)||Object.hasOwn(result,v.type+':'+v.key.slice(2)))throw new Error('Cizí nebo opakovaná identita popisku');result[v.type+':'+v.key.slice(2)]={label:nullable(v.label),code:nullable(v.code),groupingCode:nullable(v.groupingCode)};}
+        }return result;
+    }
     return {
+        async catalogSummary(itemId:number,itemVersion:string,signal:AbortSignal){
+            const row={item:{id:itemId,version:itemVersion}} as ReturnType<typeof curatorRows>[number];
+            await fillCatalogSummaries([row],true,signal);return row.catalogSummary!;
+        },
+        sourceCaptions,
         worksets:async(signal:AbortSignal)=>{
             const {body,response}=await read(`${base}/worksets`,signal);
             if(!Array.isArray(body)||body.length>200||!hasPrivateNoStore(response.headers))throw new Error('Neplatný seznam osobních pracovních sad.');
@@ -227,12 +321,13 @@ export function scopedApi(catalogId: number, token: string) {
             const items:MuseumHistoryRow[]=body.items.map((v:any)=>{if(!['REVISION','RESTORATION','LOAN'].includes(v.eventType)||(v.eventDate!==null&&!/^\d{4}-\d{2}-\d{2}$/.test(v.eventDate)))throw new Error('Unclassified museum event');return {id:integer(v.id),eventType:v.eventType,eventDate:nullable(v.eventDate),description:nullable(v.description)};});
             if(new Set(items.map((v:{id:number})=>v.id)).size!==items.length)throw new Error('Duplicate history identity');return {items,etag:tag(response,body.itemVersion)};
         },
-        cloneItem:async(id:number,requestId:string,etag:string,input:{title:string;inventoryNumber:string},signal:AbortSignal)=>{
-            if(Object.keys(input).length!==2||Object.keys(input).some(k=>!['title','inventoryNumber'].includes(k)))throw new Error('Invalid clone fields');
-            for(const key of ['title','inventoryNumber'] as const)if(typeof input[key]!=='string'||!input[key].trim()||input[key].includes('\0')||input[key].length>(key==='title'?4096:255))throw new Error('Vyplňte název a nové inventární číslo.');
-            return cloneResult(`${itemPath(id)}/clone`,requestId,signal,{method:'POST',headers:{'If-Match':strongTag(etag),'Idempotency-Key':uuid(requestId)},body:JSON.stringify(input)});
+        cloneItem:async(id:number,requestId:string,etag:string,input:{title:string|null;inventoryNumber:string;copyGroups?:CloneGroup[]},signal:AbortSignal)=>{
+            if(Object.keys(input).length!==(input.copyGroups===undefined?2:3)||Object.keys(input).some(k=>!['title','inventoryNumber','copyGroups'].includes(k)))throw new Error('Invalid clone fields');
+            if(input.copyGroups!==undefined){if(!Array.isArray(input.copyGroups))throw new Error('Invalid clone selection');input={...input,copyGroups:checkedCloneGroups(input.copyGroups)};}
+            for(const key of ['title','inventoryNumber'] as const)if(!(key==='title'&&input[key]===null)&&(typeof input[key]!=='string'||!input[key].trim()||input[key].includes('\0')||input[key].length>(key==='title'?4096:255)))throw new Error('Vyplňte název a nové inventární číslo.');
+            return confirmedCloneProfile(await cloneResult(`${itemPath(id)}/clone`,requestId,signal,{method:'POST',headers:{'If-Match':strongTag(etag),'Idempotency-Key':uuid(requestId)},body:JSON.stringify(input)}),input.copyGroups);
         },
-        cloneOutcome:(requestId:string,signal:AbortSignal)=>cloneResult(`${root}/clone-requests/${uuid(requestId)}`,requestId,signal),
+        cloneOutcome:async(requestId:string,signal:AbortSignal,groups?:CloneGroup[])=>confirmedCloneProfile(await cloneResult(`${root}/clone-requests/${uuid(requestId)}`,requestId,signal),groups),
         cloneOrigin:async(id:number,signal:AbortSignal)=>{
             const response=await request(`${itemPath(id)}/clone-origin`,signal);
             if(!hasPrivateNoStore(response.headers))throw new Error('Invalid cache policy');if(response.status===204)return null;
@@ -243,18 +338,33 @@ export function scopedApi(catalogId: number, token: string) {
             const {body,response}=await read(`${itemPath(id)}/professional-records`,signal);
             if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='CURRENT_OWNED_RECORDS_NOT_SOURCE'||!Array.isArray(body.items)||body.items.length>1000||!hasPrivateNoStore(response.headers))throw new Error('Invalid current record contract');
             const items=body.items.map((r:any)=>{if(!['DOCUMENTATION','CLASSIFICATION','DETERMINATION','DEACCESSION','MANIPULATION','ACTION','ISO','ORIGIN','MATERIAL_TECHNIQUE','BIBLIOGRAPHY'].includes(r.kind)||!r.payload||typeof r.payload!=='object'||Array.isArray(r.payload))throw new Error('Invalid professional record');
-                return {id:integer(r.id),kind:r.kind as import('../../lib/api').MuseumRecordKind,dictionaryId:r.dictionaryId===null?null:integer(r.dictionaryId),partyId:r.partyId===null?null:integer(r.partyId),payload:r.payload,materialDictionaryId:r.materialDictionaryId===null?null:integer(r.materialDictionaryId),techniqueDictionaryId:r.techniqueDictionaryId===null?null:integer(r.techniqueDictionaryId),sourceTable:null,sourceKey:null,legacyData:null};});
-            if(new Set(items.map((r:{id:number})=>r.id)).size!==items.length)throw new Error('Duplicate professional identity');return {items,etag:tag(response,body.itemVersion)};
+                if(r.kind==='MATERIAL_TECHNIQUE')professionalHistoricalRefs(r.payload);
+                return {id:integer(r.id),kind:r.kind as import('../../lib/api').MuseumRecordKind,dictionaryId:r.dictionaryId===null?null:integer(r.dictionaryId),partyId:r.partyId===null?null:integer(r.partyId),payload:r.payload,authorityLabels:r.authorityLabels??{},materialDictionaryId:r.materialDictionaryId===null?null:integer(r.materialDictionaryId),techniqueDictionaryId:r.techniqueDictionaryId===null?null:integer(r.techniqueDictionaryId),sourceTable:null,sourceKey:null,legacyData:null};});
+            if(new Set(items.map((r:{id:number})=>r.id)).size!==items.length)throw new Error('Duplicate professional identity');
+            if(unifiedDictionariesEnabled()){
+                const wanted:{type:string;key:string}[]=[];for(const row of items)for(const [key,type] of [['materialHistoricalRef','MATERIAL'],['techniqueHistoricalRef','TECHNIQUE']]){const ref=row.payload[key] as HistoricalVocabularyValue|undefined;if(ref?.recordId)wanted.push({type,key:'s:'+ref.recordId});}
+                if(wanted.length)try{const captions=await sourceCaptions(wanted,signal);for(const row of items)for(const [key,type] of [['materialHistoricalRef','MATERIAL'],['techniqueHistoricalRef','TECHNIQUE']]){const ref=row.payload[key] as HistoricalVocabularyValue|undefined;const caption=ref&&captions[type+':'+ref.recordId];if(caption)row.authorityLabels={...row.authorityLabels,[key]:dictionaryLabel(caption)};}}catch(e){if(signal.aborted)throw e;/* Stored binding remains readable without dictionary.read. */}
+            }
+            return {items,etag:tag(response,body.itemVersion)};
         },
         saveProfessional:async(id:number,kind:import('../../lib/api').MuseumRecordKind,recordId:number|undefined,etag:string,payload:Record<string,unknown>,signal:AbortSignal)=>{
-            const fields=professionalFields[kind];
+            const fields=professionalFields[kind]&&[...professionalFields[kind],...(kind==='MATERIAL_TECHNIQUE'?[['materialAuthorityId',''],['techniqueAuthorityId',''],['materialHistoricalRef',''],['techniqueHistoricalRef','']]:[])];
             if(kind==='DEACCESSION'||!fields||!payload||!Object.keys(payload).length||Object.keys(payload).some(k=>!fields.some(([key])=>key===k)))throw new Error('Nepovolená pole odborného záznamu.');
-            for(const value of Object.values(payload))if(value!==null&&typeof value!=='string'&&typeof value!=='boolean'&&!(typeof value==='number'&&Number.isFinite(value)))throw new Error('Neplatná hodnota odborného záznamu.');
+            for(const [key,value] of Object.entries(payload))if(!['materialHistoricalRef','techniqueHistoricalRef'].includes(key)&&value!==null&&typeof value!=='string'&&typeof value!=='boolean'&&!(typeof value==='number'&&Number.isFinite(value)))throw new Error('Neplatná hodnota odborného záznamu.');
+            if(kind==='MATERIAL_TECHNIQUE')professionalHistoricalRefs(payload);
+            if(kind==='MATERIAL_TECHNIQUE')for(const key of ['materialAuthorityId','techniqueAuthorityId'])if(payload[key]!==undefined&&payload[key]!==null)uuid(text(payload[key]));
             const {body,response}=await read(`${itemPath(id)}/professional-records/${kind}${recordId===undefined?'':'/'+integer(recordId)}`,signal,{method:recordId===undefined?'POST':'PATCH',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(payload)});
             if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.origin!=='CURRENT_CURATOR_STATEMENT_NOT_SOURCE'||!hasPrivateNoStore(response.headers))throw new Error('Neplatný kontrakt uložené odborné evidence.');
             const r=body.record;
             if(!r||r.kind!==kind||recordId!==undefined&&integer(r.id)!==recordId||!r.payload||typeof r.payload!=='object'||Array.isArray(r.payload)||Object.keys(r.payload).some(k=>!fields.some(([key])=>key===k)))throw new Error('Neplatný uložený odborný záznam.');
-            const result={id:integer(r.id),kind,dictionaryId:r.dictionaryId===null?null:integer(r.dictionaryId),partyId:r.partyId===null?null:integer(r.partyId),payload:r.payload,materialDictionaryId:r.materialDictionaryId===null?null:integer(r.materialDictionaryId),techniqueDictionaryId:r.techniqueDictionaryId===null?null:integer(r.techniqueDictionaryId),sourceTable:null,sourceKey:null,legacyData:null};
+            if(kind==='MATERIAL_TECHNIQUE')for(const key of ['materialAuthorityId','techniqueAuthorityId'])if(payload[key]!==undefined&&r.payload[key]!==payload[key])throw new Error('Server nepotvrdil konkrétní UUID vazbu řádku.');
+            if(kind==='MATERIAL_TECHNIQUE'){
+                professionalHistoricalRefs(r.payload);
+                for(const key of ['materialHistoricalRef','techniqueHistoricalRef'])if(payload[key]!==undefined){
+                    if(payload[key]===null?r.payload[key]!==null:!r.payload[key]||Object.entries(payload[key] as Record<string,unknown>).some(([field,value])=>JSON.stringify(r.payload[key][field])!==JSON.stringify(value)))throw new Error('Server nepotvrdil konkrétní historickou vazbu řádku.');
+                }
+            }
+            const result={id:integer(r.id),kind,dictionaryId:r.dictionaryId===null?null:integer(r.dictionaryId),partyId:r.partyId===null?null:integer(r.partyId),payload:r.payload,authorityLabels:r.authorityLabels??{},materialDictionaryId:r.materialDictionaryId===null?null:integer(r.materialDictionaryId),techniqueDictionaryId:r.techniqueDictionaryId===null?null:integer(r.techniqueDictionaryId),sourceTable:null,sourceKey:null,legacyData:null};
             return {value:result,etag:tag(response,body.itemVersion)};
         },
         itemAudit:async(id:number,signal:AbortSignal,after?:{afterVersion:string;afterId:string})=>{
@@ -268,6 +378,16 @@ export function scopedApi(catalogId: number, token: string) {
         submitFeedback:async(requestId:string,message:string,signal:AbortSignal)=>{
             const {body,response}=await read(`${base}/feedback`,signal,{method:'POST',body:JSON.stringify({requestId:uuid(requestId),message})});
             if(integer(body.catalogId)!==catalogId||uuid(body.feedbackId)!==requestId||body.status!=='RECEIVED'||!hasPrivateNoStore(response.headers))throw new Error('Přijetí připomínky nebylo potvrzeno.');return {feedbackId:requestId,status:'RECEIVED'};
+        },
+        feedbackThread:async(rootId:string,signal:AbortSignal,afterId?:string)=>{
+            const {body,response}=await read(`${base}/feedback/${uuid(rootId)}/thread${afterId?'?afterId='+uuid(afterId):''}`,signal);
+            if(integer(body.catalogId)!==catalogId||!hasPrivateNoStore(response.headers)||!Array.isArray(body.items)||body.items.length>50)throw new Error('Neplatné vlákno připomínky.');
+            const message=(v:any)=>({id:uuid(v.id),message:text(v.message),status:text(v.status),createdAt:text(v.createdAt),actorId:integer(v.actorId)});
+            const root=message(body.root);if(root.id!==rootId)throw new Error('Cizí vlákno.');const items=body.items.map(message);const nextAfterId=body.nextAfterId===null?null:uuid(body.nextAfterId);if(new Set(items.map((r:any)=>r.id)).size!==items.length||nextAfterId!==null&&nextAfterId!==items.at(-1)?.id)throw new Error('Neplatná stránka vlákna.');return {root,items,nextAfterId};
+        },
+        replyFeedback:async(rootId:string,requestId:string,message:string,signal:AbortSignal)=>{
+            const {body,response}=await read(`${base}/feedback/${uuid(rootId)}/replies`,signal,{method:'POST',body:JSON.stringify({requestId:uuid(requestId),message})});
+            if(integer(body.catalogId)!==catalogId||uuid(body.feedbackId)!==requestId||body.status!=='RECEIVED'||!hasPrivateNoStore(response.headers))throw new Error('Odpověď nebyla potvrzena.');return requestId;
         },
         feedbackQueue:async(signal:AbortSignal,after?:{afterTime:string;afterId:string})=>{
             const query=after?'?'+new URLSearchParams({afterTime:after.afterTime,afterId:uuid(after.afterId)}):'';
@@ -287,6 +407,64 @@ export function scopedApi(catalogId: number, token: string) {
             if(integer(body.catalogId)!==catalogId||body.type!==type||!hasPrivateNoStore(response.headers))throw new Error('Neplatný kontrakt uložení číselníku.');
             const value={id:uuid(body.id),catalogId,type,label:text(body.label),code:nullable(body.code),parentId:body.parentId===null?null:uuid(body.parentId),version:version(body.version)};
             if(id&&value.id!==id||value.label!==input.label||value.code!==input.code||value.parentId!==input.parentId)throw new Error('Uložení číselníku nebylo potvrzeno.');return {value,etag:tag(response,body.version)};
+        },
+        localityCapabilities:async(signal:AbortSignal)=>{
+            // A missing optional card does not revoke access to the basic dictionary.
+            // 401/403 still close private data through the standard denial event.
+            const response=await request(`${base}/dictionaries/LOCALITY/card-capabilities`,signal,{},true);
+            const body=await response.json();
+            if(typeof body.enabled!=='boolean')throw new Error('Invalid locality capabilities');
+            return body as {enabled:boolean;addressEnabled?:boolean};
+        },
+        localityCard:async(id:string,signal:AbortSignal)=>{const {body,response}=await read(`${base}/dictionaries/LOCALITY/values/${uuid(id)}/card`,signal);if(body?.value?.id!==id||integer(body.value.catalogId)!==catalogId||body.value.type!=='LOCALITY'||Object.keys(body.fields??{}).length!==13||localityFieldKeys.some(k=>!Object.hasOwn(body.fields,k)||body.fields[k]!==null&&typeof body.fields[k]!=='string')||!body.provenance||!hasPrivateNoStore(response.headers))throw new Error('Neplatná karta lokality');return {...body,etag:tag(response,body.value.version)} as LocalityCard;},
+        saveLocalityCard:async(input:LocalityCardInput,signal:AbortSignal,id?:string,etag?:string)=>{const {body,response}=await read(`${base}/dictionaries/LOCALITY/${id?'values/'+uuid(id)+'/card':'cards'}`,signal,{method:id?'PUT':'POST',headers:id?{'If-Match':strongTag(etag??'')}:{},body:JSON.stringify(input)});if(body?.value?.type!=='LOCALITY'||integer(body.value.catalogId)!==catalogId||id&&body.value.id!==id||!hasPrivateNoStore(response.headers))throw new Error('Zápis lokality nebyl potvrzen');return {...body,etag:tag(response,body.value.version)} as LocalityCard;},
+        geographySearch:async(q:string,offset:number,signal:AbortSignal)=>{const {body,response}=await read(`${base}/dictionaries/geography/municipalities?q=${encodeURIComponent(q)}&offset=${offset}`,signal);if(!Array.isArray(body.items)||!hasPrivateNoStore(response.headers))throw new Error('Neplatné geografické výsledky');return body as {items:{code:number;label:string;district:string}[];nextOffset:number|null};},
+        geographyStreets:async(code:number,q:string,offset:number,signal:AbortSignal)=>{const {body}=await read(`${base}/dictionaries/geography/municipalities/${code}/streets?q=${encodeURIComponent(q)}&offset=${offset}`,signal);return body as {items:{code:number;label:string}[];nextOffset:number|null};},
+        geographyAddresses:async(code:number,street:number|null,q:string,offset:number,signal:AbortSignal)=>{const {body}=await read(`${base}/dictionaries/geography/municipalities/${code}/addresses?q=${encodeURIComponent(q)}&offset=${offset}${street?'&street='+street:''}`,signal);return body as {items:{code:number;label:string}[];nextOffset:number|null};},
+        geographyAddressPreview:async(code:number,address:number,signal:AbortSignal)=>{const {body}=await read(`${base}/dictionaries/geography/municipalities/${code}/addresses/${address}/preview`,signal);return body as GeographyPreview;},
+        geographyPreview:async(code:number,cadastre:number|null,signal:AbortSignal)=>{const {body,response}=await read(`${base}/dictionaries/geography/municipalities/${code}/preview${cadastre?'?cadastre='+cadastre:''}`,signal);if(typeof body.token!=='string'||!body.fields||!Array.isArray(body.cadastres)||!hasPrivateNoStore(response.headers))throw new Error('Neplatný náhled geografických údajů');return body as GeographyPreview;},
+        unifiedKinds:async(signal:AbortSignal):Promise<{type:string;name:string;create:boolean;update:boolean;state?:string}[]>=>{
+            const {body,response}=await read(`${base}/unified-dictionaries`,signal);
+            if(!Array.isArray(body)||!hasPrivateNoStore(response.headers)||body.some((v:any)=>!/^[_A-Z]+$/.test(v.type)||typeof v.name!=='string'||typeof v.create!=='boolean'||typeof v.update!=='boolean'||!['AVAILABLE','UNVERIFIED','INCOMPLETE','MAPPING_UNCONFIRMED'].includes(v.state)))throw new Error('Neplatný seznam číselníků');return body;
+        },
+        unifiedValues:async(type:string,signal:AbortSignal,q='',after=''):Promise<UnifiedDictionaryPage>=>{
+            if(!/^[_A-Z]+$/.test(type)||q.length>100||after&&!/^(c:[a-f0-9-]{36}|p:[0-9]{20}|s:[a-f0-9]{64})$/.test(after))throw new Error('Neplatné hledání');
+            const {body,response}=await read(`${base}/unified-dictionaries/${type}?${new URLSearchParams({q,afterId:after,limit:'100',alphabetical:'true'})}`,signal);
+            if(integer(body.catalogId)!==catalogId||body.type!==type||!hasPrivateNoStore(response.headers)||!Array.isArray(body.items)||body.items.length>100)throw new Error('Neplatný katalogový seznam');
+            const items:UnifiedDictionaryEntry[]=body.items.map((v:any)=>{
+                if(typeof v.key!=='string'||!/^(c:[a-f0-9-]{36}|p:[0-9]{20}|s:[a-f0-9]{64})$/.test(v.key)||typeof v.writable!=='boolean'||v.key.startsWith('s:')&&(!v.binding||v.binding.recordId!==v.key.slice(2))||v.key.startsWith('c:')&&v.binding!==null)throw new Error('Neplatná identita položky');
+                return {...v,label:nullable(v.label),code:nullable(v.code),groupingCode:nullable(v.groupingCode),version:version(v.version)};
+            });
+            const counted=body.totalCount!==undefined||body.matchCount!==undefined;
+            const totalCount=counted?integer(body.totalCount,true):undefined;
+            const matchCount=counted?integer(body.matchCount,true):undefined;
+            if(new Set(items.map(item=>item.key)).size!==items.length||items.some((v,i)=>v.key===after||!counted&&(v.key<after||i>0&&v.key<=items[i-1].key))
+                ||body.nextAfterId!==null&&body.nextAfterId!==items.at(-1)?.key
+                ||counted&&(matchCount!<items.length||totalCount!<matchCount!))throw new Error('Neplatná stránka číselníku');
+            return {items,nextAfterId:body.nextAfterId,totalCount,matchCount};
+        },
+        unifiedValue:async(type:string,key:string,signal:AbortSignal):Promise<UnifiedDictionaryEntry>=>{
+            if(!/^[_A-Z]+$/.test(type)||!/^(c:[a-f0-9-]{36}|p:[0-9]{20}|s:[a-f0-9]{64})$/.test(key))throw new Error('Neplatná položka');
+            const {body,response}=await read(`${base}/unified-dictionaries/${type}/${encodeURIComponent(key)}`,signal);
+            if(body.key!==key||typeof body.writable!=='boolean'||!hasPrivateNoStore(response.headers))throw new Error('Neplatný detail položky');return {...body,version:version(body.version)};
+        },
+        sourceAuthorityItems:async(type:'AUTHOR'|'LOCALITY',key:string,after:number,signal:AbortSignal):Promise<Page<SourceAuthorityItem,number>>=>{
+            if(!/^s:[a-f0-9]{64}$/.test(key)||integer(after,true)<0)throw new Error('Neplatná identita nebo stránka.');
+            const {body,response}=await read(`${base}/unified-dictionaries/${type}/${encodeURIComponent(key)}/related-items?afterId=${after}`,signal);
+            if(integer(body.catalogId)!==catalogId||!hasPrivateNoStore(response.headers)||!Array.isArray(body.items)||body.items.length>25)
+                throw new Error('Neplatný soupis předmětů.');
+            const items:SourceAuthorityItem[]=body.items.map((row:any)=>{
+                if([row.primary,row.collaborator,row.assigned].some(value=>typeof value!=='boolean'))throw new Error('Neplatná vazba předmětu.');
+                return {id:integer(row.id),inventoryNumber:nullable(row.inventoryNumber),title:nullable(row.title),primary:row.primary,collaborator:row.collaborator,assigned:row.assigned};
+            });
+            if(items.some((row,index)=>row.id<=(items[index-1]?.id??after))
+                ||body.nextAfterId!==null&&integer(body.nextAfterId)!==items.at(-1)?.id)throw new Error('Neplatné pokračování soupisu.');
+            return {items,nextAfterId:body.nextAfterId};
+        },
+        saveUnifiedValue:async(type:string,key:string,input:{label:string;code:string|null;reason:string;fields?:Record<string,string|null>},etag:string,signal:AbortSignal):Promise<UnifiedDictionaryEntry>=>{
+            if(!/^[_A-Z]+$/.test(type)||!/^(c:[a-f0-9-]{36}|p:[0-9]{20}|s:[a-f0-9]{64})$/.test(key))throw new Error('Neplatná položka');
+            const {body,response}=await read(`${base}/unified-dictionaries/${type}/${encodeURIComponent(key)}`,signal,{method:'PUT',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(input)});
+            if(body.key!==key||!hasPrivateNoStore(response.headers))throw new Error('Uložení nebylo potvrzeno');return {...body,version:version(body.version)};
         },
         dictionaryMetadata:async(type:ManagedDictionaryType,signal:AbortSignal)=>{
             const {body,response}=await read(`${base}/dictionaries/${type}`,signal);
@@ -309,7 +487,7 @@ export function scopedApi(catalogId: number, token: string) {
                 ?await read(`${root}/curator-page/query`,signal,{method:'POST',body:JSON.stringify(bodyParams)})
                 :await read(`${root}/curator-page?${query}`,signal);
             const {totalElements,totalPages}=validateCuratorPage(body,response.headers,{catalogId,page,pageSize:size,sort});
-            const items=curatorRows(body.items,wire.items);
+            const items=await fillCatalogSummaries(curatorRows(body.items,wire.items),wire.catalogSummaryDeferred,signal);
             return {items,totalElements,totalPages,page,pageSize:size,hasMore:page+1<totalPages};
         },
         curatorPrint:async(sort:string,filters:Record<string,unknown>,signal:AbortSignal)=>{
@@ -371,6 +549,11 @@ export function scopedApi(catalogId: number, token: string) {
             try{while(true){const {done,value}=await reader.read();if(done)break;if(signal.aborted)throw new Error('Export byl zrušen.');bytes+=value.byteLength;if(bytes>134217728)throw new Error('Export překročil128MiB. Zužte filtr; neúplný soubor nebyl uložen.');chunks.push(new Uint8Array(value).buffer);pending+=decoder.decode(value,{stream:true});let n;while((n=pending.indexOf('\n'))>=0){line(pending.slice(0,n));pending=pending.slice(n+1);}if(pending.length>8388608)throw new Error('Překročen limit řádku exportu.');onProgress?.(finished.size,bytes);}
              pending+=decoder.decode();if(pending||!began||!ended||signal.aborted)throw new Error('Přenos exportu není úplný; soubor nebyl uložen.');return {blob:new Blob(chunks,{type:'application/x-ndjson'}),items:expected,sourceReviewStates:review};
             }catch(e){await reader.cancel().catch(()=>{});throw e;}finally{reader.releaseLock();}
+        },
+        currentHistory:async(id:number,signal:AbortSignal)=>{const {body,response}=await read(`${itemPath(id)}/current-history`,signal);return currentHistoryPage(body,response,id);},
+        saveCurrentHistory:async(id:number,etag:string,items:CurrentHistoryEvent[],signal:AbortSignal)=>{
+            const {body,response}=await read(`${itemPath(id)}/current-history`,signal,{method:'PUT',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(items)});
+            const result=currentHistoryPage(body,response,id);if(JSON.stringify(result.items)!==JSON.stringify(items))throw new Error('Server nepotvrdil přesné události.');return result;
         },
         currentAuthors:async(id:number,signal:AbortSignal)=>{
             const {body,response}=await read(`${itemPath(id)}/current-authors`,signal);
@@ -434,6 +617,21 @@ export function scopedApi(catalogId: number, token: string) {
             if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.semantics!=='WHITELISTED_HISTORICAL_SOURCE_NOT_CURRENT_ASSERTION'||!hasPrivateNoStore(response.headers))throw new Error('Foreign source inventory');
             return {fields:sourceInventory(body.source),itemVersion:version(body.itemVersion),etag:tag(response,body.itemVersion)};
         },
+        historicalVocabulary:async(type:string,signal:AbortSignal,query='',after=''):Promise<HistoricalVocabularyPage>=>{
+            if(!Object.hasOwn(historicalVocabularyTables,type)||query.length>100||Array.from(query).some(c=>c.charCodeAt(0)<32||c.charCodeAt(0)===127)||after!==''&&!/^[a-f0-9]{64}$/.test(after))throw new Error('Invalid historical vocabulary bounds');
+            const params=new URLSearchParams({q:query,afterId:after,limit:'100'});
+            const {body,response}=await read(`${base}/dictionaries/${type}/historical?${params}`,signal);
+            const states=['AVAILABLE','SOURCE_PARENT_MISSING','AMBIGUOUS_CATALOG_SOURCE','SOURCE_TABLE_UNAVAILABLE','MAPPING_AMBIGUOUS'];
+            if(body.sourceSha256!==null&&(typeof body.sourceSha256!=='string'||!/^[a-f0-9]{64}$/.test(body.sourceSha256))||body.state==='AVAILABLE'&&body.sourceSha256===null||integer(body.catalogId)!==catalogId||body.type!==type||body.semantics!=='IMMUTABLE_DEMUS_VOCABULARY_NOT_CURRENT_UUID_V1'||!hasPrivateNoStore(response.headers)||!states.includes(body.state)||!Array.isArray(body.items)||body.items.length>100||body.state!=='AVAILABLE'&&body.items.length)throw new Error('Invalid historical vocabulary contract');
+            const items:HistoricalVocabularyValue[]=body.items.map((v:any)=>{
+                for(const k of ['recordId','sourceSha256','rowHash'])if(typeof v[k]!=='string'||!/^[a-f0-9]{64}$/.test(v[k]))throw new Error('Invalid historical vocabulary identity');
+                if(v.sourceSha256!==body.sourceSha256||v.table!==historicalVocabularyTables[type]||version(v.occurrence)==='0'||v.typedKey!==null&&(!v.typedKey||typeof v.typedKey!=='object'||Array.isArray(v.typedKey)||!Object.values(v.typedKey).every(typedHistorical)))throw new Error('Invalid historical vocabulary source');
+                return {recordId:v.recordId,sourceSha256:v.sourceSha256,rowHash:v.rowHash,occurrence:version(v.occurrence),table:v.table,typedKey:v.typedKey,code:nullable(v.code),label:nullable(v.label),groupingCode:nullable(v.groupingCode)};
+            });
+            if(items.some((v,i)=>v.recordId<=after||i>0&&v.recordId<=items[i-1].recordId))throw new Error('Unordered historical vocabulary');
+            const next=body.nextAfterId;if(next!==null&&(!items.length||next!==items.at(-1)!.recordId||next<=after)||body.state!=='AVAILABLE'&&next!==null)throw new Error('Invalid historical vocabulary cursor');
+            return {items,state:body.state,nextAfterId:next,sourceSha256:body.sourceSha256};
+        },
         sourceChoices:async(kind:string,signal:AbortSignal,after=''):Promise<Page<SourceChoice,string>>=>{
             if(!['series','fund','department','collection','group','material','technique','object-type'].includes(kind)||after!==''&&!/^[a-f0-9]{64}$/.test(after))throw new Error('Invalid source choice bounds');
             const {body}=await read(`${base}/source-choices/${kind}?limit=100&afterId=${after}`,signal);
@@ -452,10 +650,21 @@ export function scopedApi(catalogId: number, token: string) {
             if(items.some((v:Item,i:number)=>i>0&&v.id<=items[i-1].id))throw new Error('Duplicate or unordered items');
             return {items,hasMore:body.hasMore};
         },
+        historicalAssignments:async(id:number,signal:AbortSignal)=>{
+            const {body,response}=await read(itemPath(id)+'/curator-record/historical-refs',signal);
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.section!=='historical-refs'||body.origin!=='CURRENT_CURATOR_STATEMENT_NOT_SOURCE'||!hasPrivateNoStore(response.headers)||!body.values||Object.keys(body.values).length!==1||!body.values.bindings||typeof body.values.bindings!=='object'||Array.isArray(body.values.bindings)||typeof body.hasCurrentAssertion!=='boolean')throw new Error('Invalid historical assignment contract');
+            historicalBindings(body.values.bindings);
+            return {value:body.values.bindings as Record<string,HistoricalVocabularyValue>,etag:tag(response,body.itemVersion),present:body.hasCurrentAssertion};
+        },
+        saveHistoricalAssignments:async(id:number,etag:string,bindings:Record<string,HistoricalVocabularyValue>,signal:AbortSignal)=>{
+            historicalBindings(bindings);
+            const {body,response}=await read(itemPath(id)+'/curator-record/historical-refs',signal,{method:'PUT',headers:{'If-Match':strongTag(etag)},body:JSON.stringify({bindings})});
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.section!=='historical-refs'||!hasPrivateNoStore(response.headers)||JSON.stringify(Object.keys(body.values?.bindings??{}).sort())!==JSON.stringify(Object.keys(bindings).sort()))throw new Error('Unconfirmed historical assignments');return tag(response,body.itemVersion);
+        },
         curatorRecord:async(id:number,section:CuratorSection,signal:AbortSignal)=>{
-            const {body,response}=await read(itemPath(id)+'/curator-record/'+section,signal);
+            const {body,response}=await read(itemPath(id)+'/curator-record/'+section,signal,undefined,section==='custodian'||section==='recorded-by');
             if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||body.section!==section||body.origin!=='CURRENT_CURATOR_STATEMENT_NOT_SOURCE')throw new Error('Foreign curator section');
-            const fields=curatorSectionFields[section];
+            const fields=section==='inventory-range'&&body.values&&(Object.hasOwn(body.values,'prefix')||Object.hasOwn(body.values,'postfix'))?[...curatorSectionFields[section],'prefix','postfix']:curatorSectionFields[section];
             if(!body.values||Object.keys(body.values).length!==fields.length||Object.keys(body.values).some(k=>!fields.includes(k)))throw new Error('Invalid curator fields');
             const values:Record<string,string|null>={};for(const key of fields)values[key]=nullable(body.values[key]);
             if(typeof body.hasCurrentAssertion!=='boolean')throw new Error('Missing current assertion state');
@@ -471,11 +680,13 @@ export function scopedApi(catalogId: number, token: string) {
             return body?.itemVersion!==undefined?tag(response,body.itemVersion):response.headers.get('ETag')||'';
         },
         saveCuratorRecords:async(id:number,etag:string,input:CurrentSectionWrites,signal:AbortSignal)=>{
-            const sections=Object.keys(input);if(!sections.length||sections.some(k=>!['inventory','professional','storage','additional','flags','item','dimensions'].includes(k)))throw new Error('Invalid current sections');
+            const sections=Object.keys(input);if(!sections.length||sections.some(k=>!['inventory','professional','storage','additional','flags','item','dimensions','historical-refs','custodian','recorded-by','card-notes'].includes(k)))throw new Error('Invalid current sections');
             const values:Record<string,any>={};
             for(const section of sections as (keyof CurrentSectionWrites)[]){
+                if(section==='historical-refs'){const entry=input[section];if(!entry?.bindings||Object.keys(entry).length!==1||typeof entry.bindings!=='object'||Array.isArray(entry.bindings)||Object.keys(entry.bindings).length>11)throw new Error('Invalid historical assignments');historicalBindings(entry.bindings);values[section]=entry;continue;}
                 if(section==='dimensions'){const rows=input.dimensions?.rows;if(!rows?.length||rows.length>20)throw new Error('Uložte jednu až dvacet změněných měr.');const ids=new Set<number>();for(const row of rows){if(Object.keys(row).length!==5||!['id','type','value','unit','note'].every(k=>Object.hasOwn(row,k))||row.id!==null&&(ids.has(integer(row.id))||!ids.add(row.id))||typeof row.type!=='string'||!row.type.trim()||row.type.length>255)throw new Error('Neplatná současná míra.');decimal(row.value);for(const key of ['unit','note'] as const)if(row[key]!==null&&(typeof row[key]!=='string'||row[key]!.includes('\0')||row[key]!.length>(key==='note'?50:255)))throw new Error('Poznámka má nejvýše50 znaků; jednotka nejvýše255.');}values.dimensions={rows};continue;}
-                const value=input[section]!;if(section==='item'){if(!value||!Object.keys(value).length||Object.keys(value).some(k=>!['title','inventoryNumber'].includes(k))||Object.values(value).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid inventory identity patch');values.item={...value};continue;}const fields=curatorSectionFields[section];
+                const value=input[section]!;if(section==='item'){if(!value||!Object.keys(value).length||Object.keys(value).some(k=>!['title','inventoryNumber'].includes(k))||Object.values(value).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid inventory identity patch');values.item={...value};continue;}const fields=[...curatorSectionFields[section]];
+                if(section==='professional'&&Object.hasOwn(value??{},'datingKey'))fields.push('datingKey');
                 if(!value||Object.keys(value).length!==fields.length||fields.some(k=>!Object.hasOwn(value,k))||Object.values(value).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid current section fields');
                 values[section]={...value};
                 if(section==='inventory'&&value.quantity!==null){if(!/^(0|[1-9][0-9]*)$/.test(value.quantity)||BigInt(value.quantity)>2147483647n)throw new Error('Počet musí být celé nezáporné číslo nebo NULL.');values[section].quantity=Number(value.quantity);}
@@ -506,9 +717,18 @@ export function scopedApi(catalogId: number, token: string) {
                 sourceSeries:nullable(body.sourceSeries??null),sourceDepartmentCode:nullable(body.sourceDepartmentCode??null),sourceCollectionCode:nullable(body.sourceCollectionCode??null),sourceRecordedBy:nullable(body.sourceRecordedBy??null),sourceDeterminedBy:nullable(body.sourceDeterminedBy??null)};
         },
         createItem:async(requestId:string,input:NewItemFields,signal:AbortSignal)=>{
-            if(Object.keys(input).length<3||Object.keys(input).some(k=>!['title','inventoryNumber','accessionNumber','professional','inventory','storage','additional','references'].includes(k)))throw new Error('Invalid creation fields');
+            if(Object.keys(input).length<3||Object.keys(input).some(k=>!['title','inventoryNumber','accessionNumber','professional','inventory','storage','additional','inventoryRange','references','historicalReferences'].includes(k)))throw new Error('Invalid creation fields');
+            if(input.inventoryRange){const v=input.inventoryRange;
+                // Reject literal control characters in the identity components, including NUL and DEL.
+                // eslint-disable-next-line no-control-regex
+                if(Object.keys(v).length!==5||Object.keys(v).some(k=>!['lowerNumber','upperNumber','seriesRecordId','prefix','postfix'].includes(k))||!Number.isInteger(v.lowerNumber)||v.lowerNumber<1||v.lowerNumber>99999999||v.upperNumber!==null&&(!Number.isInteger(v.upperNumber)||v.upperNumber<v.lowerNumber||v.upperNumber>99999999)||v.seriesRecordId!==null&&!/^[a-f0-9]{64}$/.test(v.seriesRecordId)||typeof v.prefix!=='string'||typeof v.postfix!=='string'||[v.prefix,v.postfix].some(t=>t.length>255||/[\x00-\x1f\x7f]/.test(t)))throw new Error('Invalid qualified creation range');
+                const middle=input.inventoryNumber.slice(v.prefix.length,input.inventoryNumber.length-v.postfix.length);
+                if(!input.inventoryNumber.startsWith(v.prefix)||!input.inventoryNumber.endsWith(v.postfix)||!/^[0-9]{1,8}$/.test(middle)||Number(middle)!==v.lowerNumber)throw new Error('Creation identity and interval disagree');
+            }
+            if(input.historicalReferences)historicalBindings(input.historicalReferences);
             if(input.references)for(const [type,id] of Object.entries(input.references)){if(!managedDictionaryTypes.includes(type as ManagedDictionaryType)||['MATERIAL','TECHNIQUE'].includes(type))throw new Error('Invalid creation authority type');uuid(id);}
-            for(const key of ['title','inventoryNumber','accessionNumber'] as const){const value=input[key];if(key==='accessionNumber'&&value===null)continue;if(typeof value!=='string'||!value.trim()||value.length>(key==='title'?4096:255)||value.includes('\0'))throw new Error('Invalid creation field');}
+            if(input.title===null&&!input.professional?.objectType?.trim()&&!input.references?.OBJECT_TYPE)throw new Error('Vyplňte Typ předmětu nebo Titul / Název.');
+            for(const key of ['title','inventoryNumber','accessionNumber'] as const){const value=input[key];if((key==='accessionNumber'||key==='title')&&value===null)continue;if(typeof value!=='string'||!value.trim()||value.length>(key==='title'?4096:255)||value.includes('\0'))throw new Error('Invalid creation field');}
             if(input.professional){const keys=curatorSectionFields.professional;if(Object.keys(input.professional).length!==keys.length||keys.some(k=>!Object.hasOwn(input.professional!,k))||Object.values(input.professional).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid creation professional fields');}
             if(input.additional){const keys=curatorSectionFields.additional;if(Object.keys(input.additional).length!==keys.length||keys.some(k=>!Object.hasOwn(input.additional!,k))||Object.values(input.additional).some(v=>v!==null&&typeof v!=='string'))throw new Error('Invalid additional fields');}
             if(input.storage){const keys=curatorSectionFields.storage;if(Object.keys(input.storage).length!==keys.length||keys.some(k=>!Object.hasOwn(input.storage!,k))||Object.values(input.storage).some(v=>v!==null&&(typeof v!=='string'||v.includes('\0')||v.length>512)))throw new Error('Invalid private storage fields');}
@@ -547,6 +767,59 @@ export function scopedApi(catalogId: number, token: string) {
         patch: async (id: number, etag: string, input: Partial<Pick<Item, 'title' | 'inventoryNumber'>>, signal: AbortSignal): Promise<Versioned<Item>> => {
             const { body, response } = await read(itemPath(id), signal, { method: 'PATCH', headers: { 'If-Match': strongTag(etag) }, body: patch(input) });
             return { value: item(body, id), etag: tag(response, body.version) };
+        },
+        exactItemBindings:async(id:number,signal:AbortSignal)=>{
+            const {body,response}=await read(itemPath(id)+'/curator-completion/bindings',signal,undefined,true);
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==id||!hasPrivateNoStore(response.headers)
+               ||!body.items||Object.keys(body.items).some(kind=>!['DATING','DETERMINER'].includes(kind)))throw new Error('Neplatná odborná vazba.');
+            const items:ItemExactBindings={};
+            for(const kind of ['DATING','DETERMINER'] as const)if(body.items[kind]){
+                const key=nullable(body.items[kind].key),caption=nullable(body.items[kind].caption);
+                if((key===null)!==(caption===null)||key!==null&&!(kind==='DATING'?/^s:[a-f0-9]{64}$/:/^(s:[a-f0-9]{64}|p:[0-9]{20})$/).test(key))throw new Error('Neplatná identita vazby.');
+                items[kind]={key,caption};
+            }
+            return {items,etag:tag(response,body.itemVersion)};
+        },
+        curatorMeasures:async(id:number,signal:AbortSignal,change?:{id:string;etag:string;values:Partial<Pick<CuratorMeasure,'type'|'value'|'unit'>>})=>{
+            const url=itemPath(id)+'/curator-completion/measures'+(change?'/'+uuid(change.id):'');
+            const {body,response}=await read(url,signal,change?{method:'PATCH',headers:{'If-Match':strongTag(change.etag)},body:JSON.stringify(change.values)}:undefined);
+            return completionPage<CuratorMeasure>(body,response,id,row=>({id:uuid(row.id),order:row.order===null?null:signedInteger(row.order),type:nullable(row.type),value:nullable(row.value),unit:nullable(row.unit)}));
+        },
+        createCuratorMeasure:async(id:number,etag:string,values:{typeKey:string;value:string|null;unit:string|null},signal:AbortSignal)=>{
+            if(!/^s:[a-f0-9]{64}$/.test(values.typeKey))throw new Error('Vyberte přesný typ rozměru.');
+            const {body,response}=await read(itemPath(id)+'/curator-completion/measures',signal,{
+                method:'POST',headers:{'If-Match':strongTag(etag)},body:JSON.stringify(values)
+            });
+            return completionPage<CuratorMeasure>(body,response,id,row=>({id:uuid(row.id),order:row.order===null?null:signedInteger(row.order),type:nullable(row.type),value:nullable(row.value),unit:nullable(row.unit)}));
+        },
+        curatorStories:async(id:number,signal:AbortSignal,change?:{key:string;etag:string;values:Partial<Omit<CuratorStory,'key'>>})=>{
+            const key=(value:unknown)=>typeof value==='string'&&/^s:[a-f0-9]{64}$/.test(value)?value:uuid(text(value));
+            const url=itemPath(id)+'/curator-completion/stories'+(change?'/'+encodeURIComponent(key(change.key)):'');
+            const {body,response}=await read(url,signal,change?{method:'PATCH',headers:{'If-Match':strongTag(change.etag)},body:JSON.stringify(change.values)}:undefined);
+            return completionPage<CuratorStory>(body,response,id,row=>({key:key(row.key),date:nullable(row.date),location:nullable(row.location),person:nullable(row.person),text:nullable(row.text),year:row.year===null?null:signedInteger(row.year)}));
+        },
+        curatorDocuments:async(id:number,signal:AbortSignal,change?:{document:number;etag:string;values:Pick<CuratorDocument,'typeKey'|'mediaId'>})=>{
+            const url=itemPath(id)+'/curator-completion/documents'+(change?'/'+integer(change.document):'');
+            const {body,response}=await read(url,signal,change?{method:'PATCH',headers:{'If-Match':strongTag(change.etag)},body:JSON.stringify(change.values)}:undefined);
+            return completionPage<CuratorDocument>(body,response,id,row=>{
+                const typeKey=nullable(row.typeKey),typeCaption=nullable(row.typeCaption);
+                if((typeKey===null)!==(typeCaption===null)||typeKey!==null&&!/^s:[a-f0-9]{64}$/.test(typeKey))
+                    throw new Error('Neplatná identita typu dokumentu.');
+                return {id:integer(row.id),typeKey,typeCaption,mediaId:row.mediaId===null?null:uuid(row.mediaId)};
+            });
+        },
+        sourceDimensionCorrections:async(parent:number,signal:AbortSignal,change?:{recordId:string;etag:string;values:Partial<Pick<SourceDimensionCorrection,'value'|'unit'|'type'>>})=>{
+            if(change&&!/^[a-f0-9]{64}$/.test(change.recordId))throw new Error('Neplatná identita míry.');
+            const url=itemPath(parent)+'/source-dimension-corrections'+(change?'/'+change.recordId:'');
+            const {response,body}=await read(url,signal,change?{method:'PATCH',headers:{'If-Match':strongTag(change.etag)},body:JSON.stringify(change.values)}:undefined);
+            if(integer(body.catalogId)!==catalogId||integer(body.itemId)!==parent||!Array.isArray(body.items)
+                ||body.items.length>2000||!hasPrivateNoStore(response.headers))throw new Error('Neplatné odborné opravy měr.');
+            const items:SourceDimensionCorrection[]=body.items.map((row:any)=>{
+                if(typeof row.recordId!=='string'||!/^[a-f0-9]{64}$/.test(row.recordId))throw new Error('Neplatná identita míry.');
+                return {recordId:row.recordId,type:nullable(row.type),value:nullable(row.value),unit:nullable(row.unit),valueCleared:row.valueCleared===true};
+            });
+            if(new Set(items.map(row=>row.recordId)).size!==items.length||change&&(items.length!==1||items[0].recordId!==change.recordId))throw new Error('Zápis míry nebyl potvrzen.');
+            return {items,etag:tag(response,body.itemVersion)};
         },
         sourceDimensions:async(parent:number,signal:AbortSignal,offset=0,limit=50):Promise<Versioned<{items:SourceDimension[];nextOffset:number|null}>>=>{
             integer(offset,true);if(offset>100000||integer(limit)>100)throw new Error('Invalid page bounds');
@@ -606,6 +879,12 @@ export function scopedApi(catalogId: number, token: string) {
             if(!hasPrivateNoStore(response.headers)||integer(body.catalogId)!==catalogId||integer(body.itemId)!==parent||version(body.itemVersion)!==String(BigInt(etag.slice(1,-1))+1n)||wire.media?.caption!==caption)throw new Error('Invalid private caption receipt');
             return {value:media(body.media,parent,id),etag:tag(response,body.itemVersion)};
         },
+        archiveAttachment:async(parent:number,id:string,etag:string,signal:AbortSignal)=>{
+            const {body,response}=await read(`${itemPath(parent)}/media/${uuid(id)}/archive`,signal,{method:'POST',headers:{'If-Match':strongTag(etag)},body:'{}'});
+            if(!hasPrivateNoStore(response.headers)||integer(body.catalogId)!==catalogId||integer(body.itemId)!==parent||body.mediaId!==id||body.archived!==true||typeof body.replayed!=='boolean')throw new Error('Neplatný kontrakt archivace přílohy.');
+            const saved=version(body.itemVersion),before=BigInt(etag.slice(1,-1));if(body.replayed?BigInt(saved)<before:BigInt(saved)!==before+1n)throw new Error('Neplatná verze archivace přílohy.');
+            return {etag:tag(response,saved),replayed:body.replayed};
+        },
         media: async (parent: number, signal: AbortSignal, after?: string): Promise<Page<Media, string>> => {
             const { body } = await read(`${itemPath(parent)}/media?limit=50${after ? '&afterId=' + uuid(after) : ''}`, signal);
             if(!Array.isArray(body.items)||body.items.length>50)throw new Error('Invalid media page');
@@ -645,5 +924,5 @@ export function scopedApi(catalogId: number, token: string) {
         },
     };
 }
-type AddedCuratorMethods='inventoryPage'|'sourceChoices'|'curatorRecord'|'saveCuratorRecord'|'curatorMeasurement'|'saveMeasurement'|'createItem'|'creationOutcome'|'itemOrigin'|'createDimensionsBatch'|'sourceSummary'|'sourceDimensions'|'sourceMatTech';
+type AddedCuratorMethods='historicalVocabulary'|'inventoryPage'|'sourceChoices'|'curatorRecord'|'saveCuratorRecord'|'curatorMeasurement'|'saveMeasurement'|'createItem'|'creationOutcome'|'itemOrigin'|'createDimensionsBatch'|'sourceSummary'|'sourceDimensions'|'sourceMatTech';
 export type ScopedApi = Omit<ReturnType<typeof scopedApi>,AddedCuratorMethods> & Partial<Pick<ReturnType<typeof scopedApi>,AddedCuratorMethods>>;

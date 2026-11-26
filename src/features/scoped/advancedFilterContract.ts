@@ -1,8 +1,9 @@
+export const selectionFields=['fundAuthorityId','groupAuthorityId','localityAuthorityId','custodianAuthorityId','authorAuthorityId','fundHistoricalId','groupHistoricalId','localityHistoricalId'];
 const numeric=new Set(['inventory.ordinal','inventory.hierarchyOrdinal','PorC_S','HPorC_S','Pocet_S','currentQuantity']);
 const operators=new Set(['CONTAINS','EQUALS','NOT_EQUALS','NOT_CONTAINS','STARTS_WITH','ENDS_WITH','GREATER_THAN','LESS_THAN','BETWEEN','IS_EMPTY','IS_NOT_EMPTY']);
 /** Existing original builder wire format; never silently drops an unsupported condition. */
 export function validateAdvancedFilter(raw:string,approvedFields:readonly string[]){
- const fields=new Set<string>([...approvedFields,'historicalInventoryNumber','acquisitionRecordNumber','inventory.hierarchyDivision','description','materialNote','inventory.series','inventory.ordinal','inventory.division','inventory.hierarchyOrdinal','inventory.stateCode','inventory.custodianCode','inventory.departmentCode','inventory.collectionCode','fundLegacyCode','legacyCreatedBy','determinedBy']);
+ const fields=new Set<string>([...approvedFields,...selectionFields,'materialAuthorityId','techniqueAuthorityId','historicalInventoryNumber','acquisitionRecordNumber','historicalAccessionNumber','inventory.hierarchyDivision','description','materialNote','inventory.series','inventory.ordinal','inventory.division','inventory.hierarchyOrdinal','inventory.stateCode','inventory.custodianCode','inventory.departmentCode','inventory.collectionCode','fundLegacyCode','legacyCreatedBy','determinedBy']);
  if(raw.length>16000)throw new Error('Pokročilý filtr překračuje povolenou velikost.');
  let root:any;try{root=JSON.parse(raw);}catch{throw new Error('Neplatný JSON pokročilého filtru.');}
  let nodes=0;
@@ -12,6 +13,12 @@ export function validateAdvancedFilter(raw:string,approvedFields:readonly string
   for(const condition of value.conditions){
    if(++nodes>96||!condition||typeof condition!=='object'||Object.keys(condition).some(k=>!['id','field','operator','value','valueTo'].includes(k)))throw new Error('Neplatná podmínka filtru.');
    if(!fields.has(condition.field))throw new Error(`Pole ${condition.field} nemá schválenou scoped sémantiku. Podmínka nebyla vynechána.`);
+   if(selectionFields.includes(condition.field)){
+    if(!['EQUALS','NOT_EQUALS','IS_EMPTY','IS_NOT_EMPTY'].includes(condition.operator)||!['IS_EMPTY','IS_NOT_EMPTY'].includes(condition.operator)&&(typeof condition.value!=='string'||!(condition.field.endsWith('HistoricalId')?/^[a-f0-9]{64}$/:/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i).test(condition.value)))throw new Error('Vyberte dostupnou položku ze seznamu.');
+   }
+   if(['materialAuthorityId','techniqueAuthorityId'].includes(condition.field)){
+    if(!['EQUALS','NOT_EQUALS','IS_EMPTY','IS_NOT_EMPTY'].includes(condition.operator)||!['IS_EMPTY','IS_NOT_EMPTY'].includes(condition.operator)&&(typeof condition.value!=='string'||! /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(condition.value)))throw new Error('Přesný filtr autority vyžaduje UUID nebo kontrolu vyplnění.');
+   }
    if(!operators.has(condition.operator))throw new Error('Nepodporovaný operátor filtru.');
    if(['IS_EMPTY','IS_NOT_EMPTY'].includes(condition.operator))continue;
    if(typeof condition.value!=='string'||condition.value.length>255)throw new Error('Neplatná hodnota filtru.');

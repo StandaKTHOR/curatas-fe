@@ -137,12 +137,17 @@ describe('muzeální sekce předmětu', () => {
         vi.mocked(getMuseumItem).mockResolvedValue({ ...detail, records: [imported] } as never);
         render(<MuseumSection itemId={7} section="classification" />);
 
-        expect(await screen.findByText(/DEMUS ZarazeniSbirky/)).toBeInTheDocument();
+        expect(await screen.findByText('Původní záznam DEMUS')).toBeVisible();
+        const source = screen.getByText(/Zdroj: ZarazeniSbirky/);
+        expect(source).not.toBeVisible();
+        await userEvent.click(source.closest('[data-demus-technical]')!.querySelector('summary')!);
+        await userEvent.click(source.closest('[data-technical-entry]')!.querySelector('summary')!);
+        expect(source).toBeVisible();
         const editButton = screen.getByRole('button', { name: 'Upravit' });
         await userEvent.click(editButton);
 
         expect(screen.getByText('✏️ Právě upravujete')).toBeInTheDocument();
-        expect(screen.getByText('✏️ Úprava záznamu #42')).toBeInTheDocument();
+        expect(screen.getByText('✏️ Úprava záznamu')).toBeInTheDocument();
         expect(screen.getByDisplayValue('3')).toBeInTheDocument();
     });
 
@@ -160,7 +165,7 @@ describe('muzeální sekce předmětu', () => {
         render(<MuseumSection itemId={7} section="determination" />);
 
         expect(await screen.findByText('Fosilie trilobita')).toBeInTheDocument();
-        expect(screen.getByText('Vazba na osobu/subjekt #99')).toBeInTheDocument();
+        expect(screen.getByText(/Identifikátor záznamu:.*Vazba na osobu\/subjekt: 99/)).toBeInTheDocument();
     });
 });
 
@@ -175,7 +180,7 @@ describe('akvizice', () => {
         expect(await screen.findByText('A1')).toBeInTheDocument();
         expect(screen.getByText('A2')).toBeInTheDocument();
         await userEvent.click(screen.getAllByRole('button', { name: 'Upravit' })[0]);
-        await userEvent.type(screen.getByLabelText('Předchozí vlastník'),'Reviewed owner');
+        await userEvent.type(screen.getByLabelText('Předchozí majitel'),'Reviewed owner');
         await userEvent.click(screen.getByRole('button', { name: 'Uložit akvizici' }));
         expect(updateMuseumAcquisition).toHaveBeenCalledWith(7, 1, expect.objectContaining({ accessionNumber: 'A1' }), undefined);
     });

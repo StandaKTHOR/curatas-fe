@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {originalSession} from './originalAdapter';
 
 export type HistoricalFields=Readonly<Record<string,string|null>>;
-export const demusText=(value:string|null|undefined)=>value===null||value===undefined?'—':value===''?'Prázdný řetězec (DEMUS)':`${value} (DEMUS)`;
+export const demusText=(value:string|null|undefined)=>value===null||value===undefined?'—':value===''?'Prázdný řetězec':value;
 const populated=(value:unknown):value is string=>typeof value==='string'&&value.trim()!=='';
 /** Output only. Never pass the result to a current-value draft or save function. */
 export function historicalControl(current:unknown,source:string|null|undefined,readOnly:boolean){
@@ -10,7 +10,6 @@ export function historicalControl(current:unknown,source:string|null|undefined,r
  const hint=populated(source)?demusText(source):undefined;
  return {value:present?String(current):readOnly&&hint?hint:'',placeholder:present?undefined:hint};
 }
-export const currentBinding=(recordId:string|null|undefined)=>recordId?`Současná číselníková vazba (${recordId})`:null;
 
 /** Independent read-only state, scoped to authentication signal, catalog, item AND parent ETag. */
 export function useOriginalHistoricalData(itemId:number|undefined,session:any,enabled:boolean){

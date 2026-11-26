@@ -1,3 +1,4 @@
+import TechnicalDemus from '../features/catalog/TechnicalDemus';
 import {originalIntegrationEnabled} from '../features/catalog/originalAdapter';
 import {originalCanEdit} from '../features/catalog/originalEdit';
 import {ScopedError} from '../features/scoped/scopedApi';
@@ -103,23 +104,24 @@ export default function AcquisitionSection({ itemId, editSession, readOnly = fal
         <h3 className="font-bold">Akvizice předmětu</h3>
         <p className="text-sm text-gray-600">Jeden předmět může mít více akvizic. Původní hodnoty DEMUS zůstávají uložené u importovaných řádků.</p>
         {rows.map(row => <div key={row.id} className="rounded border border-gray-200 p-3 text-sm">
-            <div className="flex justify-between"><strong>{row.accessionNumber || `Akvizice #${row.id}`}</strong><span>
+            <TechnicalDemus title="Identita akvizice"><p>Záznam {row.id}</p></TechnicalDemus>
+            <div className="flex justify-between"><strong>{row.accessionNumber || 'Akvizice bez přírůstkového čísla'}</strong><span>
                 <button type="button" disabled={originalIntegrationEnabled()&&row.sourceReadOnly} onClick={() => select(row)} className="text-blue-700 underline">Upravit</button>
                 {!row.legacyData && <button type="button" disabled={originalIntegrationEnabled()} title={originalIntegrationEnabled()?'QA nepovoluje odstranění akvizice.':undefined} onClick={() => remove(row)} className="ml-3 text-red-700 underline">Odebrat</button>}
             </span></div>
-            <p>{originalIntegrationEnabled()?(row.sourceReadOnly?'Historický zdroj — pouze pro čtení · ':'Současná akvizice · '):''}{row.acquisitionDate || 'Bez data'} · {row.acquisitionMethod || 'Bez způsobu'} · {row.acquiredFrom || 'Bez předchozího vlastníka'}</p>
-            {row.legacyData && <details><summary className="cursor-pointer">Všechna původní pole</summary>
-                <pre className="overflow-x-auto text-xs">{JSON.stringify(row.legacyData, null, 2)}</pre></details>}
+            <p>{originalIntegrationEnabled()?(row.sourceReadOnly?'Historický zdroj — pouze pro čtení · ':'Současná akvizice · '):''}{row.acquisitionDate || 'Bez data'} · {row.acquisitionMethod || 'Bez způsobu'} · {row.acquiredFrom || 'Bez předchozího majitele'}</p>
+            {row.legacyData && <TechnicalDemus title="Původní pole akvizice" className="cursor-pointer">
+                <pre className="overflow-x-auto text-xs">{JSON.stringify(row.legacyData, null, 2)}</pre></TechnicalDemus>}
         </div>)}
         <div className="space-y-3 rounded border border-gray-200 bg-gray-50 p-4">
-            <h4 className="font-semibold">{editing ? `Úprava akvizice #${editing.id}` : 'Nová akvizice'}</h4>
+            <h4 className="font-semibold">{editing ? 'Úprava akvizice' : 'Nová akvizice'}</h4>
             <div className="grid gap-3 md:grid-cols-2">
                 {field('accessionNumber', 'Přírůstkové číslo')}{field('acquisitionMethod', 'Způsob akvizice / DEMUS kód')}
                 <TreeChoice unavailableReason={originalIntegrationEnabled()?'Novou vazbu způsobu nabytí nelze přiřadit bez schváleného katalogového mapování; lze zadat současný text. Stávající vazba se zachovává.':undefined} type="ACQUISITION_METHOD" label="Způsob akvizice – číselník"
                     value={form.methodDictionaryId} onChange={(id, choice) => setForm(old => ({ ...old,
                         methodDictionaryId: id, acquisitionMethod: choice?.code ?? old.acquisitionMethod }))} />
                 <YearDateInput id="acquisition-record-date" label="Datum akvizice" value={form.acquisitionDate || ''}
-                    onChange={value => setForm(old => ({...old, acquisitionDate: value || null}))} />{field('acquiredFrom', 'Předchozí vlastník')}
+                    onChange={value => setForm(old => ({...old, acquisitionDate: value || null}))} />{field('acquiredFrom', 'Předchozí majitel')}
                 {field('circumstances', 'Okolnosti')}{field('documentNumber', 'Číslo dokladu')}
                 {field('message', 'Vzkaz')}{field('orderNumber', 'Pořadí', 'number')}
             </div>

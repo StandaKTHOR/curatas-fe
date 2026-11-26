@@ -1,0 +1,15 @@
+import {render,screen} from '@testing-library/react';
+import {beforeEach,it,expect,vi,afterEach} from 'vitest';
+import {MemoryRouter} from 'react-router-dom';
+const m=vi.hoisted(()=>({catalog:{id:1,capabilities:['dictionary.read']} as any,loading:false,error:null as string|null}));
+vi.mock('../features/catalog/CatalogContext',()=>({useCatalog:()=>({selectedCatalog:m.catalog,loading:m.loading,error:m.error})}));
+vi.mock('../features/catalog/ManagedDictionaries',()=>({default:()=> <section aria-label="Skutečná správa číselníků"/>}));
+vi.mock('../features/catalog/ProfessionalRegistry',()=>({RegistryNavigation:()=>null}));
+import Dictionaries from './Dictionaries';
+beforeEach(()=>{vi.stubEnv('VITE_MANAGED_AUTHORITIES_ENABLED','true');m.catalog={id:1,capabilities:['dictionary.read']};m.loading=false;m.error=null;});afterEach(()=>vi.unstubAllEnvs());
+const show=()=>render(<MemoryRouter initialEntries={['/admin/dictionaries?catalog=1&type=LOCALITY']}><Dictionaries/></MemoryRouter>);
+it('admin-equivalent catalog with dictionary.read can open LOCALITY management',()=>{show();expect(screen.getByRole('region',{name:'Skutečná správa číselníků'})).toBeInTheDocument();expect(screen.queryByRole('alert')).toBeNull();});
+it('missing catalog is not reported as denied or empty dictionary data',()=>{m.catalog=null;show();expect(screen.getByRole('status')).toHaveTextContent('Nejprve vyberte katalog');expect(screen.queryByRole('region')).toBeNull();});
+it('missing dictionary.read explicitly reports a permission failure',()=>{m.catalog={id:1,capabilities:['item.read']};show();expect(screen.getByRole('alert')).toHaveTextContent('dictionary.read');expect(screen.queryByRole('region')).toBeNull();});
+it('build feature disabled reports configuration, never missing data',()=>{vi.stubEnv('VITE_MANAGED_AUTHORITIES_ENABLED','false');show();expect(screen.getByRole('alert')).toHaveTextContent('není v tomto sestavení zapnutá');expect(screen.queryByRole('region')).toBeNull();});
+it('catalog loading failure stays an error rather than an empty list',()=>{m.error='Katalogový přístup není pro tento účet povolen.';m.catalog=null;show();expect(screen.getByRole('alert')).toHaveTextContent(m.error);});

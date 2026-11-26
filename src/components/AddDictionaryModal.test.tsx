@@ -13,6 +13,18 @@ describe('AddDictionaryModal - oprava chyby Nová země', () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
+    it.each([['Textil starý','TEXTIL_STARY'],['Textil nový','TEXTIL_NOVY']])('keeps generating a distinct child code through spaces and Czech characters: %s',async(label,code)=>{
+        const create=vi.fn().mockResolvedValue(undefined),parent='00000000-0000-4000-8000-000000000001';
+        const {container}=render(<AddDictionaryModal isOpen dictionaryType="MATERIAL" dictionaryTitle="Materiál" onClose={vi.fn()} onSuccess={vi.fn()} onCreate={create} parentOptions={[{id:parent,label:'Textil — TEXTIL'}]}/>);
+        await userEvent.type(container.querySelector('#dictLabel')!,label);expect(container.querySelector('#dictCode')).toHaveValue(code);
+        await userEvent.selectOptions(screen.getByLabelText('Nadřazená položka'),parent);await userEvent.click(screen.getByRole('button',{name:'Přidat a vybrat'}));
+        await waitFor(()=>expect(create).toHaveBeenCalledWith({type:'MATERIAL',label,code,parentId:parent}));
+    });
+    it('preserves an explicit code when the label changes and when editing an existing authority',async()=>{
+        const {container}=render(<AddDictionaryModal isOpen dictionaryType="MATERIAL" dictionaryTitle="Materiál" editing initialValue={{label:'Textil',code:'CURATOR_CODE',parentId:null}} onClose={vi.fn()} onSuccess={vi.fn()} onCreate={vi.fn()}/>);
+        await userEvent.type(container.querySelector('#dictLabel')!,' starý');expect(container.querySelector('#dictCode')).toHaveValue('CURATOR_CODE');
+        await userEvent.clear(container.querySelector('#dictCode')!);await userEvent.type(container.querySelector('#dictCode')!,'EXPLICIT');await userEvent.type(container.querySelector('#dictLabel')!,' nový');expect(container.querySelector('#dictCode')).toHaveValue('EXPLICIT');
+    });
 
     it('submits country dictionary item correctly on button click', async () => {
         vi.mocked(createDictionaryItem).mockResolvedValue({
@@ -95,4 +107,11 @@ describe('AddDictionaryModal - oprava chyby Nová země', () => {
         const labelInput = container.querySelector('#dictLabel') as HTMLInputElement;
         expect(labelInput).toHaveValue('');
     });
+});
+
+it('new subcollection parent choices keep distinct captions and exact UUID values; unresolved duplicates cannot be picked',async()=>{
+ const a='00000000-0000-4000-8000-000000000001',b='00000000-0000-4000-8000-000000000002',create=vi.fn().mockResolvedValue(undefined);
+ const {container}=render(<AddDictionaryModal isOpen dictionaryType="COLLECTION" dictionaryTitle="Podsbírka" onClose={vi.fn()} onSuccess={vi.fn()} onCreate={create} parentOptions={[{id:a,label:'Sbírka — A'},{id:b,label:'Sbírka — B'},{id:'unresolved',label:'Bez rozlišení',disabled:true}]}/>);
+ expect(screen.getByRole('option',{name:'Sbírka — A'})).toHaveValue(a);expect(screen.getByRole('option',{name:'Sbírka — B'})).toHaveValue(b);expect(screen.getByRole('option',{name:/Bez rozlišení/})).toBeDisabled();expect(screen.getByLabelText('Nadřazená položka').textContent).not.toContain(a);
+ await userEvent.type(container.querySelector('#dictLabel')!,'Nová podsbírka');await userEvent.selectOptions(screen.getByLabelText('Nadřazená položka'),b);await userEvent.click(screen.getByRole('button',{name:'Přidat a vybrat'}));await waitFor(()=>expect(create).toHaveBeenCalledWith(expect.objectContaining({type:'COLLECTION',parentId:b})));
 });

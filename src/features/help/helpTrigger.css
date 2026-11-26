@@ -1,0 +1,17 @@
+/* Update4.6.1: only the existing help trigger; approved dialog styles stay intact. */
+.mes-help-trigger,
+.demus-menubar .mes-help-trigger {
+ display:inline-flex; align-items:center; justify-content:center; gap:6px; flex:0 0 auto;
+ min-height:28px; padding:4px 9px; border:1px solid #9aacc2; border-radius:5px;
+ color:#153a72; background:#e2eaf6; font:inherit; line-height:18px; white-space:nowrap; cursor:pointer;
+}
+.demus-menubar .mes-help-trigger { margin-inline-start:auto; }
+.mes-help-trigger svg { display:block; flex:0 0 18px; width:18px; height:18px; }
+.mes-help-trigger:hover,
+.demus-menubar .mes-help-trigger:hover { background:#dbe9f5; border-color:#8c939c; }
+.mes-help-trigger:focus-visible,
+.demus-menubar .mes-help-trigger:focus-visible { outline:3px solid #0874d9; outline-offset:2px; }
+@media(max-width:760px){
+ .mes-help-trigger,.demus-menubar .mes-help-trigger { min-height:44px; min-width:44px; }
+}
+@media(max-width:480px){ .mes-help-trigger .mes-help-trigger-label { display:none; } }

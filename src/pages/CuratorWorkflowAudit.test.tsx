@@ -14,6 +14,7 @@ import {
     updateItem,
     listAttachments,
     uploadAttachment,
+    deleteAttachment,
     listItemImages,
     deleteItemImage,
     setPrimaryItemImage,
@@ -103,7 +104,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
     it('allows an authenticated attachment download in read-only detail without enabling edits',async()=>{
         vi.mocked(listAttachments).mockResolvedValue([{id:77,originalFilename:'evidence.txt',caption:'Evidence'}] as never);
         render(<MemoryRouter initialEntries={['/admin/items/view/123']}><Routes><Route path="/admin/items/view/:id" element={<AdminItemForm readOnly/>}/></Routes></MemoryRouter>);
-        await screen.findByDisplayValue('Gotická monstrance');
+        await screen.findAllByText('Gotická monstrance');
         await userEvent.click(screen.getByRole('button',{name:/Přílohy/}));
         await userEvent.click(await screen.findByRole('button',{name:'Stáhnout'}));
         expect(downloadAttachmentFile).toHaveBeenCalledWith(123,77,'evidence.txt');
@@ -150,8 +151,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         expect(roleSelect.value).toBe('Falsifikátor');
 
         // Verify materialNote (PoznMT) textarea is available
-        await userEvent.click(screen.getByRole('button', {name: 'MatTech'}));
-        const matNote = screen.getByPlaceholderText(/Doplňující poznámka k materiálu/i);
+        const matNote = screen.getByLabelText('Poznámka k materiálu a technice');
         expect(matNote).toBeInTheDocument();
         expect(matNote).toHaveValue('Pozlacené stříbro s emailem');
     });
@@ -218,6 +218,23 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
         await userEvent.click(attSubtab);
 
         expect(screen.getByText('posudek.pdf')).toBeInTheDocument();
+        const file=new File(['generated attachment'],'foto_makro.jpg',{type:'image/jpeg'});
+        vi.mocked(listAttachments).mockResolvedValue([...mockItemData.attachments,{id:2,originalFilename:file.name,caption:'Makrosnímek'}] as never);
+        await userEvent.upload(screen.getByLabelText('Soubor'),file);
+        await userEvent.type(screen.getByLabelText('Popis souboru'),'Makrosnímek');
+        await userEvent.click(screen.getByRole('button',{name:'Nahrát přílohu'}));
+        await screen.findByRole('button',{name:/Přílohy \(2\)/});
+        expect(uploadAttachment).toHaveBeenCalledWith(123,file,'Makrosnímek');
+        const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
+        await userEvent.click(screen.getByRole('button',{name:'Odebrat přílohu foto_makro.jpg'}));
+        expect(deleteAttachment).not.toHaveBeenCalled();
+        confirm.mockReturnValue(true);
+        vi.mocked(listAttachments).mockResolvedValue(mockItemData.attachments as never);
+        await userEvent.click(screen.getByRole('button',{name:'Odebrat přílohu foto_makro.jpg'}));
+        await screen.findByRole('button',{name:/Přílohy \(1\)/});
+        expect(deleteAttachment).toHaveBeenCalledWith(123,2);
+        expect(screen.getByText('posudek.pdf')).toBeVisible();
+        confirm.mockRestore();
     });
 
     it('fundSelector_loadsDictionaryOptionsAndPersists: loads options and updates Fund and SubCollection independently', async () => {
@@ -265,7 +282,7 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
     });
 
     it('photoDelete_requiresConfirmationAndRemovesPhoto: confirms and calls delete API', async () => {
-        const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+        const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
         vi.mocked(listItemImages).mockResolvedValue([
             { id: 999, url: 'http://localhost:8080/test/foto.jpg', primary: true, sortOrder: 1, caption: 'Hlavní foto' }
         ]);
@@ -294,7 +311,11 @@ describe('Curator Workflow Audit - Frontend Integration', () => {
 
         await userEvent.click(deleteBtn);
 
+        expect(deleteItemImage).not.toHaveBeenCalled();
+        confirmSpy.mockReturnValue(true);
+        await userEvent.click(deleteBtn);
         expect(confirmSpy).toHaveBeenCalledWith('Opravdu chcete tuto fotografii odstranit?');
         expect(deleteItemImage).toHaveBeenCalledWith(123, 999);
+        confirmSpy.mockRestore();
     });
 });

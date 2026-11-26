@@ -2,7 +2,7 @@ import {renderHook,waitFor,cleanup,act} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {bindOriginalCatalog,currentForm} from './originalAdapter';
 import {currentSectionDraft,saveOriginalCurrent} from './originalEdit';
-import {useOriginalHistoricalData,historicalControl,demusText,currentBinding} from './useOriginalHistoricalData';
+import {useOriginalHistoricalData,historicalControl,demusText} from './useOriginalHistoricalData';
 const api=vi.hoisted(()=>({sourceInventory:vi.fn(),curatorRecord:vi.fn(),saveCuratorRecord:vi.fn()}));
 vi.mock('../scoped/scopedApi',async original=>({...await original<typeof import('../scoped/scopedApi')>(),scopedApi:()=>api}));
 const catalog={id:1,code:'POLAKOVA',name:'Generated fixture',version:0,institution:{id:1,code:'GEN',name:'Generated'},capabilities:['catalog.read','item.read','item.professional.write'],professionalWriteEnabled:true};
@@ -16,8 +16,8 @@ afterEach(()=>{cleanup();bindOriginalCatalog(null,null);});
 it.each(['kredenc kuchyňská','židle'])('presents supplied reference name %s and Czech fund without changing current fields',async name=>{
  api.sourceInventory.mockResolvedValue(source(name));const current={title:'',objectType:'',description:'',author:'',datingText:'',originPlace:'',material:'',technique:'',materialNote:'',quantity:null,otherNumber:null,fundDictionaryId:null};Object.freeze(current);
  const v=renderHook(()=>useOriginalHistoricalData(3,session(),true));await waitFor(()=>expect(v.result.current?.fields.Predmet_S).toBe(name));
- expect(historicalControl(current.title,v.result.current?.fields.Predmet_S,true).value).toBe(`${name} (DEMUS)`);
- expect(historicalControl(current.title,v.result.current?.fields.Predmet_S,false)).toEqual({value:'',placeholder:`${name} (DEMUS)`});
+ expect(historicalControl(current.title,v.result.current?.fields.Predmet_S,true).value).toBe(`${name}`);
+ expect(historicalControl(current.title,v.result.current?.fields.Predmet_S,false)).toEqual({value:'',placeholder:`${name}`});
  expect(currentSectionDraft('professional',p,current)).toEqual({changed:false,values:p});expect(current.fundDictionaryId).toBeNull();
  expect(await saveOriginalCurrent(3,'professional',session(),current)).toEqual({saved:false});expect(api.saveCuratorRecord).not.toHaveBeenCalled();
  await saveOriginalCurrent(3,'professional',session(),{...current,description:'CURRENT EDIT'});
@@ -27,7 +27,7 @@ it.each([['Současný název','kredenc kuchyňská'],['Jiný fond','nábytek'],[
  expect(historicalControl(current,historical,true).value).toBe(String(current));expect(historicalControl(current,historical,false).value).toBe(String(current));
 });
 it('keeps missing, empty, NULL and zero distinct without date reinterpretation',()=>{
- expect(historicalControl(null,null,true).value).toBe('');expect(historicalControl('',undefined,false).value).toBe('');expect(demusText(null)).toBe('—');expect(demusText('')).toBe('Prázdný řetězec (DEMUS)');expect(demusText('0')).toBe('0 (DEMUS)');expect(demusText('00.00.0000')).toBe('00.00.0000 (DEMUS)');expect(currentBinding('VERIFIED_RECORD_ID')).toContain('VERIFIED_RECORD_ID');
+ expect(historicalControl(null,null,true).value).toBe('');expect(historicalControl('',undefined,false).value).toBe('');expect(demusText(null)).toBe('—');expect(demusText('')).toBe('Prázdný řetězec');expect(demusText('0')).toBe('0');expect(demusText('00.00.0000')).toBe('00.00.0000');expect(demusText('Skutečný zápis (DEMUS)')).toBe('Skutečný zápis (DEMUS)');
  const form=currentForm({etag:'"0"',value:{id:3,catalogId:1,title:null}},{etag:'"0"',present:false,value:p},{etag:'"0"',value:i});expect(form.author).toBeNull();expect(form.datingText).toBeNull();expect(form.description).toBeNull();
 });
 it('refuses a different source or authority revision',async()=>{

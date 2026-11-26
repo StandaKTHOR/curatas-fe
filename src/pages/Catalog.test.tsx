@@ -1,3 +1,4 @@
+import {DEFAULT_COLUMNS} from '../components/ColumnSelectorModal';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -103,4 +104,9 @@ describe('Catalog Page UAT State Preservation', () => {
     expect(screen.queryByText('Klonovat')).not.toBeInTheDocument();
     expect(screen.queryByTitle('Selektivně klonovat předmět')).not.toBeInTheDocument();
   });
+});
+it('fills only the four existing cells with the read-only summary and DEMUS markers',async()=>{
+ localStorage.setItem('curatas_catalog_columns',JSON.stringify(DEFAULT_COLUMNS.map(v=>({...v,visible:v.id==='technique'||v.visible}))));
+ vi.spyOn(api,'listPublicItems').mockResolvedValue({content:[{id:'summary-1',title:'GENERATED SUMMARY',inventoryNumber:'SUM-1',catalogSummary:{author:[{value:'Původní autor [malíř]',origin:'DEMUS_SOURCE',identity:'a'}],material:[{value:'papírmaš, papír',origin:'DEMUS_SOURCE',identity:'m'}],technique:[{value:'batika vosková - špendlík',origin:'DEMUS_SOURCE',identity:'t'}],accessionNumber:[{value:'Etn 11/99',origin:'DEMUS_SOURCE',identity:'q'}]}}],totalPages:1,totalElements:1});
+ render(<MemoryRouter><Catalog/></MemoryRouter>);expect(await screen.findByText('Původní autor [malíř] (DEMUS)')).toBeInTheDocument();expect(screen.getByText('papírmaš, papír (DEMUS)')).toBeInTheDocument();expect(screen.getByText('batika vosková - špendlík (DEMUS)')).toBeInTheDocument();expect(screen.getByText('Etn 11/99 (DEMUS)')).toBeInTheDocument();localStorage.removeItem('curatas_catalog_columns');
 });

@@ -1,0 +1,5 @@
+/* Keep Update4 form geometry. Scope only the shared technical disclosure. */
+[data-clean-item-card="true"] > [data-demus-technical] { margin: 0 8px; }
+[data-clean-item-card="true"] > [data-demus-technical]:not(:has([data-technical-entry])) { display: none; }
+[data-clean-item-card="true"] [data-demus-technical] summary { cursor: pointer; }
+[data-clean-item-card="true"] [data-demus-technical] pre { white-space: pre-wrap; overflow-wrap: anywhere; }
